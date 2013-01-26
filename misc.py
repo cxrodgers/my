@@ -22,6 +22,7 @@ def parse_folded_by_block(lb_folded, pb_folded, start_trial=1, last_trial=None,
     """
     # Override start trial for some munged sessions
     if session_name in ['YT6A_120201_behaving', 'CR24A_121019_001_behaving']:
+        print "overriding start trial"
         start_trial = 161
     
     # Where to stop putting trials into blocks    
