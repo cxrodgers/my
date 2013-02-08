@@ -3,3 +3,6 @@ doesn't fit anywhere else."""
 
 import bootstrap
 reload(bootstrap)
+
+import misc
+reload(misc)
