@@ -1,6 +1,10 @@
 """Catchall module within the catchall module for really one-off stuff."""
 
 import numpy as np
+import warnings
+
+def no_warn_rs():
+    warnings.filterwarnings('ignore', module='ns5_process.RecordingSession$')    
 
 def parse_folded_by_block(lb_folded, pb_folded, start_trial=1, last_trial=None,
     session_name=None):
