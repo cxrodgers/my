@@ -18,16 +18,16 @@ def parse_folded_by_block(lb_folded, pb_folded, start_trial=1, last_trial=None,
     start_trial : where to start counting up by 80
     last_trial : last trial to include, inclusive
         if None, use the max trial in either set of labels
-    session_name : optional. If one of the known munged sessions, it will
-        autoset start_trial
+    session_name : no longer used. should make this load trials_info and
+        grab first trial, if anything.
     
     Returns: counts_by_block
     A list of arrays, always beginning with LB, eg LB1, PB1, LB2, PB2...
     """
     # Override start trial for some munged sessions
-    if session_name in ['YT6A_120201_behaving', 'CR24A_121019_001_behaving']:
-        print "overriding start trial"
-        start_trial = 161
+    #~ if session_name in ['YT6A_120201_behaving', 'CR24A_121019_001_behaving']:
+        #~ print "overriding start trial"
+        #~ start_trial = 161
     
     # Where to stop putting trials into blocks    
     if last_trial is None:
