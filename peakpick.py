@@ -56,8 +56,8 @@ def test_vs_baseline(data, baseline_idxs, test_idxs, fix_float=10000):
         except IndexError:
             raise ValueError("provided test index not valid for provided data")
         
-        # test it
-        utest_res = r_utest(refdata, testdata)
+        # test it (the ordering is important: testdata > refdata => auroc > .5)
+        utest_res = r_utest(testdata, refdata)
         U, p, auroc = utest_res['U'], utest_res['p'], utest_res['auroc']
         
         # store results
@@ -75,22 +75,29 @@ def test_vs_baseline(data, baseline_idxs, test_idxs, fix_float=10000):
 
 
 def define_onset_window(auroc, p, min_duration=2, max_stop_idx=None, 
-    drop_truncated=True):
+    min_start_idx=0, drop_truncated=True):
     """Given AUROC and p-value, identify start and stop of putative peak.
     
     Define this as extending from first significant positive bin, till
     the first nonsignif bin (or first significantly negative bin).
-    The peak must last at least as long as `min_duration`.
-    If multiple peaks satisfy these constraints, only the first is chosen.
     
-    After a peak has been found, the following checks can be done:
-        1) If longer than max_duration, drop it and return nothing
-        2) If it last to the end of the window, drop it and return nothing
+    Specifically:
+    1)  We consider all bins >= min_start_idx with signif pos peak as
+        possible peak starts. If nothing to consider, msg = 'nothing'
+    2)  We discard any peak start if the peak falls below significance
+        in less than min_duration bins.
+    3)  If none satisfy this constraint, msg='too brief'. If more than one,
+        choose the earliest.
+    4)  If that peak lasts to the end of the testing window and
+        drop_truncated is true, then msg = 'lasts to end'
+    5)  If that peak lasts past max_stop_idx, then msg = 'lasts too long'
+    6)  Otherwise msg = 'good' and the peak intervals are stored.
     
-    Returns: start_idx, stop_idx, peak_found
+    Returns: dict with following keys
         start_idx, stop_idx: indexes into masked (half-open interval)
         peak_found : unless True, no peak was found, and start_idx and
             stop_idx are uninterpretable.
+        msg : string as stated above
     """
     # Default values for returned variables
     start_idx, stop_idx, peak_found, msg = 0, 0, False, 'nothing'
@@ -98,6 +105,9 @@ def define_onset_window(auroc, p, min_duration=2, max_stop_idx=None,
     # Find where it started (after min_start_idx)
     masked = (auroc > .5) & (p < .05)
     start_candidates = np.where(masked)[0]
+    
+    # Mask out ones before min_start_idx
+    start_candidates = start_candidates[start_candidates >= min_start_idx]
     
     # Mask out ones that are too close to the end
     start_candidates = start_candidates[
