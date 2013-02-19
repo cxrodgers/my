@@ -88,6 +88,8 @@ def define_onset_window(auroc, p, min_duration=2, max_stop_idx=None,
         in less than min_duration bins.
     3)  If none satisfy this constraint, msg='too brief'. If more than one,
         choose the earliest.
+    
+    # Remove these next two checks and let upstream user decide
     4)  If that peak lasts to the end of the testing window and
         drop_truncated is true, then msg = 'lasts to end'
     5)  If that peak lasts past max_stop_idx, then msg = 'lasts too long'
@@ -130,15 +132,15 @@ def define_onset_window(auroc, p, min_duration=2, max_stop_idx=None,
         try:
             stop_idx = stop_candidates[0]
         except IndexError:
-            stop_idx = len(auroc)
+            stop_idx = len(auroc) - 1
         assert masked[start_idx:stop_idx].all()
     
     # Some final checks
-    if drop_truncated and stop_idx == len(auroc):
-        start_idx, stop_idx, peak_found = 0, 0, False
+    if drop_truncated and stop_idx == len(auroc) - 1:
+        #start_idx, stop_idx, peak_found = 0, 0, False
         msg = 'lasts to end'
     elif max_stop_idx and stop_idx > max_stop_idx:
-        start_idx, stop_idx, peak_found = 0, 0, False
+        #start_idx, stop_idx, peak_found = 0, 0, False
         msg = 'lasts too long'
     
     return {'start_idx': start_idx, 'stop_idx': stop_idx, 
@@ -210,4 +212,4 @@ def plot_peaks(peak_intervals, onset_results, tested_t, traces_per_ax=4):
                     ax.plot(tested_t[i1:i2], auroc[i1:i2], 'k+', ms=8, mew=2)
             
             # Legend outside bbox
-            ax.legend(ulabels, bbox_to_anchor=(0.9,1.2), prop={'size':'xx-small'})
+            ax.legend(ulabels, bbox_to_anchor=(0.9,1.2), prop={'size':'x-small'})
