@@ -6,3 +6,6 @@ reload(bootstrap)
 
 import misc
 reload(misc)
+
+import stats
+reload(stats)
