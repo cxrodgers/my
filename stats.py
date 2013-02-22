@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.stats
-
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
 try:
     import rpy2.robjects as robjects
     r = robjects.r
@@ -121,4 +122,24 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
         print res
     
     return {'U': U, 'p': p, 'auroc': auroc}
+
+def anova(df, fmla, typ=3):
+    # Anova/OLS
+    lm = ols(fmla, df=df).fit()
+    
+    # Grab the pvalues (note we use Type III)
+    aov = anova_lm(lm, typ=typ)
+    pvals = aov["PR(>F)"]
+    pvals.index = map(lambda s: 'p_' + s, pvals.index)
+    
+    # Grab the explainable sum of squares
+    ess = aov.drop("Residual").sum_sq
+    ess = ess / ess.sum()
+    ess.index = map(lambda s: 'ess_' + s, ess.index)
+    
+    # Grab the fit
+    fit = lm.params
+    fit.index = map(lambda s: 'fit_' + s, fit.index)   
+
+    return {'lm':lm, 'aov':aov, 'pvals':pvals, 'ess':ess, 'fit':fit}
     
