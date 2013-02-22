@@ -11,31 +11,35 @@ from lxml import etree
 from ns5_process import LBPB, RecordingSession
 
 
-def ulabel2dfolded(ulabel, folding_kwargs=None, trial_picker_kwargs=None):
+def ulabel2dfolded(ulabel, folding_kwargs=None, trial_picker_kwargs='random hits'):
     """Convenience function for getting dict of folded from RS/kkpandas
     
-    if trial_picker_kwargs is None:
-        trial_picker_kwargs = {
-            'labels': LBPB.mixed_stimnames,
-            'label_kwargs': [{'stim_name':s} for s in LBPB.mixed_stimnames],
-            'nonrandom' : 0,
-            'outcome' : 'hit'
-            }
-
-    if folding_kwargs is None:
-        folding_kwargs = {'dstart': -.25, 'dstop': .3}      
+    Some reasonable defaults for kwargs ... see code  
     
     Returns: dict, picked trials label to Folded object
     """
     # Default kwargs for the pipeline
     # How to parse out trials
-    if trial_picker_kwargs is None:
+    if trial_picker_kwargs == 'random hits':
         trial_picker_kwargs = {
             'labels': LBPB.mixed_stimnames,
             'label_kwargs': [{'stim_name':s} for s in LBPB.mixed_stimnames],
             'nonrandom' : 0,
             'outcome' : 'hit'
             }
+    elif trial_picker_kwargs == 'all':
+        trial_picker_kwargs = {
+            'labels': LBPB.stimnames, 
+            'label_kwargs': [{'stim_name':s} for s in LBPB.stimnames],
+            }
+    elif trial_picker_kwargs == 'by outcome':
+        label_kwargs = pandas.MultiIndex.from_tuples(
+            names=['stim_name', 'outcome'],
+            tuples=list(itertools.product(
+                LBPB.mixed_stimnames, ['hit', 'error', 'wrong_port'])))
+        labels = ['-'.join(t) for t in label_kwargs]
+        trial_picker_kwargs = {'labels': labels, 'label_kwargs': label_kwargs,
+            'nonrandom' : 0}
 
     # How to fold the window around each trial
     if folding_kwargs is None:
