@@ -1,7 +1,6 @@
 import numpy as np
 import scipy.stats
-from statsmodels.formula.api import ols
-from statsmodels.stats.anova import anova_lm
+
 try:
     import rpy2.robjects as robjects
     r = robjects.r
@@ -124,6 +123,9 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
     return {'U': U, 'p': p, 'auroc': auroc}
 
 def anova(df, fmla, typ=3):
+    from statsmodels.formula.api import ols
+    from statsmodels.stats.anova import anova_lm
+    
     # Anova/OLS
     lm = ols(fmla, df=df).fit()
     
