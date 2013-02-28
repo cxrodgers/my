@@ -7,6 +7,23 @@ def font_embed():
     matplotlib.rcParams['ps.useafm'] = True
     matplotlib.rcParams['svg.fonttype'] = 'svgfont'
 
+def rescue_tick(ax=None, f=None, x=3, y=3):
+    # Determine what axes to process
+    if ax is not None:
+        ax_l = [ax]
+    elif f is not None:
+        ax_l = f.axes
+    else:
+        raise ValueError("either ax or f must not be None")
+    
+    # Iterate over axes to process
+    for ax in ax_l:
+        if x is not None:
+            ax.xaxis.set_major_locator(plt.MaxNLocator(x))
+        if y is not None:
+            ax.yaxis.set_major_locator(plt.MaxNLocator(y))
+        
+
 def scatter_with_trend(x, y, xname='X', yname='Y', ax=None, 
     legend_font_size='medium'):
     """Scatter plot `y` vs `x`, also linear regression line"""
