@@ -34,7 +34,7 @@ def check_float_conversion(a1, a2, tol):
             raise ValueError("floats separated by less than tol")
 
 def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE', 
-    fix_nan=True):
+    fix_nan=True, fix_float=False):
     """Mann-Whitney U-test in R
     
     This is a test on the median of the distribution of sample in x minus
@@ -60,6 +60,12 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
     fix_nan : if p-value is nan due to all values being equal, then
         set p-value to 1.0. But note that the test is really not appropriate
         in this case.
+    fix_float : int, or False
+        if False or if the data is integer, does nothing
+        if int and the data is float, then the data are multiplied by this
+        and then rounded to integers. The purpose is to prevent the numerical
+        errors that are tested for in this function. Note that differences
+        less than 1/fix_float will be removed.
     
     Returns: dict with keys ['U', 'p', 'auroc']
         U : U-statistic. 
@@ -79,6 +85,12 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
         behavior = 'float'
     else:
         raise ValueError("cannot determine datatype of x and y")
+    
+    # Optionally fix float
+    if fix_float and behavior == 'float':
+        x = np.rint(x * fix_float).astype(np.int)
+        y = np.rint(y * fix_float).astype(np.int)
+        behavior = 'integer'
     
     # Define variables
     if behavior == 'integer':
