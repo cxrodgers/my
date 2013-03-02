@@ -1,5 +1,5 @@
 import matplotlib
-import numpy as np
+import numpy as np, warnings
 import matplotlib.pyplot as plt
 import scipy.stats
 
@@ -74,3 +74,189 @@ def horiz_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     ax.set_yticklabels(bar_labels)
     
     return ax
+
+def auto_subplot(n, return_fig=True, squeeze=False, **kwargs):
+    """Return nx and ny for n subplots total"""
+    nx = int(np.floor(np.sqrt(n)))
+    ny = int(np.ceil(n / float(nx)))
+    
+    if return_fig:
+        return plt.subplots(nx, ny, squeeze=squeeze, **kwargs)
+    else:
+        return nx, ny
+
+def imshow(C, x=None, y=None, ax=None, 
+    extent=None, xd_range=None, yd_range=None,
+    cmap=plt.cm.RdBu_r, origin='upper', interpolation='nearest', aspect='auto', 
+    axis_call='tight', clim=None, center_clim=False):
+    """Wrapper around imshow with better defaults.
+    
+    Plots "right-side up" with the first pixel C[0, 0] in the upper left,
+    not the lower left. So it's like an image or a matrix, not like
+    a graph. This done by setting the `origin` to 'upper', and by 
+    appropriately altering `extent` to account for this flip.
+    
+    C must be regularly-spaced. See this example for how to handle irregular:
+    http://stackoverflow.com/questions/14120222/matplotlib-imshow-with-irregular-spaced-data-points
+    
+    C - Two-dimensional array of data
+        If C has shape (m, n), then the image produced will have m rows
+        and n columns.
+    x - array of values corresonding to the x-coordinates of the columns
+        Only use this if you want numerical values on the columns.
+        Because the spacing must be regular, the way this is handled is by
+        setting `xd_range` to the first and last values in `x`
+    y - Like x but for rows.
+    ax - Axes object
+        If None, a new one is created.
+    axis_call - string
+        ax.axis is called with this. The default `tight` fits the data
+        but does not constrain the pixels to be square.
+    extent - tuple, or None
+        (left, right, bottom, top) axis range
+        Note that `bottom` and `top` are really the bottom and top labels.
+        So, generally you will want to provide this as (xmin, xmax, ymax, ymin),
+        or just provide xd_range and yd_range and this function will handle
+        the swap.
+    xd_range - 2-tuple, or None
+        If you want the x-coordinates to have numerical labels, use this.
+        Specify the value of the first and last column.
+        If None, then 0-based integer indexing is assumed.
+        NB: half a pixel is subtracted from the first and added to the last
+        to calculate the `extent`.
+    yd_range - 2-tuple, or None
+        Like xd_range but for rows.
+        Always provide this as (y-coordinate of first row of C, y-coordinate
+        of last row of C). It will be flipped as necessary to match the data.
+    cmap, origin, interpolation, aspect
+        just like plt.imshow, but different defaults
+    clim : Tuple, or None
+        Color limits to apply to image
+        See also `harmonize_clim`
+    
+    Returns: Image object
+    """
+    # Coerce data to array
+    C = np.asarray(C)
+    
+    # Set up axis if necessary
+    if ax is None:
+        f, ax = plt.subplots()
+    
+    # Data range
+    if extent is None:
+        # Specify the data range with 0-based indexing if necessary
+        if xd_range is None:
+            if x is None:
+                xd_range = (0, C.shape[1] - 1)
+            else:
+                if len(x) != C.shape[1]:
+                    warnings.warn("x-labels do not match data size")
+                xd_range = (x[0], x[-1])
+        if yd_range is None:
+            if y is None:
+                yd_range = (0, C.shape[0] - 1)
+            else:
+                if len(y) != C.shape[0]:
+                    warnings.warn("y-labels do not match data size")                
+                yd_range = (y[0], y[-1])
+        
+        # Calculate extent from data range by adding (subtracting) half a pixel
+        try:
+            xwidth = (xd_range[1] - xd_range[0]) / (C.shape[1] - 1)
+        except ZeroDivisionError:
+            xwidth = 1.
+        try:
+            ywidth = (yd_range[1] - yd_range[0]) / (C.shape[0] - 1)
+        except ZeroDivisionError:
+            ywidth=1.
+        extent = (
+            xd_range[0] - xwidth/2., xd_range[1] + xwidth/2.,
+            yd_range[0] - ywidth/2., yd_range[1] + ywidth/2.)
+
+        # Optionally invert the yd_range
+        # Because we specify the `extent` manually, we also need to correct
+        # it for origin == 'upper'
+        if origin == 'upper':
+            extent = extent[0], extent[1], extent[3], extent[2]
+    
+    # Actual call to imshow
+    im = ax.imshow(C, interpolation='nearest', origin=origin,
+        extent=extent, aspect=aspect, cmap=cmap)
+    
+    # Fix up the axes
+    ax.axis(axis_call)
+    
+    # Deal with color limits
+    if clim is not None:
+        im.set_clim(clim)
+    
+    return im
+
+def colorbar(ax=None, fig=None, new_wspace=.4, **kwargs):
+    """Insert colorbar into axis or every axis in a figure."""
+    # Separate behavior based on fig
+    if fig:
+        if new_wspace:
+            fig.subplots_adjust(wspace=new_wspace)
+        
+        # Colorbar for all contained axes
+        for ax in fig.axes:
+            if ax.images and len(ax.images) > 0:
+                c = fig.colorbar(ax.images[0], ax=ax, **kwargs)
+    
+    else:
+        # Colorbar just for ax
+        fig = ax.figure
+        if ax.images and len(ax.images) > 0:    
+            c = fig.colorbar(ax.images[0], ax=ax, **kwargs)
+    
+    return c
+
+def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False, trim=1):
+    """Set clim to be the same in all subplots in figur
+    
+    f : Figure to grab all axes from, or None
+    axa : the list of subplots (if f is None)
+    center_clim : if True, the mean of the new clim is always zero
+    trim : does nothing if 1 or None
+        otherwise, sets the clim to truncate extreme values
+        for example, if .99, uses the 1% and 99% values of the data
+    """
+    # Which axes to operate on
+    if axa is None:
+        axa = fig.get_axes()
+    axa = np.asarray(axa)
+
+    # Two ways of getting new clim
+    if trim is None or trim == 1:
+        # Get all the clim
+        all_clim = []        
+        for ax in axa.flatten():
+            for im in ax.get_images():
+                all_clim.append(np.asarray(im.get_clim()))
+        
+        # Find covering clim and optionally center
+        all_clim_a = np.array(all_clim)
+        new_clim = (np.min(all_clim_a[:, 0]), np.max(all_clim_a[:, 1]))
+    else:
+        # Trim to specified prctile of the image data
+        data_l = []
+        for ax in axa.flatten():
+            for im in ax.get_images():
+                data_l.append(np.asarray(im.get_array()).flatten())
+        data_a = np.concatenate(data_l)
+        
+        # New clim
+        new_clim = mlab.prctile(data_a, (100.*(1-trim), 100.*trim))
+    
+    # Optionally center
+    if center_clim:
+        new_clim = np.max(np.abs(new_clim)) * np.array([-1, 1])
+    
+    # Set to new value
+    for ax in axa.flatten():
+        for im in ax.get_images():
+            im.set_clim(new_clim)
+    
+    return new_clim
