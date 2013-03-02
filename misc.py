@@ -67,3 +67,20 @@ def parse_folded_by_block(lb_folded, pb_folded, start_trial=1, last_trial=None,
             res_by_block.append(pb_this_block)
     
     return res_by_block 
+
+
+def yoked_zscore(list_of_arrays, axis=1):
+    """Concatenate arrays, z-score together, break apart again"""
+    concatted = np.concatenate(list_of_arrays, axis=axis)
+    means = np.mean(concatted, axis=axis)
+    stdevs = np.std(concatted, axis=axis)
+    
+    res = []
+    for arr in list_of_arrays:
+        if axis == 1:
+            res.append((arr - means[:, None]) / stdevs[:, None])
+        elif axis == 0:
+            res.append((arr - means[None, :]) / stdevs[None, :])
+        else:
+            raise ValueError("axis must be 0 or 1")
+    return res
