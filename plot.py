@@ -1,6 +1,7 @@
 import matplotlib
 import numpy as np, warnings
 import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
 import scipy.stats
 
 def font_embed():
