@@ -10,6 +10,31 @@ import os.path
 from lxml import etree
 from ns5_process import LBPB, RecordingSession
 
+# Convenience loading functions
+def ulabel2spikes(ulabel, sort_spikes=True):
+    """Return all spike times for specified ulabel"""
+    # Load data
+    gets = getstarted()
+
+    # Parse ulabel
+    session_name = kkpandas.kkrs.ulabel2session_name(ulabel)
+    unum = kkpandas.kkrs.ulabel2unum(ulabel)
+
+    # Get server
+    kks = session2kk_server(session_name)
+
+    # Load and sort
+    spikes = np.asarray(kks.get(session=session_name, unit=unum).time)
+    if sort_spikes:
+        spikes = np.sort(spikes)
+    
+    return spikes
+
+def ulabel2trials_info(ulabel):
+    session_name = kkpandas.kkrs.ulabel2session_name(ulabel)
+    rs = session2rs(session_name)
+    trials_info = kkpandas.io.load_trials_info(rs.full_path)
+    return trials_info
 
 def ulabel2dfolded(ulabel, folding_kwargs=None, trial_picker_kwargs='random hits'):
     """Convenience function for getting dict of folded from RS/kkpandas
