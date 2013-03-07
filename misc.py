@@ -84,3 +84,91 @@ def yoked_zscore(list_of_arrays, axis=1):
         else:
             raise ValueError("axis must be 0 or 1")
     return res
+
+
+def gaussian_smooth(signal, gstd=100, glen=None, axis=1, **filtfilt_kwargs):
+    """Smooth a signal with a Gaussian window
+    
+    signal : array-like, to be filtered
+    gstd : standard deviation of Gaussian in samples (can be float)
+    glen : half-width of (truncated) Gaussian
+        Default is int(2.5 * gstd)
+        If you are using padding (on by default) and the pad length which
+        is a function of `glen` is longer than the data, you will get a
+        smoothing error. Lower `glen` or lower `padlen`.
+    axis : 0 or 1
+        Default is to filter the columns of 2d data
+    filtfilt_kwargs : other kwargs to pass to filtfilt
+        padtype - 'odd', 'even', 'constant', None
+            Default is 'odd', that is, continuing the signal at either end
+            with odd symmetry
+        padlen - int or None
+            Default is None, which is 3 * max(len(signal), glen)
+    
+    NaNs will cause problems. You should probably interpolate them, using
+    perhaps interp_nans in this module.
+    """
+    import scipy.signal
+    
+    # Defaults
+    signal = np.asarray(signal)
+    if glen is None:    
+        glen = int(2.5 * gstd)
+    
+    # Incantation such that b[0] == 1.0
+    b = scipy.signal.gaussian(glen * 2, gstd, sym=False)[glen:]
+    b = b / np.sum(b**2)   
+    
+    # Smooth
+    if signal.ndim == 1:
+        res = scipy.signal.filtfilt(b, [1], signal, **filtfilt_kwargs)
+    elif signal.ndim == 2:
+        if axis == 0:
+            res = np.array([scipy.signal.filtfilt(b, [1], sig, **filtfilt_kwargs) 
+                for sig in signal])
+        elif axis == 1:
+            res = np.array([scipy.signal.filtfilt(b, [1], sig, **filtfilt_kwargs) 
+                for sig in signal.T]).T
+        else:
+            raise ValueError("axis must be 0 or 1")
+    else:
+        raise ValueError("signal must be 1d or 2d")
+    
+    return res
+
+def interp_nans(signal, axis=1, left=None, right=None, dtype=np.float):
+    """Replaces nans in signal by interpolation along axis
+    
+    signal : array-like, containing NaNs
+    axis : 0 or 1
+        Default is to interpolate along columns
+    left, right : to be passed to interp
+    dtype : Signal is first converted to this type, mainly to avoid
+        conversion to np.object
+    """
+    # Convert to array
+    res = np.asarray(signal, dtype=np.float).copy()
+
+    # 1d or 2d behavior
+    if res.ndim == 1:
+        # Inner loop
+        nan_mask = np.isnan(res)
+        res[nan_mask] = np.interp(
+            np.where(nan_mask)[0], # x-coordinates where we need a y
+            np.where(~nan_mask)[0], # x-coordinates where we know y
+            res[~nan_mask], # known y-coordinates
+            left=left, right=right)
+    elif res.ndim == 2:
+        if axis == 0:
+            res = np.array([
+                interp_nans(sig, left=left, right=right, dtype=dtype)
+                for sig in res])
+        elif axis == 1:
+            res = np.array([
+                interp_nans(sig, left=left, right=right, dtype=dtype)
+                for sig in res.T]).T
+        else:
+            raise ValueError("axis must be 0 or 1")
+    else:
+        raise ValueError("signal must be 1d or 2d")
+    return res
