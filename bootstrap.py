@@ -175,3 +175,177 @@ class DiffBootstrapper:
     def summary(self):
         return list(self.summary_group1) + list(self.summary_group2) + \
             list(self.summary_diff) + [self.p_from_dist]
+
+
+
+# Stimulus-equalizing bootstrap functions
+
+def difference_CI_bootstrap_wrapper(data, **boot_kwargs):
+    """Given parsed data from single ulabel, return difference CIs.
+    
+    data : same format as bootstrap_main_effect expects
+    
+    Will calculate the following statistics:
+        means : mean of each condition, across draws
+        CIs : confidence intervals on each condition
+        mean_difference : mean difference between conditions
+        difference_CI : confidence interval on difference between conditions
+        p : two-tailed p-value of 'no difference'
+    
+    Returns:
+        dict of those statistics
+    """
+    # Yields a 1000 x 2 x N_trials matrix:
+    # 1000 draws from the original data, under both conditions.
+    bh = bootstrap_main_effect(data, meth=keep, **boot_kwargs)
+
+    # Find the distribution of means of each draw, across trials
+    # This is 1000 x 2, one for each condition
+    # hist(means_of_all_draws) shows the comparison across conditions
+    means_of_all_draws = bh.mean(axis=2)
+
+    # Confidence intervals across the draw means for each condition
+    condition_CIs = np.array([
+        mlab.prctile(dist, (2.5, 97.5)) for dist in means_of_all_draws.T])
+
+    # Means of each ulabel (centers of the CIs, basically)
+    condition_means = means_of_all_draws.mean(axis=0)
+
+    # Now the CI on the *difference between conditions*
+    difference_of_conditions = np.diff(means_of_all_draws).flatten()
+    difference_CI = mlab.prctile(difference_of_conditions, (2.5, 97.5)) 
+
+    # p-value of 0. in the difference distribution
+    cdf_at_value = np.sum(difference_of_conditions < 0.) / \
+        float(len(difference_of_conditions))
+    p_at_value = 2 * np.min([cdf_at_value, 1 - cdf_at_value])
+    
+    # Should probably floor the p-value at 1/n_boots
+
+    return {'p' : p_at_value, 
+        'means' : condition_means, 'CIs': condition_CIs,
+        'mean_difference': difference_of_conditions.mean(), 
+        'difference_CI' : difference_CI}
+
+def bootstrap_main_effect(data, n_boots=1000, meth=None, min_bucket=5):
+    """Given 2xN set of data of unequal sample sizes, bootstrap main effect.
+
+    We will generate a bunch of fake datasets by resampling from data.
+    Then we combine across categories. The total number of data points
+    will be the same as in the original dataset; however, the resampling
+    is such that each category is equally represented.    
+    
+    data : list of length N, each entry a list of length 2
+        Each entry in `data` is a "category".
+        Each category consists of two groups.
+        The question is: what is the difference between the groups, without
+        contaminating by the different size of each category?
+    
+    n_boots : number of times to randomly draw, should be as high as you
+        can stand
+    
+    meth : what to apply to the drawn samples from each group
+        If None, use means_tester
+        It can be any function that takes (group0, group1)
+        Results of every call are returned
+
+    Returns:
+        np.asarray([meth(group0, group1) for group0, group1 in each boot])    
+    """    
+    if meth is None:
+        meth = means_tester
+    
+    # Convert to standard format
+    data = [[np.asarray(d) for d in dd] for dd in data]
+    
+    # Test
+    alld = np.concatenate([np.concatenate([dd for dd in d]) for d in data])
+    if len(np.unique(alld)) == 0:
+        raise BootstrapError("no data")
+    elif len(np.unique(alld)) == 1:
+        raise BootstrapError("all data points are identical")
+    
+    # How many to generate from each group, total
+    N_group0 = np.sum([len(category[0]) for category in data])
+    N_group1 = np.sum([len(category[1]) for category in data])
+    N_categories = len(data)
+    
+    # Which categories to draw from
+    res_l = []
+    for n_boot in range(n_boots):
+        # Determine the representation of each category
+        # Randomly generating so in the limit each category is equally
+        # represented. Alternatively we could use fixed, equal representation,
+        # but then we need to worry about rounding error when it doesn't
+        # divide exactly evenly.
+        fakedata_category_label_group0 = np.random.randint(  
+            0, N_categories, N_group0)
+        fakedata_category_label_group1 = np.random.randint(
+            0, N_categories, N_group1)
+        
+        # Draw the data, separately by each category
+        fakedata_by_group = [[], []]
+        for category_num in range(N_categories):
+            # Group 0
+            n_draw = np.sum(fakedata_category_label_group0 == category_num)
+            if len(data[category_num][0]) < min_bucket:
+                raise BootstrapError("insufficient data in a category")
+            idxs = np.random.randint(0, len(data[category_num][0]),
+                n_draw)
+            fakedata_by_group[0].append(data[category_num][0][idxs])
+            
+            # Group 1
+            n_draw = np.sum(fakedata_category_label_group0 == category_num)
+            if len(data[category_num][1]) < min_bucket:
+                raise BootstrapError("insufficient data in a category")
+            idxs = np.random.randint(0, len(data[category_num][1]),
+                n_draw)
+            fakedata_by_group[1].append(data[category_num][1][idxs])
+        
+        # Concatenate across categories
+        fakedata_by_group[0] = np.concatenate(fakedata_by_group[0])
+        fakedata_by_group[1] = np.concatenate(fakedata_by_group[1])
+        
+        # Test difference in means
+        #res = np.mean(fakedata_by_group[1]) - np.mean(fakedata_by_group[0])
+        res = meth(fakedata_by_group[0], fakedata_by_group[1])
+        res_l.append(res)
+    
+    return np.asarray(res_l)
+
+# Lambdas for bootstrap_main_effect
+def means_tester(d0, d1):
+    return np.mean(d1) - np.mean(d0)
+
+def keep(d0, d1):
+    return (d0, d1)
+
+
+# Utility bootstrap functions
+def CI_compare(CI1, CI2):
+    """Return +1 if CI1 > CI2, -1 if CI1 < CI2, 0 if overlapping"""
+    if CI1[1] < CI2[0]:
+        return -1
+    elif CI2[1] < CI1[0]:
+        return +1
+    else:
+        return 0
+
+def simple_bootstrap(data, n_boots=1000, min_bucket=20):
+    if len(data) < min_bucket:
+        raise BootstrapError("too few samples")
+    
+    res = []
+    data = np.asarray(data)
+    for boot in range(n_boots):
+        idxs = np.random.randint(0, len(data), len(data))
+        draw = data[idxs]
+        res.append(np.mean(draw))
+    res = np.asarray(res)
+    CI = mlab.prctile(res, (2.5, 97.5))
+    
+    return res, res.mean(), CI
+
+class BootstrapError(BaseException):
+    pass
+
