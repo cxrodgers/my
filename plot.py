@@ -326,4 +326,5 @@ def pie(n_list, labels, ax=None, autopct=None, colors=None):
     for t in pct_texts: 
         plt.setp(t, 'color', 'w', 'fontweight', 'bold')
     
+    ax.axis('equal')
     return ax
