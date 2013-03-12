@@ -48,6 +48,36 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
     ax.set_ylabel(yname)
     plt.show()
 
+def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
+    bar_errs=None, bar_colors=None, bar_hatches=None, tick_labels_rotation=90,
+    plot_bar_ends='ks'):
+    """Vertical bar plot"""
+    # Defaults
+    if bar_positions is None:
+        bar_positions = list(range(len(bar_lengths)))
+    bar_centers = bar_positions
+    if ax is None:
+        f, ax = plt.subplots()
+    
+    # Make the bar plot
+    ax.bar(left=bar_centers, bottom=0, width=.8, height=bar_lengths, 
+        align='center', yerr=bar_errs, capsize=0,
+        ecolor='k', color=bar_colors, orientation='vertical')
+    
+    # Hatch it
+    if bar_hatches is not None:
+        for p, hatch in zip(ax.patches, bar_hatches): p.set_hatch(hatch)
+    
+    # Plot squares on the bar tops
+    if plot_bar_ends:
+        ax.plot(bar_centers, bar_lengths, plot_bar_ends)
+    
+    # Labels
+    ax.set_xticks(bar_centers)
+    ax.set_xticklabels(bar_labels, rotation=tick_labels_rotation)
+    
+    return ax
+
 def horiz_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     bar_errs=None, bar_colors=None, bar_hatches=None):
     """Horizontal bar plot"""
@@ -261,3 +291,39 @@ def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False, trim=1):
             im.set_clim(new_clim)
     
     return new_clim
+
+def pie(n_list, labels, ax=None, autopct=None, colors=None):
+    """Make a pie chart
+    
+    n_list : list of integers, size of each category
+    labels : list of strings, label for each category
+    colors : list of strings convertable to colors
+    autopct : function taking a percentage and converting it to a label
+        Default converts it to "N / N_total"
+    
+    """
+    # How to create the percentage strings
+    n_total = np.sum(n_list)
+    def percent_to_fraction(pct):
+        n = int(np.rint(pct / 100. * n_total))
+        return '%d/%d' % (n, n_total)
+    if autopct is None:
+        autopct = percent_to_fraction
+
+    # Create the figure
+    if ax is None:
+        f, ax  = plt.subplots()
+        f.subplots_adjust(left=.23, right=.81)
+
+    # Plot it
+    patches, texts, pct_texts = ax.pie(
+        n_list, colors=colors,
+        labels=labels, 
+        explode=[.1]*len(n_list),
+        autopct=percent_to_fraction)
+
+    #for t in texts: t.set_horizontalalignment('center')
+    for t in pct_texts: 
+        plt.setp(t, 'color', 'w', 'fontweight', 'bold')
+    
+    return ax
