@@ -23,7 +23,123 @@ def rescue_tick(ax=None, f=None, x=3, y=3):
             ax.xaxis.set_major_locator(plt.MaxNLocator(x))
         if y is not None:
             ax.yaxis.set_major_locator(plt.MaxNLocator(y))
+
+def crucifix(x, y, xerr=None, yerr=None, relative_CIs=False, p=None, 
+    ax=None, factor=None, below=None, above=None, null=None,
+    data_range=None, axtype=None):
+    """Crucifix plot y vs x around the unity line
+    
+    x, y : array-like, length N, paired data
+    xerr, yerr : array-like, Nx2, confidence intervals around x and y
+    relative_CIs : if True, then add x to xerr (and ditto yerr)
+    p : array-like, length N, p-values for each point
+    ax : graphical object
+    factor : multiply x, y, and errors by this value
+    below : dict of point specs for points significantly below the line
+    above : dict of point specs for points significantly above the line
+    null : dict of point specs for points nonsignificant
+    data_range : re-adjust the data limits to this
+    axtype : if 'symlog' then set axes to symlog
+    """
+    # Set up point specs
+    if below is None:
+        below = {'color': 'b', 'marker': '.', 'ls': '-', 'alpha': 1.0,
+            'mec': 'b', 'mfc': 'b'}
+    if above is None:
+        above = {'color': 'r', 'marker': '.', 'ls': '-', 'alpha': 1.0,
+            'mec': 'r', 'mfc': 'r'}
+    if null is None:
+        null = {'color': 'gray', 'marker': '.', 'ls': '-', 'alpha': 0.5,
+            'mec': 'gray', 'mfc': 'gray'}
+    
+    # Defaults for data range
+    if data_range is None:
+        data_range = [None, None]
+    else:
+        data_range = list(data_range)
+    
+    # Convert to array and optionally multiply
+    if factor is None:
+        factor = 1
+    x = np.asarray(x) * factor
+    y = np.asarray(y) * factor
+
+    # p-values
+    if p is not None: 
+        p = np.asarray(p)
+    
+    # Same with errors but optionally also reshape and recenter
+    if xerr is not None: 
+        xerr = np.asarray(xerr) * factor
+        if xerr.ndim == 1:
+            xerr = np.array([-xerr, xerr]).T
+        if relative_CIs:
+            xerr += x[:, None]
+    if yerr is not None: 
+        yerr = np.asarray(yerr) * factor
+        if yerr.ndim == 1:
+            yerr = np.array([-yerr, yerr]).T
+        if relative_CIs:
+            yerr += y[:, None]
+    
+    # Create figure handles
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(111)
+    
+    # Plot each point
+    min_value, max_value = [], []
+    for n, (xval, yval) in enumerate(zip(x, y)):
+        # Get p-value and error bars for this point
+        pval = 1.0 if p is None else p[n]
+        xerrval = xerr[n] if xerr is not None else None
+        yerrval = yerr[n] if yerr is not None else None
         
+        # What color
+        if pval < .05 and yval < xval:
+            pkwargs = below
+        elif pval < .05 and yval > xval:
+            pkwargs = above
+        else:
+            pkwargs = null
+        lkwargs = pkwargs.copy()
+        lkwargs.pop('marker')
+        
+        # Now actually plot the point
+        ax.plot([xval], [yval], **pkwargs)
+        
+        # plot error bars, keep track of data range
+        if xerrval is not None:
+            ax.plot(xerrval, [yval, yval], **lkwargs)
+            max_value += list(xerrval)
+        else:
+            max_value.append(xval)
+        
+        # same for y
+        if yerrval is not None:
+            ax.plot([xval, xval], yerrval, **lkwargs)
+            max_value += list(yerrval)
+        else:
+            max_value.append(xval)        
+
+    # Plot the unity line
+    if data_range[0] is None:
+        data_range[0] = np.min(max_value)
+    if data_range[1] is None:
+        data_range[1] = np.max(max_value)
+    ax.plot(data_range, data_range, 'k:')
+    ax.set_xlim(data_range)
+    ax.set_ylim(data_range)
+    
+    # symlog
+    if axtype == 'symlog':
+        ax.set_xscale('symlog')
+        ax.set_yscale('symlog')
+    
+    ax.axis('scaled')
+    
+    
+    return ax
 
 def scatter_with_trend(x, y, xname='X', yname='Y', ax=None, 
     legend_font_size='medium'):
