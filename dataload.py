@@ -65,6 +65,13 @@ def ulabel2dfolded(ulabel, folding_kwargs=None, trial_picker_kwargs='random hits
         labels = ['-'.join(t) for t in label_kwargs]
         trial_picker_kwargs = {'labels': labels, 'label_kwargs': label_kwargs,
             'nonrandom' : 0}
+    elif trial_picker_kwargs == 'random hits by block':
+        trial_picker_kwargs = {
+            'labels': ['LB', 'PB'],
+            'label_kwargs': [{'block': 2} , {'block': 4}],
+            'nonrandom' : 0,
+            'outcome' : 'hit'
+            }
 
     # How to fold the window around each trial
     if folding_kwargs is None:
