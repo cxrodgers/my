@@ -104,6 +104,8 @@ def getstarted():
             Includes only units from XML files with score above 3 and
             with session marked analyze=True
         unit_db : pandas DataFrame consisting of information about each ulabel
+        session_db : pandas DataFrame of information about each session
+        session_list : list of session names with analyze=True
     """
     res = {}
     
@@ -157,6 +159,11 @@ def getstarted():
     
     res['unit_db'] = pandas.DataFrame.from_csv(os.path.expanduser(
         '~/Dropbox/lab/unit_db.csv'))
+
+    res['session_db'] = pandas.DataFrame.from_csv(os.path.expanduser(
+        '~/Dropbox/lab/sessions_df.csv'))
+    res['session_list'] = list(res['session_db'][
+        res['session_db'].analyze == 'True'].index)
 
     return res
 
