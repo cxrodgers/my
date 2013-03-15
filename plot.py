@@ -26,7 +26,8 @@ def rescue_tick(ax=None, f=None, x=3, y=3):
 
 def crucifix(x, y, xerr=None, yerr=None, relative_CIs=False, p=None, 
     ax=None, factor=None, below=None, above=None, null=None,
-    data_range=None, axtype=None):
+    data_range=None, axtype=None, zero_substitute=1e-6,
+    suppress_null_error_bars=False):
     """Crucifix plot y vs x around the unity line
     
     x, y : array-like, length N, paired data
@@ -95,6 +96,15 @@ def crucifix(x, y, xerr=None, yerr=None, relative_CIs=False, p=None,
         xerrval = xerr[n] if xerr is not None else None
         yerrval = yerr[n] if yerr is not None else None
         
+        # Replace neginfs
+        if xerrval is not None:
+            xerrval[xerrval == 0] = zero_substitute
+        if yerrval is not None:
+            yerrval[yerrval == 0] = zero_substitute
+        
+        #~ if xval < .32:
+            #~ 1/0
+        
         # What color
         if pval < .05 and yval < xval:
             pkwargs = below
@@ -109,14 +119,14 @@ def crucifix(x, y, xerr=None, yerr=None, relative_CIs=False, p=None,
         ax.plot([xval], [yval], **pkwargs)
         
         # plot error bars, keep track of data range
-        if xerrval is not None:
+        if xerrval is not None and not (suppress_null_error_bars and pkwargs is null):
             ax.plot(xerrval, [yval, yval], **lkwargs)
             max_value += list(xerrval)
         else:
             max_value.append(xval)
         
         # same for y
-        if yerrval is not None:
+        if yerrval is not None and not (suppress_null_error_bars and pkwargs is null):
             ax.plot([xval, xval], yerrval, **lkwargs)
             max_value += list(yerrval)
         else:
@@ -132,9 +142,9 @@ def crucifix(x, y, xerr=None, yerr=None, relative_CIs=False, p=None,
     ax.set_ylim(data_range)
     
     # symlog
-    if axtype == 'symlog':
-        ax.set_xscale('symlog')
-        ax.set_yscale('symlog')
+    if axtype:
+        ax.set_xscale(axtype)
+        ax.set_yscale(axtype)
     
     ax.axis('scaled')
     
