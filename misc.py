@@ -6,9 +6,101 @@ import warnings
 def no_warn_rs():
     warnings.filterwarnings('ignore', module='ns5_process.RecordingSession$')    
 
+def parse_by_block(lb_counts, pb_counts, lb_trial_numbers, pb_trial_numbers,
+    start_trial=None, last_trial=None, session_name=None):
+    """Parses counts into each block (with corresponding trial numbers)
+    
+    Using the known block structure (80 trials LB, 80 trials PB, etc) 
+    and the trial labels in the folded, split the counts into each 
+    sequential block.
+    
+    parse_folded_by_block could almost be reimplemented with this function
+    if only it accepted __getslice__[trial_number]
+    Instead the code is almost duplicated.
+    
+    lb_counts, pb_counts : Array-like, list of counts, one per trial
+    lb_trial_numbers, pb_trial_numbers : Array-like, same as counts, but
+        contianing trial numbers.
+    start_trial : where to start counting up by 80
+        if None, auto-get from session_db and unit_db (or just use 1 if
+        session name not provided)
+    last_trial : last trial to include, inclusive
+        if None, use the max trial in either set of labels
+    session_name : if start_trial is None and you specify this, it will
+        auto grab start_trial from session_db
+    
+    Returns: counts_by_block
+    A list of arrays, always beginning with LB, eg LB1, PB1, LB2, PB2...
+    """
+    # Auto-get first trial
+    if start_trial is None:
+        if session_name is None:
+            start_trial = 1
+        else:
+            import my.dataload
+            session_db = my.dataload.getstarted()['session_db']
+            first_trial = int(round(session_db['first_trial'][session_name]))
+            # Convert to beginning of first full LB block
+            # This drops some trials in non-full LBPB blocks
+            # Change the final +161 to +1 to include everything
+            start_trial = ((first_trial - 1) / 160) * 160 + 161
+    
+    # Arrayify
+    lb_counts = np.asarray(lb_counts)
+    pb_counts = np.asarray(pb_counts)
+    lb_trial_numbers = np.asarray(lb_trial_numbers)
+    pb_trial_numbers = np.asarray(pb_trial_numbers)
+    
+    # Where to stop putting trials into blocks    
+    if last_trial is None:
+        last_trial = np.max([lb_trial_numbers.max(), pb_trial_numbers.max()])
+    
+    # Initialize return variable
+    res_by_block = []
+    
+    # Parse by block
+    for block_start in range(start_trial, last_trial + 1, 80):
+        # Counts from lb in this block
+        lb_this_block_msk = (
+            (lb_trial_numbers >= block_start) &
+            (lb_trial_numbers < block_start + 80))
+        lb_this_block = lb_counts[lb_this_block_msk]
+        
+        # Counts from pb in this block
+        pb_this_block_msk = (
+            (pb_trial_numbers >= block_start) &
+            (pb_trial_numbers < block_start + 80))
+        pb_this_block = pb_counts[pb_this_block_msk]
+        
+        # Error check
+        if np.mod(block_start - start_trial, 160) == 0:
+            # Should be in an LB block
+            assert len(pb_this_block) == 0
+            if len(lb_this_block) == 0:
+                print "warning: no trials around trial %d" % block_start
+            res_by_block.append(lb_this_block)
+        else:
+            # Should be in a PB block
+            assert len(lb_this_block) == 0
+            if len(pb_this_block) == 0:
+                print "warning: no trials around trial %d" % block_start            
+            res_by_block.append(pb_this_block)
+    
+    # Error check that all counts were included and ordering maintained
+    assert np.all(np.concatenate(res_by_block[::2]) == 
+        lb_counts[lb_trial_numbers >= start_trial])
+    assert np.all(np.concatenate(res_by_block[1::2]) == 
+        pb_counts[pb_trial_numbers >= start_trial])
+    
+    return res_by_block 
+
 def parse_folded_by_block(lb_folded, pb_folded, start_trial=1, last_trial=None,
     session_name=None):
     """Parses Folded into each block
+    
+    parse_by_block is now more feature-ful
+    TODO: reimplement parse_by_block to just return trial numbers, then
+    this function can wrap that and use the trial numbers to slice the foldeds
     
     Using the known block structure (80 trials LB, 80 trials PB, etc) 
     and the trial labels in the folded, split the counts into each 
