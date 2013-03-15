@@ -18,6 +18,9 @@ def parse_by_block(lb_counts, pb_counts, lb_trial_numbers, pb_trial_numbers,
     if only it accepted __getslice__[trial_number]
     Instead the code is almost duplicated.
     
+    This one is overridden because it starts at 157:
+        YT6A_120201_behaving, start at 161
+    
     lb_counts, pb_counts : Array-like, list of counts, one per trial
     lb_trial_numbers, pb_trial_numbers : Array-like, same as counts, but
         contianing trial numbers.
@@ -36,6 +39,9 @@ def parse_by_block(lb_counts, pb_counts, lb_trial_numbers, pb_trial_numbers,
     if start_trial is None:
         if session_name is None:
             start_trial = 1
+        elif session_name == 'YT6A_120201_behaving':
+            # Forcible override
+            start_trial = 161
         else:
             import my.dataload
             session_db = my.dataload.getstarted()['session_db']
