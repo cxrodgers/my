@@ -40,10 +40,10 @@ def parse_by_block(lb_counts, pb_counts, lb_trial_numbers, pb_trial_numbers,
             import my.dataload
             session_db = my.dataload.getstarted()['session_db']
             first_trial = int(round(session_db['first_trial'][session_name]))
-            # Convert to beginning of first full LB block
-            # This drops some trials in non-full LBPB blocks
-            # Change the final +161 to +1 to include everything
-            start_trial = ((first_trial - 1) / 160) * 160 + 161
+            # Convert to beginning of first LBPB with any trials
+            # The first block might be quite short
+            # Change the final +1 to +161 to start at the first full block
+            start_trial = ((first_trial - 1) / 160) * 160 + 1
     
     # Arrayify
     lb_counts = np.asarray(lb_counts)
