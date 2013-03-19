@@ -34,7 +34,7 @@ def check_float_conversion(a1, a2, tol):
             raise ValueError("floats separated by less than tol")
 
 def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE', 
-    fix_nan=True, fix_float=False):
+    fix_nan=True, fix_float=False, paired='FALSE'):
     """Mann-Whitney U-test in R
     
     This is a test on the median of the distribution of sample in x minus
@@ -115,7 +115,7 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
         print "warning empty data in utest, returning p = 1.0"
         U, p, auroc = 0.0, 1.0, 0.5
     else:
-        res = r("wilcox.test(x, y, mu=%r, exact=%s)" % (mu, exact))
+        res = r("wilcox.test(x, y, mu=%r, exact=%s, paired=%s)" % (mu, exact, paired))
         U, p = res[0][0], res[2][0]
         auroc = float(U) / (len(x) * len(y))
     
