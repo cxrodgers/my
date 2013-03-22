@@ -215,7 +215,7 @@ def gaussian_smooth(signal, gstd=100, glen=None, axis=1, **filtfilt_kwargs):
     
     # Incantation such that b[0] == 1.0
     b = scipy.signal.gaussian(glen * 2, gstd, sym=False)[glen:]
-    b = b / np.sum(b**2)   
+    b = b / b.sum()
     
     # Smooth
     if signal.ndim == 1:
@@ -270,3 +270,43 @@ def interp_nans(signal, axis=1, left=None, right=None, dtype=np.float):
     else:
         raise ValueError("signal must be 1d or 2d")
     return res
+
+
+
+
+def correlate(v0, v1, mode='valid', normalize=True, auto=False):
+    """Wrapper around np.correlate to calculate the timepoints
+
+    'full' : all possible overlaps, from last of first and beginning of
+        second, to vice versa. Total length: 2*N - 1
+    'same' : Slice out the central 'N' of 'full'. There will be one more
+        negative than positive timepoint.
+    'valid' : only overlaps where all of both arrays are included
+    
+    normalize: accounts for the amount of data in each bin
+    auto: sets the center peak to zero
+    
+    Positive peaks (latter half of the array) mean that the second array
+    leads the first array.
+   
+    """
+    counts = np.correlate(v0, v1, mode=mode)
+    
+    if len(v0) != len(v1):
+        raise ValueError('not tested')
+    
+    if mode == 'full':
+        corrn = np.arange(-len(v0) + 1, len(v0), dtype=np.int)
+    elif mode == 'same':
+        corrn = np.arange(-len(v0) / 2, len(v0) - (len(v0) / 2), 
+            dtype=np.int)
+    else:
+        raise ValueError('mode not tested')
+    
+    if normalize:
+        counts = counts / (len(v0) - np.abs(corrn)).astype(np.float)
+    
+    if auto:
+        counts[corrn == 0] = 0
+    
+    return counts, corrn
