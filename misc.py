@@ -2,6 +2,7 @@
 
 import numpy as np
 import warnings
+import matplotlib.mlab as mlab
 
 def no_warn_rs():
     warnings.filterwarnings('ignore', module='ns5_process.RecordingSession$')    
@@ -272,8 +273,7 @@ def interp_nans(signal, axis=1, left=None, right=None, dtype=np.float):
     return res
 
 
-
-
+# Correlation and coherence functions
 def correlate(v0, v1, mode='valid', normalize=True, auto=False):
     """Wrapper around np.correlate to calculate the timepoints
 
@@ -310,3 +310,80 @@ def correlate(v0, v1, mode='valid', normalize=True, auto=False):
         counts[corrn == 0] = 0
     
     return counts, corrn
+
+def binned_pair2cxy(binned0, binned1, Fs=1000., NFFT=256, noverlap=None,
+    windw=mlab.window_hanning, detrend=mlab.detrend_mean, freq_high=100,
+    average_over_trials=True):
+    """Given 2d array of binned times, return Cxy
+    
+    Helper function to ensure faking goes smoothly
+    binned: 2d array, trials on rows, timepoints on cols
+        Keep trials lined up!
+    rest : psd_kwargs. noverlap defaults to NFFT/2
+
+    Trial averaging, if any, is done between calculating the spectra and
+    normalizing them.
+
+    Will Cxy each trial with psd_kwargs, then mean over trials, then slice out 
+    frequencies below freq_high and return.
+    """
+    # Set up psd_kwargs
+    if noverlap is None:
+        noverlap = NFFT / 2
+    psd_kwargs = {'Fs': Fs, 'NFFT': NFFT, 'noverlap': noverlap, 
+        'detrend': detrend, 'window': windw}
+
+    # Cxy each trial
+    ppxx_l, ppyy_l, ppxy_l = [], [], []
+    for row0, row1 in zip(binned0, binned1):
+        ppxx, freqs = mlab.psd(row0, **psd_kwargs)
+        ppyy, freqs = mlab.psd(row1, **psd_kwargs)
+        ppxy, freqs = mlab.csd(row0, row1, **psd_kwargs)
+        ppxx_l.append(ppxx); ppyy_l.append(ppyy); ppxy_l.append(ppxy)
+    
+    # Optionally mean over trials, then normalize
+    S12 = np.real_if_close(np.array(ppxy_l))
+    S1 = np.array(ppxx_l)
+    S2 = np.array(ppyy_l)
+    if average_over_trials:
+        S12 = S12.mean(0)
+        S1 = S1.mean(0)
+        S2 = S2.mean(0)
+    Cxy = S12 / np.sqrt(S1 * S2)
+    
+    # Truncate unnecessary frequencies
+    if freq_high:
+        topbin = np.where(freqs > freq_high)[0][0]
+        freqs = freqs.T[1:topbin].T
+        Cxy = Cxy.T[1:topbin].T
+    return Cxy, freqs
+
+def binned2pxx(binned, Fs=1000., NFFT=256, noverlap=None,
+    windw=mlab.window_hanning, detrend=mlab.detrend_mean, freq_high=100):
+    """Given 2d array of binned times, return Pxx
+    
+    Helper function to ensure faking goes smoothly
+    binned: 2d array, trials on rows, timepoints on cols
+    rest : psd_kwargs. noverlap defaults to NFFT/2
+    
+    Will Pxx each trial separately with psd_kwargs, then slice out 
+    frequencies below freq_high and return.
+    """
+    # Set up psd_kwargs
+    if noverlap is None:
+        noverlap = NFFT / 2
+    psd_kwargs = {'Fs': Fs, 'NFFT': NFFT, 'noverlap': noverlap, 
+        'detrend': detrend, 'window': windw}    
+    
+    # Pxx each trial
+    ppxx_l = []
+    for row in binned:
+        ppxx, freqs = mlab.psd(row, **psd_kwargs)
+        ppxx_l.append(ppxx)
+    
+    # Truncate unnecessary frequencies
+    if freq_high:
+        topbin = np.where(freqs > freq_high)[0][0]
+        freqs = freqs[1:topbin]
+        Pxx = np.asarray(ppxx_l)[:, 1:topbin]       
+    return Pxx, freqs
