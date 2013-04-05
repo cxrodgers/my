@@ -4,6 +4,64 @@ import numpy as np
 import warnings
 import matplotlib.mlab as mlab
 
+def rint(arr):
+    """Round with rint and cast to int"""
+    return np.rint(arr).astype(np.int)
+
+def is_nonstring_iter(val):
+    return hasattr(val, '__len__') and not isinstance(val, str)
+
+def pick(df, isnotnull=None, **kwargs):
+    """Function to pick row indices from DataFrame.
+    
+    Copied from kkpandas
+    
+    This method provides a nicer interface to choose rows from a DataFrame
+    that satisfy specified constraints on the columns.
+    
+    isnotnull : column name, or list of column names, that should not be null.
+        See pandas.isnull for a defintion of null
+    
+    All additional kwargs are interpreted as {column_name: acceptable_values}.
+    For each column_name, acceptable_values in kwargs.items():
+        The returned indices into column_name must contain one of the items
+        in acceptable_values.
+    
+    If acceptable_values is None, then that test is skipped.
+        Note that this means there is currently no way to select rows that
+        ARE none in some column.
+    
+    If acceptable_values is a single string or value (instead of a list), 
+    then the returned rows must contain that single string or value.
+    
+    TODO:
+    add flags for string behavior, AND/OR behavior, error if item not found,
+    return unique, ....
+    """
+    msk = np.ones(len(df), dtype=np.bool)
+    for key, val in kwargs.items():
+        if val is None:
+            continue
+        elif is_nonstring_iter(val):
+            msk &= df[key].isin(val)
+        else:
+            msk &= (df[key] == val)
+    
+    if isnotnull is not None:
+        # Edge case
+        if not is_nonstring_iter(isnotnull):
+            isnotnull = [isnotnull]
+        
+        # Filter by not null
+        for key in isnotnull:
+            msk &= -pandas.isnull(df[key])
+
+    return df.index[msk]
+
+def pick_rows(df, **kwargs):
+    """Returns sliced DataFrame based on indexes from pick"""
+    return df.ix[pick(df, **kwargs)]
+
 def no_warn_rs():
     warnings.filterwarnings('ignore', module='ns5_process.RecordingSession$')    
 

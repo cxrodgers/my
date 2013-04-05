@@ -9,3 +9,7 @@ reload(misc)
 
 import stats
 reload(stats)
+
+
+# shortcuts
+from misc import rint, pick, pick_rows
