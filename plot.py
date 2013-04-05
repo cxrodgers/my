@@ -4,6 +4,13 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import scipy.stats
 
+def despine(ax, detick=True):
+    """Remove the top and right axes from the plot"""
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.tick_params(top=False, right=False)
+    return ax
+
 def font_embed():
     matplotlib.rcParams['ps.useafm'] = True
     matplotlib.rcParams['svg.fonttype'] = 'svgfont'
@@ -176,7 +183,7 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
 
 def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     bar_errs=None, bar_colors=None, bar_hatches=None, tick_labels_rotation=90,
-    plot_bar_ends='ks'):
+    plot_bar_ends='ks', bar_width=.8):
     """Vertical bar plot"""
     # Defaults
     if bar_positions is None:
@@ -186,7 +193,7 @@ def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
         f, ax = plt.subplots()
     
     # Make the bar plot
-    ax.bar(left=bar_centers, bottom=0, width=.8, height=bar_lengths, 
+    ax.bar(left=bar_centers, bottom=0, width=bar_width, height=bar_lengths, 
         align='center', yerr=bar_errs, capsize=0,
         ecolor='k', color=bar_colors, orientation='vertical')
     
