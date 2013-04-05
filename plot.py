@@ -172,7 +172,7 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
     ax.legend(loc='best', prop={'size':legend_font_size})
     ax.set_xlabel(xname)
     ax.set_ylabel(yname)
-    plt.show()
+    return ax
 
 def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     bar_errs=None, bar_colors=None, bar_hatches=None, tick_labels_rotation=90,
