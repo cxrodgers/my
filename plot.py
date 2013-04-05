@@ -1,3 +1,6 @@
+"""Wrapper functions with boilerplate code for making plots the way I like them
+"""
+
 import matplotlib
 import numpy as np, warnings
 import matplotlib.pyplot as plt
@@ -460,4 +463,24 @@ def pie(n_list, labels, ax=None, autopct=None, colors=None):
         plt.setp(t, 'color', 'w', 'fontweight', 'bold')
     
     ax.axis('equal')
+    return ax
+
+
+def hist_p(data, p, bins=20, thresh=.05, ax=None, **hist_kwargs):
+    """Make a histogram with significant entries colored differently"""
+    if ax is None:
+        f, ax = plt.subplots()
+    
+    if np.sum(p > thresh) == 0:
+        # All nonsig
+        ax.hist(data[p<=thresh], bins=bins, histtype='barstacked', color='r',
+            **hist_kwargs)    
+    elif np.sum(p < thresh) == 0:
+        # All sig
+        ax.hist(data[p>thresh], bins=bins, histtype='barstacked', color='k',
+            **hist_kwargs)            
+    else:
+        # Mixture
+        ax.hist([data[p>thresh], data[p<=thresh]], bins=bins, 
+            histtype='barstacked', color=['k', 'r'], rwidth=1.0, **hist_kwargs)    
     return ax
