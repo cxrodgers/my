@@ -445,3 +445,13 @@ def binned2pxx(binned, Fs=1000., NFFT=256, noverlap=None,
         freqs = freqs[1:topbin]
         Pxx = np.asarray(ppxx_l)[:, 1:topbin]       
     return Pxx, freqs
+
+
+def sem(data, axis=None):
+    """Standard error of the mean"""
+    if axis is None:
+        N = len(data)
+    else:
+        N = np.asarray(data).shape[axis]
+    
+    return np.std(np.asarray(data), axis) / np.sqrt(N)

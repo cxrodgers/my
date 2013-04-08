@@ -6,6 +6,7 @@ import numpy as np, warnings
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import scipy.stats
+import misc
 
 def despine(ax, detick=True):
     """Remove the top and right axes from the plot"""
@@ -210,7 +211,9 @@ def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     
     # Labels
     ax.set_xticks(bar_centers)
-    ax.set_xticklabels(bar_labels, rotation=tick_labels_rotation)
+    ax.set_xlim(bar_centers[0] - bar_width, bar_centers[-1] + bar_width)
+    if bar_labels:
+        ax.set_xticklabels(bar_labels, rotation=tick_labels_rotation)
     
     return ax
 
@@ -484,3 +487,34 @@ def hist_p(data, p, bins=20, thresh=.05, ax=None, **hist_kwargs):
         ax.hist([data[p>thresh], data[p<=thresh]], bins=bins, 
             histtype='barstacked', color=['k', 'r'], rwidth=1.0, **hist_kwargs)    
     return ax
+
+
+def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0, **kwargs):
+    """Plots mean and SEM for a matrix `data`"""
+    if ax is None:
+        f, ax = plt.subplots(1, 1)
+
+    # Put data into 2d, or single trace
+    data = np.asarray(data)
+    if np.min(data.shape) == 1:
+        data = data.flatten()
+    if data.ndim == 1:
+        #single trace
+        single_trace = True
+        errorbar = False        
+        if x is None:
+            x = range(len(data))
+    else:
+        single_trace = False        
+        if x is None:
+            x = range(len(np.mean(data, axis=axis)))
+    
+    # plot
+    if single_trace:
+        ax.plot(x, data, **kwargs)
+    else:
+        if errorbar:
+            ax.errorbar(x=x, y=np.mean(data, axis=axis),
+                yerr=misc.sem(data, axis=axis), **kwargs)
+        else:
+            ax.plot(np.mean(data, axis=axis), **kwargs)
