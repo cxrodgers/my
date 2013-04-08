@@ -8,11 +8,11 @@ import matplotlib.mlab as mlab
 import scipy.stats
 import misc
 
-def despine(ax, detick=True):
+def despine(ax, detick=True, which=('right', 'top')):
     """Remove the top and right axes from the plot"""
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.tick_params(top=False, right=False)
+    for w in which:
+        ax.spines[w].set_visible(False)
+        ax.tick_params(**{w:False})
     return ax
 
 def font_embed():
@@ -493,6 +493,10 @@ def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0, **kwargs):
     """Plots mean and SEM for a matrix `data`"""
     if ax is None:
         f, ax = plt.subplots(1, 1)
+    
+    # plotting defaults
+    if 'capsize' not in kwargs:
+        kwargs['capsize'] = 0
 
     # Put data into 2d, or single trace
     data = np.asarray(data)
