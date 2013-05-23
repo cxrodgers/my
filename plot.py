@@ -8,6 +8,62 @@ import matplotlib.mlab as mlab
 import scipy.stats
 import misc
 
+def radar_by_stim(evoked_resp):
+    """Given a df of spikes by stim, plot radar
+    
+    evoked_resp should have arrays of counts indexed by all the stimulus
+    names
+    """
+    f, ax = plt.subplots(figsize=(3, 3), subplot_kw={'polar': True})
+
+    # Heights of the bars
+    evoked_resp = evoked_resp.ix[LBPB.mixed_stimnames]
+    barmeans = evoked_resp.apply(np.mean)
+    barstderrs = evoked_resp.apply(myutils.std_error)
+    
+    # Set up the radar
+    radar_dists = [[barmeans[sname+block] 
+        for sname in ['ri_hi', 'le_hi', 'le_lo', 'ri_lo']] 
+        for block in ['_lc', '_pc']]
+    
+    # make it circular
+    circle_meansLB = np.array(radar_dists[0] + [radar_dists[0][0]])
+    circle_meansPB = np.array(radar_dists[1] + [radar_dists[1][0]])
+    circle_errsLB = np.array([barstderrs[sname+'_lc'] for sname in 
+        ['ri_hi', 'le_hi', 'le_lo', 'ri_lo', 'ri_hi']])
+    circle_errsPB = np.array([barstderrs[sname+'_pc'] for sname in 
+        ['ri_hi', 'le_hi', 'le_lo', 'ri_lo', 'ri_hi']])
+    
+    # x-values (really theta values)
+    xts = np.array([45, 135, 225, 315, 405])*np.pi/180.0
+    
+    # Plot LB means and errs
+    #ax.errorbar(xts, circle_meansLB, circle_errsLB, color='b')
+    ax.plot(xts, circle_meansLB, color='b')
+    ax.fill_between(x=xts, y1=circle_meansLB-circle_errsLB,
+        y2=circle_meansLB+circle_errsLB, color='b', alpha=.5)
+    
+    # Plot PB means and errs
+    ax.plot(xts, circle_meansPB, color='r')
+    ax.fill_between(x=xts, y1=circle_meansPB-circle_errsPB,
+        y2=circle_meansPB+circle_errsPB, color='r', alpha=.5)
+    
+    # Tick labels
+    xtls = ['right\nhigh', 'left\nhigh', 'left\nlow', 'right\nlow']        
+    ax.set_xticks(xts)
+    ax.set_xticklabels([]) # if xtls, will overlap
+    ax.set_yticks(ax.get_ylim()[1:])
+    ax.set_yticks([])
+        
+    # manual tick
+    for xt, xtl in zip(xts, xtls):
+        ax.text(xt, ax.get_ylim()[1]*1.25, xtl, size='large', ha='center', va='center')            
+    
+    # pretty and save
+    f.tight_layout()
+    return ax
+    
+
 def despine(ax, detick=True, which=('right', 'top')):
     """Remove the top and right axes from the plot"""
     for w in which:
@@ -489,14 +545,38 @@ def hist_p(data, p, bins=20, thresh=.05, ax=None, **hist_kwargs):
     return ax
 
 
-def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0, **kwargs):
-    """Plots mean and SEM for a matrix `data`"""
+def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0, 
+    fill_between=False, fb_kwargs=None, eb_kwargs=None, **kwargs):
+    """Plots mean and SEM for a matrix `data`
+    
+    data : 1d or 2d
+    axis : if 0, then replicates in `data` are along rows
+    x : corresponding x values for points in data
+    ax : where to plot
+    errorbar : if True and if 2d, will plot SEM
+    eb_kwargs : kwargs passed to errorbar
+    fill_between: whether to plots SEM as bars or as trace thickness
+    fb_kwargs : kwargs passed to fill_between
+    
+    Other kwargs are passed to `plot`
+    Returns the axis object
+    """
     if ax is None:
         f, ax = plt.subplots(1, 1)
     
     # plotting defaults
-    if 'capsize' not in kwargs:
-        kwargs['capsize'] = 0
+    if fb_kwargs is None:
+        fb_kwargs = {}
+    if eb_kwargs is None:
+        eb_kwargs = {}
+    if 'capsize' not in eb_kwargs:
+        eb_kwargs['capsize'] = 0
+    if 'lw' not in fb_kwargs:
+        fb_kwargs['lw'] = 0
+    if 'alpha' not in fb_kwargs:
+        fb_kwargs['alpha'] = .5
+    if 'color' in kwargs and 'color' not in fb_kwargs:
+        fb_kwargs['color'] = kwargs['color']
 
     # Put data into 2d, or single trace
     data = np.asarray(data)
@@ -518,7 +598,14 @@ def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0, **kwargs):
         ax.plot(x, data, **kwargs)
     else:
         if errorbar:
-            ax.errorbar(x=x, y=np.mean(data, axis=axis),
-                yerr=misc.sem(data, axis=axis), **kwargs)
+            y = np.mean(data, axis=axis)
+            yerr = misc.sem(data, axis=axis)
+            if fill_between:
+                ax.plot(x, y, **kwargs)
+                ax.fill_between(x, y1=y-yerr, y2=y+yerr, **fb_kwargs)
+            else:
+                ax.errorbar(x=x, y=y, yerr=yerr, **eb_kwargs)
         else:
             ax.plot(np.mean(data, axis=axis), **kwargs)
+    
+    return ax
