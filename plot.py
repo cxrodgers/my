@@ -219,8 +219,14 @@ def crucifix(x, y, xerr=None, yerr=None, relative_CIs=False, p=None,
     return ax
 
 def scatter_with_trend(x, y, xname='X', yname='Y', ax=None, 
-    legend_font_size='medium'):
-    """Scatter plot `y` vs `x`, also linear regression line"""
+    legend_font_size='medium', **kwargs):
+    """Scatter plot `y` vs `x`, also linear regression line
+    
+    Kwargs sent to the point plotting
+    """
+    if 'marker' not in kwargs:
+        kwargs['marker'] = '.'
+    
     dropna = np.isnan(x) | np.isnan(y)
     x = x[~dropna]
     y = y[~dropna]
@@ -228,7 +234,7 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
     if ax is None:    
         f = plt.figure()
         ax = f.add_subplot(111)
-    ax.plot(x, y, '.')
+    ax.plot(x, y, **kwargs)
 
     m, b, rval, pval, stderr = \
         scipy.stats.stats.linregress(x.flatten(), y.flatten())
