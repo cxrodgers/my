@@ -445,12 +445,16 @@ def colorbar(ax=None, fig=None, new_wspace=.4, **kwargs):
     
     return c
 
-def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False, trim=1):
+def harmonize_clim_in_subplots(fig=None, axa=None, clim=(None, None), 
+    center_clim=False, trim=1):
     """Set clim to be the same in all subplots in figur
     
     f : Figure to grab all axes from, or None
     axa : the list of subplots (if f is None)
+    clim : tuple of desired c-limits. If either or both values are
+        unspecified, they are derived from the data.
     center_clim : if True, the mean of the new clim is always zero
+        May overrule specified `clim`
     trim : does nothing if 1 or None
         otherwise, sets the clim to truncate extreme values
         for example, if .99, uses the 1% and 99% values of the data
@@ -470,7 +474,7 @@ def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False, trim=1):
         
         # Find covering clim and optionally center
         all_clim_a = np.array(all_clim)
-        new_clim = (np.min(all_clim_a[:, 0]), np.max(all_clim_a[:, 1]))
+        new_clim = [np.min(all_clim_a[:, 0]), np.max(all_clim_a[:, 1])]
     else:
         # Trim to specified prctile of the image data
         data_l = []
@@ -480,7 +484,16 @@ def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False, trim=1):
         data_a = np.concatenate(data_l)
         
         # New clim
-        new_clim = mlab.prctile(data_a, (100.*(1-trim), 100.*trim))
+        new_clim = list(mlab.prctile(data_a, (100.*(1-trim), 100.*trim)))
+    
+    # Take into account specified clim
+    try:
+        if clim[0] is not None:
+            new_clim[0] = clim[0]
+        if clim[1] is not None:
+            new_clim[1] = clim[1]
+    except IndexError:
+        print "warning: problem with provided clim"
     
     # Optionally center
     if center_clim:
