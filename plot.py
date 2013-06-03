@@ -8,18 +8,20 @@ import matplotlib.mlab as mlab
 import scipy.stats
 import misc
 
-def radar_by_stim(evoked_resp):
+def radar_by_stim(evoked_resp, ax=None, label_stim=True):
     """Given a df of spikes by stim, plot radar
     
     evoked_resp should have arrays of counts indexed by all the stimulus
     names
     """
-    f, ax = plt.subplots(figsize=(3, 3), subplot_kw={'polar': True})
+    from ns5_process import LBPB
+    if ax is None:
+        f, ax = plt.subplots(figsize=(3, 3), subplot_kw={'polar': True})
 
     # Heights of the bars
     evoked_resp = evoked_resp.ix[LBPB.mixed_stimnames]
     barmeans = evoked_resp.apply(np.mean)
-    barstderrs = evoked_resp.apply(myutils.std_error)
+    barstderrs = evoked_resp.apply(misc.sem)
     
     # Set up the radar
     radar_dists = [[barmeans[sname+block] 
@@ -56,11 +58,13 @@ def radar_by_stim(evoked_resp):
     ax.set_yticks([])
         
     # manual tick
-    for xt, xtl in zip(xts, xtls):
-        ax.text(xt, ax.get_ylim()[1]*1.25, xtl, size='large', ha='center', va='center')            
+    if label_stim:
+        for xt, xtl in zip(xts, xtls):
+            ax.text(xt, ax.get_ylim()[1]*1.25, xtl, size='large', 
+                ha='center', va='center')            
     
     # pretty and save
-    f.tight_layout()
+    #f.tight_layout()
     return ax
     
 
@@ -226,6 +230,10 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
     """
     if 'marker' not in kwargs:
         kwargs['marker'] = '.'
+    if 'ls' not in kwargs:
+        kwargs['ls'] = ''
+    if 'color' not in kwargs:
+        kwargs['color'] = 'g'
     
     dropna = np.isnan(x) | np.isnan(y)
     x = x[~dropna]
