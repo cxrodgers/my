@@ -9,6 +9,7 @@ import pandas, kkpandas, kkpandas.kkrs
 import os.path
 from lxml import etree
 from ns5_process import LBPB, RecordingSession
+import itertools
 
 # Convenience loading functions
 def ulabel2spikes(ulabel, sort_spikes=True):
