@@ -76,8 +76,21 @@ def despine(ax, detick=True, which=('right', 'top')):
     return ax
 
 def font_embed():
+    """Produce files that can be usefully imported into AI"""
     matplotlib.rcParams['ps.useafm'] = True
-    matplotlib.rcParams['svg.fonttype'] = 'svgfont'
+    
+    # AI can edit the text but can't import the font itself
+    #matplotlib.rcParams['svg.fonttype'] = 'svgfont'
+    
+    # seems to work better
+    matplotlib.rcParams['svg.fonttype'] = 'none'
+
+def publication_defaults():
+    """Set my defaults for font sizes, possibly more later"""
+    matplotlib.rcParams['axes.labelsize'] = 14
+    matplotlib.rcParams['font.sans-serif'] = 'Arial'
+    #matplotlib.rcParams['figure.facecolor'] = ''
+
 
 def rescue_tick(ax=None, f=None, x=3, y=3):
     # Determine what axes to process
