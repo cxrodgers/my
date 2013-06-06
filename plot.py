@@ -617,6 +617,9 @@ def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0,
         fb_kwargs['alpha'] = .5
     if 'color' in kwargs and 'color' not in fb_kwargs:
         fb_kwargs['color'] = kwargs['color']
+    if 'color' in kwargs and 'color' not in eb_kwargs:
+        eb_kwargs['color'] = kwargs['color']
+
 
     # Put data into 2d, or single trace
     data = np.asarray(data)
