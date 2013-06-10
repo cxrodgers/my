@@ -586,7 +586,8 @@ def hist_p(data, p, bins=20, thresh=.05, ax=None, **hist_kwargs):
 
 
 def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0, 
-    fill_between=False, fb_kwargs=None, eb_kwargs=None, **kwargs):
+    fill_between=False, fb_kwargs=None, eb_kwargs=None, error_fn=misc.sem,
+    **kwargs):
     """Plots mean and SEM for a matrix `data`
     
     data : 1d or 2d
@@ -594,9 +595,11 @@ def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0,
     x : corresponding x values for points in data
     ax : where to plot
     errorbar : if True and if 2d, will plot SEM
+        The format of the error bars depends on fill_between
     eb_kwargs : kwargs passed to errorbar
     fill_between: whether to plots SEM as bars or as trace thickness
     fb_kwargs : kwargs passed to fill_between
+    error_fn : how to calculate error bars
     
     Other kwargs are passed to `plot`
     Returns the axis object
@@ -642,7 +645,7 @@ def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0,
     else:
         if errorbar:
             y = np.mean(data, axis=axis)
-            yerr = misc.sem(data, axis=axis)
+            yerr = error_fn(data, axis=axis)
             if fill_between:
                 ax.plot(x, y, **kwargs)
                 ax.fill_between(x, y1=y-yerr, y2=y+yerr, **fb_kwargs)
