@@ -77,8 +77,14 @@ def despine(ax, detick=True, which=('right', 'top')):
 
 def font_embed():
     """Produce files that can be usefully imported into AI"""
+    # For PDF imports:
+    # Not sure what this does
     matplotlib.rcParams['ps.useafm'] = True
     
+    # Makes it so that the text is editable
+    matplotlib.rcParams['pdf.fonttype'] = 42
+    
+    # For SVG imports:
     # AI can edit the text but can't import the font itself
     #matplotlib.rcParams['svg.fonttype'] = 'svgfont'
     
