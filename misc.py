@@ -9,7 +9,24 @@ def rint(arr):
     return np.rint(arr).astype(np.int)
 
 def is_nonstring_iter(val):
-    return hasattr(val, '__len__') and not isinstance(val, str)
+    """Check if the input is iterable, but not a string.
+    
+    Recently changed this to work for Unicode. 
+    This should catch a subset of the old way, because previously Unicode
+    strings caused this to return True, but now they should return False.
+    
+    Will print a warning if this is not the case.
+    """
+    # Old way
+    res1 = hasattr(val, '__len__') and not isinstance(val, str)
+    
+    # New way
+    res2 = hasattr(val, '__len__') and not isinstance(val, basestring)
+    
+    if res2 and not res1:
+        print "warning: check is_nonstring_iter"
+    
+    return res2
 
 def pick(df, isnotnull=None, **kwargs):
     """Function to pick row indices from DataFrame.
