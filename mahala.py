@@ -38,7 +38,8 @@ def bootstrapped_intercluster_mahalanobis(cluster1, cluster2, n_boots=1000,
     return m, CI, d_a
 
 def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000, 
-    fix_icov=True):
+    fix_icov=True, directed=True, use_cluster_center=True, impl='mine',
+    seed=0):
     """Estimate distribution of subcluster distance assuming no effect.
     
     The purpose of this method is to provide statistical context for the
@@ -59,6 +60,11 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
         If True then calculate the covariance matrix of the full cluster
         and always use this in calculating the Mahalanobis distance. 
         If False, recalculate the covariance matrix for each permutation.
+    directed, use_cluster_center, impl : Parameters passed to 
+        intercluster_mahalanobis. Mainly you want to make sure that this
+        matches your original call in order to make the permutation test
+        valid.
+    seed : if not None, set seed to this for repeatability
     
     Note: This method is optimized for relatively small subclusters compared
     to the size of the full cluster.
@@ -69,6 +75,10 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
     else:
         icov = None
     full_cluster_size = len(full_cluster)
+    
+    # Set seed
+    if seed:
+        random.seed(seed)
 
     # Permute
     dist_l = []
@@ -86,7 +96,7 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
         
         # Test and store
         dist_l.append(intercluster_mahalanobis(fake_full, fake_sub, icov1=icov,
-            directed=True))
+            directed=directed, use_cluster_center=use_cluster_center, impl=impl))
     dist_a = np.array(dist_l)
     
     return dist_a
@@ -99,6 +109,9 @@ def permute_mahalanobis2(full_cluster, subcluster_size1, subcluster_size2,
     of distances between two randomly chosen subclusters (of the same
     size as the true subclusters), instead of between the subcluster
     and the full cluster.
+    
+    Note this hardwires directed=False, and uses intercluster_mahalanobis
+    default for use_cluster_center (check this is what you want)
     """
     # Deal with covariance matrix
     if fix_icov:
@@ -124,7 +137,7 @@ def permute_mahalanobis2(full_cluster, subcluster_size1, subcluster_size2,
     return dist_a
 
 def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
-    directed=False, use_cluster_center=True):
+    directed=False, use_cluster_center=True, impl='mine'):
     """Returns the Mahalanobis distance between the cluster centers.
     
     The Mahalanobis distance between two points, given a specified covariance
@@ -150,9 +163,12 @@ def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
             harmonic mean.
         use_cluster_center - boolean
             If True, then calculates the distance between cluster2 center
-            and cluster1 center.
+            and cluster1 center. This makes it smaller.
             If False, then calculates the mean distance beween each point
-            in cluster2 and the cluster1 center.
+            in cluster2 and the cluster1 center. This makes it more robust (?).
+        impl - I reimplemented scipy.spatial.distance.mahalanobis to be
+            faster for multidimensional input. Results appear the same
+            but much faster.
     
     Returns:
         normalized scalar distance between clusters
@@ -180,6 +196,14 @@ def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
     are separated along the first dimension, in which the clusters are 
     much skinnier.
     """
+    # Arrayification
+    cluster1 = np.asarray(cluster1)
+    cluster2 = np.asarray(cluster2)
+    if icov1 is not None:
+        icov1 = np.asarray(icov1)
+    if icov2 is not None:
+        icov2 = np.asarray(icov2)
+    
     if not directed:
         # Do it both direction and take harmonic mean
         d1 = intercluster_mahalanobis(cluster1, cluster2, icov1, icov2,
@@ -200,9 +224,17 @@ def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
             d = scipy.spatial.distance.mahalanobis(
                 cluster1.mean(axis=0), cluster2.mean(axis=0), icov1)
         else:
-            # Avg distance of cluster 2 points to cluster 1 center, w.r.t. icov1
-            d_a = np.asarray([scipy.spatial.distance.mahalanobis(
-                cluster1.mean(axis=0), p2, icov1) for p2 in cluster2])
-            d = d_a.mean()
+            if impl == 'scipy':
+                # Avg distance of cluster 2 points to cluster 1 center, w.r.t. icov1
+                d_a = np.asarray([scipy.spatial.distance.mahalanobis(
+                    cluster1.mean(axis=0), p2, icov1) for p2 in cluster2])
+                d = d_a.mean()
+            elif impl == 'mine':
+                # More efficient way to the same end
+                delta = cluster2 - cluster1.mean(axis=0)[None, :]
+                d_a = np.sqrt(np.sum(np.dot(delta, icov1) * delta, axis=1))
+                d = d_a.mean()
+            else:
+                raise ValueError('cannot interpret impl: %r' % impl)
         
         return d
