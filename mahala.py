@@ -1,6 +1,5 @@
 import scipy.spatial
-import glob, os.path, pandas, numpy as np, scipy.stats
-from ns5_process import myutils
+import numpy as np
 from matplotlib import mlab
 import random
 
