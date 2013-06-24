@@ -12,8 +12,8 @@ except ImportError:
 
 def r_adj_pval(a, meth='BH'):
     """Adjust p-values in R using specified method"""
-    robjects.globalenv['unadj_p'] = robjects.FloatVector(
-        np.asarray(a).flatten())
+    a = np.asarray(a)
+    robjects.globalenv['unadj_p'] = robjects.FloatVector(a.flatten())
     return np.array(r("p.adjust(unadj_p, '%s')" % meth)).reshape(a.shape)
 
 def check_float_conversion(a1, a2, tol):
