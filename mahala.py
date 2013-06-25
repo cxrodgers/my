@@ -39,7 +39,7 @@ def bootstrapped_intercluster_mahalanobis(cluster1, cluster2, n_boots=1000,
 
 def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000, 
     fix_icov=True, directed=True, use_cluster_center=True, impl='mine',
-    seed=0):
+    seed=0, force_idxs=None):
     """Estimate distribution of subcluster distance assuming no effect.
     
     The purpose of this method is to provide statistical context for the
@@ -69,6 +69,9 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
     Note: This method is optimized for relatively small subclusters compared
     to the size of the full cluster.
     """
+    # Arrayification
+    full_cluster = np.asarray(full_cluster)
+    
     # Deal with covariance matrix
     if fix_icov:
         icov = np.linalg.inv(np.cov(full_cluster, rowvar=0))
@@ -89,6 +92,11 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
             xrange(full_cluster_size), subcluster_size)] = 1
         fake_sub = full_cluster[fake_subcluster_mask]
         fake_full = full_cluster[~fake_subcluster_mask]
+        
+        # debug
+        if force_idxs is not None:
+            fake_sub = full_cluster[force_idxs]
+            fake_full = full_cluster[~force_idxs]
         
         # too slow:
         #permed = np.random.permutation(concat_data)
@@ -207,9 +215,9 @@ def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
     if not directed:
         # Do it both direction and take harmonic mean
         d1 = intercluster_mahalanobis(cluster1, cluster2, icov1, icov2,
-            directed=True, use_cluster_center=use_cluster_center)
+            directed=True, use_cluster_center=use_cluster_center, impl=impl)
         d2 = intercluster_mahalanobis(cluster2, cluster1, icov2, icov1,
-            directed=True, use_cluster_center=use_cluster_center)
+            directed=True, use_cluster_center=use_cluster_center, impl=impl)
         return np.sqrt(d1 * d2)
     else:
         # Directed, so just use icov1
@@ -234,6 +242,7 @@ def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
                 delta = cluster2 - cluster1.mean(axis=0)[None, :]
                 d_a = np.sqrt(np.sum(np.dot(delta, icov1) * delta, axis=1))
                 d = d_a.mean()
+                #d = np.median(d_a)
             else:
                 raise ValueError('cannot interpret impl: %r' % impl)
         
