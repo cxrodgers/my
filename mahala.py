@@ -38,8 +38,7 @@ def bootstrapped_intercluster_mahalanobis(cluster1, cluster2, n_boots=1000,
     return m, CI, d_a
 
 def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000, 
-    fix_icov=True, directed=True, use_cluster_center=True, impl='mine',
-    seed=0, force_idxs=None):
+    fix_icov=True, force_idxs=None, seed=0, **mkwargs):
     """Estimate distribution of subcluster distance assuming no effect.
     
     The purpose of this method is to provide statistical context for the
@@ -60,11 +59,11 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
         If True then calculate the covariance matrix of the full cluster
         and always use this in calculating the Mahalanobis distance. 
         If False, recalculate the covariance matrix for each permutation.
-    directed, use_cluster_center, impl : Parameters passed to 
-        intercluster_mahalanobis. Mainly you want to make sure that this
-        matches your original call in order to make the permutation test
-        valid.
     seed : if not None, set seed to this for repeatability
+    other kwargs : Parameters passed to intercluster_mahalanobis. 
+        Mainly you want to make sure that this matches your original call 
+        in order to make the permutation test valid.
+    
     
     Note: This method is optimized for relatively small subclusters compared
     to the size of the full cluster.
@@ -104,7 +103,7 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
         
         # Test and store
         dist_l.append(intercluster_mahalanobis(fake_full, fake_sub, icov1=icov,
-            directed=directed, use_cluster_center=use_cluster_center, impl=impl))
+            **mkwargs))
     dist_a = np.array(dist_l)
     
     return dist_a
@@ -145,7 +144,7 @@ def permute_mahalanobis2(full_cluster, subcluster_size1, subcluster_size2,
     return dist_a
 
 def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
-    directed=False, use_cluster_center=True, impl='mine'):
+    directed=False, use_cluster_center=True, impl='mine', collapse=np.mean):
     """Returns the Mahalanobis distance between the cluster centers.
     
     The Mahalanobis distance between two points, given a specified covariance
@@ -241,8 +240,10 @@ def intercluster_mahalanobis(cluster1, cluster2, icov1=None, icov2=None,
                 # More efficient way to the same end
                 delta = cluster2 - cluster1.mean(axis=0)[None, :]
                 d_a = np.sqrt(np.sum(np.dot(delta, icov1) * delta, axis=1))
-                d = d_a.mean()
-                #d = np.median(d_a)
+                if collapse is not None:
+                    d = collapse(d_a)
+                else:
+                    d = d_a
             else:
                 raise ValueError('cannot interpret impl: %r' % impl)
         
