@@ -4,6 +4,21 @@ import numpy as np
 import warnings
 import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
+import re
+
+def apply_and_filter_by_regex(pattern, list_of_strings, sort=True):
+    """Apply regex pattern to each string, return first hit from each match"""
+    res = []
+    for s in list_of_strings:
+        m = re.match(pattern, s)
+        if m is None:
+            continue
+        else:
+            res.append(m.groups()[0])
+    if sort:
+        return sorted(res)
+    else:
+        return res
 
 def rint(arr):
     """Round with rint and cast to int"""
