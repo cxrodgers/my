@@ -7,7 +7,11 @@ import os, subprocess # for frame_dump
 import re
 
 def apply_and_filter_by_regex(pattern, list_of_strings, sort=True):
-    """Apply regex pattern to each string, return first hit from each match"""
+    """Apply regex pattern to each string and return result.
+    
+    Non-matches are ignored.
+    If multiple matches, the first is returned.
+    """
     res = []
     for s in list_of_strings:
         m = re.match(pattern, s)
