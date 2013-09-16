@@ -6,6 +6,10 @@ import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
 import re
 
+def invert_linear_poly(p):
+    """Helper function for inverting fit.coeffs"""
+    return np.array([1, -p[1]]).astype(np.float) / p[0]
+
 def apply_and_filter_by_regex(pattern, list_of_strings, sort=True):
     """Apply regex pattern to each string and return result.
     
