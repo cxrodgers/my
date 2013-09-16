@@ -3,6 +3,7 @@
 import numpy as np
 import warnings
 import matplotlib.mlab as mlab
+import os, subprocess # for frame_dump
 
 def rint(arr):
     """Round with rint and cast to int"""
@@ -472,3 +473,56 @@ def sem(data, axis=None):
         N = np.asarray(data).shape[axis]
     
     return np.std(np.asarray(data), axis) / np.sqrt(N)
+
+
+def frame_dump(filename, frametime, output_filename='out.png', 
+    meth='ffmpeg best', subseek_cushion=20., verbose=False, dry_run=False,
+    very_verbose=False):
+    """Dump the frame in the specified file
+    
+    If the subprocess fails, CalledProcessError is raised.
+    Special case: if seek is beyond the end of the file, nothing is done
+    and no error is raised
+    (because ffmpeg does not report any problem in this case).
+    
+    Values for meth:
+        'ffmpeg best' : Seek quickly, then accurately
+            ffmpeg -ss :coarse: -i :filename: -ss :fine: -vframes 1 \
+                :output_filename:
+        'ffmpeg fast' : Seek quickly
+            ffmpeg -ss :frametime: -i :filename: -vframes 1 :output_filename:
+        'ffmpeg accurate' : Seek accurately, but takes forever
+            ffmpeg -i :filename: -ss frametime -vframes 1 :output_filename:
+        'mplayer' : This takes forever and also dumps two frames, the first 
+            and the desired. Not currently working but something like this:
+            mplayer -nosound -benchmark -vf framestep=:framenum: \
+                -frames 2 -vo png :filename:
+    
+    Source
+        https://trac.ffmpeg.org/wiki/Seeking%20with%20FFmpeg
+    """
+    
+    if meth == 'mplayer':
+        raise ValueError, "mplayer not supported"
+    elif meth == 'ffmpeg best':
+        # Break the seek into a coarse and a fine
+        coarse = np.max([0, frametime - subseek_cushion])
+        fine = frametime - coarse
+        syscall = 'ffmpeg -ss %r -i %s -ss %r -vframes 1 %s' % (
+            coarse, filename, fine, output_filename)
+    elif meth == 'ffmpeg accurate':
+        syscall = 'ffmpeg -i %s -ss %r -vframes 1 %s' % (
+            filename, frametime, output_filename)
+    elif meth == 'ffmpeg fast':
+        syscall = 'ffmpeg -ss %r -i %s -vframes 1 %s' % (
+            frametime, filename, output_filename)
+    
+    if verbose:
+        print syscall
+    if not dry_run:
+        #os.system(syscall)
+        syscall_l = syscall.split(' ')
+        syscall_result = subprocess.check_output(syscall_l, 
+            stderr=subprocess.STDOUT)
+        if very_verbose:
+            print syscall_result
