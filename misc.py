@@ -6,6 +6,17 @@ import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
 import re
 
+def pickle_load(filename):
+    import cPickle
+    with file(filename) as fi:
+        res = cPickle.load(fi)
+    return res
+
+def pickle_dump(obj, filename):
+    import cPickle
+    with file(filename, 'w') as fi:
+        cPickle.dump(obj, fi)
+
 def invert_linear_poly(p):
     """Helper function for inverting fit.coeffs"""
     return np.array([1, -p[1]]).astype(np.float) / p[0]
