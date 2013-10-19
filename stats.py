@@ -8,6 +8,15 @@ except ImportError:
     # it's all good
     pass
     
+def binom_confint(x=None, n=None, data=None, alpha=.95, meth='exact'):
+    if data is not None:
+        x = np.sum(data)
+        n = len(data)
+    r("library(binom)")
+    res = r("binom.confint(%d, %d, %f, methods='%s')" % (x, n, alpha, meth))
+    return res[res.names.index('lower')][0], res[res.names.index('upper')][0]
+    
+    
 
 
 def r_adj_pval(a, meth='BH'):
