@@ -276,12 +276,58 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
 
 def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     bar_errs=None, bar_colors=None, bar_hatches=None, tick_labels_rotation=90,
-    plot_bar_ends='ks', bar_width=.8):
-    """Vertical bar plot"""
-    # Defaults
+    plot_bar_ends='ks', bar_width=.8, mpl_ebar=False):
+    """Vertical bar plot with nicer defaults
+    
+    bar_lengths : heights of the bars, length N
+    bar_labels : text labels
+    bar_positions : x coordinates of the bar centers. Default is range(N)
+    ax : axis to plot in
+    bar_errs : error bars. Will be cast to array
+        If 1d, then these are drawn +/-
+        If 2d, then (UNLIKE MATPLOTLIB) they are interpreted as the exact
+        locations of the endpoints. Transposed as necessary. If mpl_ebar=True, 
+        then it is passed directly to `errorbar`, and it needs to be 2xN and
+        the bars are drawn at -row0 and +row1.
+    bar_colors : colors of bars. If longer than N, then the first N are taken
+    bar_hatches : set the hatches like this. length N
+    plot_bar_ends : if not None, then this is plotted at the tops of the bars
+    bar_width : passed as width to ax.bar
+    mpl_ebar : controls behavior of errorbars
+    """
+    # Default bar positions
     if bar_positions is None:
         bar_positions = list(range(len(bar_lengths)))
     bar_centers = bar_positions
+    
+    # Arrayify bar lengths
+    bar_lengths = np.asarray(bar_lengths)
+    N = len(bar_lengths)
+    
+    # Default bar colors
+    if bar_colors is not None:
+        bar_colors = np.asarray(bar_colors)
+        if len(bar_colors) > N:
+            bar_color = bar_colors[:N]
+    
+    # Deal with errorbars (if specified, and not mpl_ebar behavior)
+    if bar_errs is not None and not mpl_ebar:
+        bar_errs = np.asarray(bar_errs)
+        
+        # Transpose as necessary
+        if bar_errs.ndim == 2 and bar_errs.shape[0] != 2:
+            if bar_errs.shape[1] == 2:
+                bar_errs = bar_errs.T
+            else:
+                raise ValueError("weird shape for bar_errs: %r" % bar_errs)
+        
+        # Put into MPL syntax: -row0, +row1
+        assert bar_errs.shape[1] == N
+        bar_errs = np.array([
+            bar_lengths - bar_errs[0],
+            bar_errs[1] - bar_lengths])
+    
+    # Create axis objects
     if ax is None:
         f, ax = plt.subplots()
     
