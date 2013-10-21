@@ -6,6 +6,16 @@ import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
 import re
 
+def get_file_time(filename, human=False):
+    import time
+    # Get modification time
+    res = os.path.getmtime(filename)
+    
+    # Convert to human-readable
+    if human:
+        res = time.ctime(res)
+    return res
+
 def pickle_load(filename):
     import cPickle
     with file(filename) as fi:
