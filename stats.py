@@ -96,6 +96,8 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
         raise ValueError("cannot determine datatype of x and y")
     
     # Optionally fix float
+    if fix_float is True:
+        fix_float = 1e6
     if fix_float and behavior == 'float':
         x = np.rint(x * fix_float).astype(np.int)
         y = np.rint(y * fix_float).astype(np.int)
