@@ -124,6 +124,7 @@ def getstarted():
         'CR12B' : os.path.expanduser('~/Dropbox/lab/CR12B_summary_v2/CR12B.xml'),
         'CR17B' : os.path.expanduser('~/Dropbox/lab/CR17B_summary_v2/CR17B.xml'),
         'CR24A' : os.path.expanduser('~/Dropbox/lab/CR24A_summary/CR24A.xml'),
+        'CR27B' : os.path.expanduser('~/Dropbox/lab/CR27B_summary/CR27B.xml'),
         }
     
     res['kksfiles'] = {
@@ -139,6 +140,8 @@ def getstarted():
             '~/Dropbox/lab/CR12B_summary_v2/CR12B_behaving.kks'),            
         'CR24A' : os.path.expanduser(
             '~/Dropbox/lab/CR24A_summary/CR24A_behaving.kks'),            
+        'CR27B' : os.path.expanduser(
+            '~/Dropbox/lab/CR27B_summary/CR27B_behaving.kks'),            
         }
     
     res['kk_servers'] = dict([
@@ -152,6 +155,7 @@ def getstarted():
         'CR17B' : '/media/hippocampus/chris/20121220_CR17B_allsessions',
         'CR12B' : '/media/hippocampus/chris/20121115_CR12B_allsessions',
         'CR24A' : '/media/hippocampus/chris/20121217_CR24A_allsessions',
+        'CR27B' : '/media/hippocampus/chris/20130917_CR27B_allsessions',
         #'CR12B' : '/media/granule/20121115_CR12B_allsessions',
         #'CR12B' : '/media/hippocampus/chris/20111208_CR12B_allsessions_sorted',
         }
