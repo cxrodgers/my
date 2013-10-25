@@ -8,6 +8,61 @@ import matplotlib.mlab as mlab
 import scipy.stats
 import misc
 
+def connected_pairs(v1, v2, p=None, signif=None, shapes=None, colors=None, 
+    labels=None, ax=None):
+    """Plot columns of (v1, v2) as connected pairs"""
+    import my.stats
+    if ax is None:
+        f, ax = plt.subplots()
+    
+    # Arrayify 
+    v1 = np.asarray(v1)
+    v2 = np.asarray(v2)
+    if signif is None:
+        signif = np.zeros_like(v1)
+    else:
+        signif = np.asarray(signif)
+    
+    # Defaults
+    if shapes is None:
+        shapes = ['o'] * v1.shape[0]
+    if colors is None:
+        colors = ['k'] * v1.shape[0]
+    if labels is None:
+        labels = ['' * v1.shape[1]]
+    
+    # Store location of each pair
+    xvals = []
+    xvalcenters = []
+    
+    # Iterate over columns
+    for n, (col1, col2, signifcol, label) in enumerate(zip(v1.T, v2.T, signif.T, labels)):
+        # Where to plot this pair
+        x1 = n * 2
+        x2 = n * 2 + 1
+        xvals += [x1, x2]
+        xvalcenters.append(np.mean([x1, x2]))
+        
+        # Iterate over specific pairs
+        for val1, val2, sigval, shape, color in zip(col1, col2, signifcol, shapes, colors):
+            lw = 2 if sigval else 0.5
+            ax.plot([x1, x2], [val1, val2], marker=shape, color=color, 
+                ls='-', mec=color, mfc='none', lw=lw)
+        
+        # Sigtest on pop
+        utest_res = my.stats.r_utest(col1[~np.isnan(col1)], col2[~np.isnan(col2)],
+            paired='TRUE', fix_float=1e6)
+        if utest_res['p'] < 0.05:
+            ax.text(np.mean([x1, x2]), 1.0, '*', va='top', ha='center')
+    
+    # Label center of each pair
+    ax.set_xlim([xvals[0]-1, xvals[-1] + 1])
+    if labels:
+        ax.set_xticks(xvalcenters)
+        ax.set_xticklabels(labels)
+    
+    return ax, xvals
+
 def radar_by_stim(evoked_resp, ax=None, label_stim=True):
     """Given a df of spikes by stim, plot radar
     
