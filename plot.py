@@ -49,6 +49,12 @@ def connected_pairs(v1, v2, p=None, signif=None, shapes=None, colors=None,
             ax.plot([x1, x2], [val1, val2], marker=shape, color=color, 
                 ls='-', mec=color, mfc='none', lw=lw)
         
+        # Plot the median
+        median1 = np.median(col1[~np.isnan(col1)])
+        median2 = np.median(col2[~np.isnan(col2)])
+        ax.plot([x1, x2], [median1, median2], marker='o', color='k', ls='-',
+            mec=color, mfc='none', lw=4)
+        
         # Sigtest on pop
         utest_res = my.stats.r_utest(col1[~np.isnan(col1)], col2[~np.isnan(col2)],
             paired='TRUE', fix_float=1e6)
