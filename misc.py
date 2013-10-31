@@ -6,6 +6,12 @@ import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
 import re
 
+def printnow(s):
+    """Write string to stdout and flush immediately"""
+    import sys
+    sys.stdout.write(str(s) + "\n")
+    sys.stdout.flush()
+
 def get_file_time(filename, human=False):
     import time
     # Get modification time

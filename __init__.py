@@ -12,4 +12,4 @@ reload(stats)
 
 
 # shortcuts
-from misc import rint, pick, pick_rows
+from misc import rint, pick, pick_rows, printnow
