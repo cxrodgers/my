@@ -6,6 +6,38 @@ import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
 import re
 
+def UniquenessError(Exception):
+    pass
+
+def only_one(l):
+    """Returns the only value in l, or l itself if non-iterable.
+    
+    Compare 'unique_or_error', which allows multiple identical etnries.
+    """
+    # listify
+    if not hasattr(l, '__len__'):
+        l = [l]
+    
+    # check length
+    if len(l) != 1:
+        raise UniquenessError("must contain exactly one value")
+    
+    # return entry
+    return l[0]
+
+def unique_or_error(a):
+    """Asserts that `a` contains only one unique value and returns it
+    
+    Compare 'only_one' which does not allow repeats.
+    """    
+    u = np.unique(np.asarray(a))
+    if len(u) == 0:
+        raise UniquenessError("no values found")
+    if len(u) > 1:
+        raise UniquenessError("%d values found, should be one" % len(u))
+    else:
+        return u[0]
+
 def printnow(s):
     """Write string to stdout and flush immediately"""
     import sys
