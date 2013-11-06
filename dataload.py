@@ -126,6 +126,9 @@ def getstarted():
         'CR24A' : os.path.expanduser('~/Dropbox/lab/CR24A_summary/CR24A.xml'),
         'CR27B' : os.path.expanduser('~/Dropbox/lab/CR27B_summary/CR27B.xml'),
         'CR27A' : os.path.expanduser('~/Dropbox/lab/CR27A_summary/CR27A.xml'),
+        'CR25A' : os.path.expanduser('~/Dropbox/scripts/20131024_CR25A_collation/auto_generated_CR25A.xml'),
+        'CR28A' : os.path.expanduser('~/Dropbox/scripts/20131024_CR28A_collation/auto_generated_CR28A.xml'),
+        'CR28B' : os.path.expanduser('~/Dropbox/scripts/20131105_CR28B_collation/auto_generated_CR28B.xml'),
         }
     
     res['kksfiles'] = {
