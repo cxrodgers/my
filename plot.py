@@ -337,7 +337,8 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
 
 def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     bar_errs=None, bar_colors=None, bar_hatches=None, tick_labels_rotation=90,
-    plot_bar_ends='ks', bar_width=.8, mpl_ebar=False):
+    plot_bar_ends='ks', bar_width=.8, mpl_ebar=False,
+    yerr_is_absolute=True):
     """Vertical bar plot with nicer defaults
     
     bar_lengths : heights of the bars, length N
@@ -355,6 +356,9 @@ def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
     plot_bar_ends : if not None, then this is plotted at the tops of the bars
     bar_width : passed as width to ax.bar
     mpl_ebar : controls behavior of errorbars
+    yerr_is_absolute : if not mpl_ebar, and you are independently specifying
+        the locations of each end exactly, set this to True
+        Does nothing if yerr is 1d
     """
     # Default bar positions
     if bar_positions is None:
@@ -382,11 +386,12 @@ def vert_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
             else:
                 raise ValueError("weird shape for bar_errs: %r" % bar_errs)
         
-        # Put into MPL syntax: -row0, +row1
-        assert bar_errs.shape[1] == N
-        bar_errs = np.array([
-            bar_lengths - bar_errs[0],
-            bar_errs[1] - bar_lengths])
+        if bar_errs.ndim == 2 and yerr_is_absolute:
+            # Put into MPL syntax: -row0, +row1
+            assert bar_errs.shape[1] == N
+            bar_errs = np.array([
+                bar_lengths - bar_errs[0],
+                bar_errs[1] - bar_lengths])
     
     # Create axis objects
     if ax is None:
