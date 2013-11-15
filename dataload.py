@@ -37,10 +37,26 @@ def ulabel2trials_info(ulabel):
     trials_info = kkpandas.io.load_trials_info(rs.full_path)
     return trials_info
 
-def ulabel2dfolded(ulabel, folding_kwargs=None, trial_picker_kwargs='random hits'):
+class SpikeServer:
+    """Wrapper around ulabel2spikes to make it work like `pipeline` likes"""
+    @classmethod
+    def get(self, **kwargs):
+        return ulabel2spikes(**kwargs)
+
+def ulabel2dfolded(ulabel, folding_kwargs=None, 
+    trial_picker_kwargs='random hits',
+    old_behavior=False, locking_event='stim_onset'):
     """Convenience function for getting dict of folded from RS/kkpandas
     
-    Some reasonable defaults for kwargs ... see code  
+    
+    trial_picker_kwargs:
+        Some reasonable defaults for kwargs ... see code  
+    
+    old_behavior : if True, use pipeline_over_block_oneevent
+        if False, use the newer `pipeline`
+    
+    locking_event : what to lock to
+        Only works for new behavior
     
     Returns: dict, picked trials label to Folded object
     """
@@ -81,19 +97,34 @@ def ulabel2dfolded(ulabel, folding_kwargs=None, trial_picker_kwargs='random hits
 
     # Load data
     gets = getstarted()
+    
+    
+    if not old_behavior:
+        trials_info = ulabel2trials_info(ulabel)
+        time_picker = kkpandas.timepickers.TrialsInfoTimePicker(trials_info)
+        
+        res = kkpandas.pipeline.pipeline(trials_info,
+            spike_server=SpikeServer,
+            spike_server_kwargs={'ulabel': ulabel, 'sort_spikes': True},
+            time_picker=time_picker,
+            time_picker_kwargs={'event_name': locking_event},
+            trial_picker_kwargs=trial_picker_kwargs,
+            folding_kwargs=folding_kwargs,
+            )
+    
+    else:
+        # Parse ulabel
+        session_name = kkpandas.kkrs.ulabel2session_name(ulabel)
+        unum = kkpandas.kkrs.ulabel2unum(ulabel)
 
-    # Parse ulabel
-    session_name = kkpandas.kkrs.ulabel2session_name(ulabel)
-    unum = kkpandas.kkrs.ulabel2unum(ulabel)
+        # link back
+        rs, kks = session2rs(session_name), session2kk_server(session_name)
 
-    # link back
-    rs, kks = session2rs(session_name), session2kk_server(session_name)
-
-    # Run the pipeline
-    res = kkpandas.pipeline.pipeline_overblock_oneevent(
-        kks, session_name, unum, rs,
-        trial_picker_kwargs=trial_picker_kwargs,
-        folding_kwargs=folding_kwargs)
+        # Run the pipeline
+        res = kkpandas.pipeline.pipeline_overblock_oneevent(
+            kks, session_name, unum, rs,
+            trial_picker_kwargs=trial_picker_kwargs,
+            folding_kwargs=folding_kwargs)
 
     return res
 
