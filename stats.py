@@ -166,5 +166,9 @@ def anova(df, fmla, typ=3):
     fit = lm.params
     fit.index = map(lambda s: 'fit_' + s, fit.index)   
 
+    # I think this happens with pathological inputs
+    if np.any(aov['sum_sq'] < 0):
+        1/0
+
     return {'lm':lm, 'aov':aov, 'pvals':pvals, 'ess':ess, 'fit':fit}
     
