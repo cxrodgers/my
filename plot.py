@@ -129,11 +129,15 @@ def radar_by_stim(evoked_resp, ax=None, label_stim=True):
     return ax
     
 
-def despine(ax, detick=True, which=('right', 'top')):
-    """Remove the top and right axes from the plot"""
+def despine(ax, detick=True, which_ticks='both', which=('right', 'top')):
+    """Remove the top and right axes from the plot
+    
+    which_ticks : can be 'major', 'minor', or 'both
+    """
     for w in which:
         ax.spines[w].set_visible(False)
-        ax.tick_params(**{w:False})
+        if detick:
+            ax.tick_params(which=which_ticks, **{w:False})
     return ax
 
 def font_embed():
