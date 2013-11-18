@@ -43,9 +43,10 @@ class SpikeServer:
     def get(self, **kwargs):
         return ulabel2spikes(**kwargs)
 
-def ulabel2dfolded(ulabel, folding_kwargs=None, 
+def ulabel2dfolded(ulabel, trials_info=None, folding_kwargs=None, 
+    time_picker=None, time_picker_kwargs=None,
     trial_picker_kwargs='random hits',
-    old_behavior=False, locking_event='stim_onset'):
+    old_behavior=False):
     """Convenience function for getting dict of folded from RS/kkpandas
     
     
@@ -100,14 +101,19 @@ def ulabel2dfolded(ulabel, folding_kwargs=None,
     
     
     if not old_behavior:
-        trials_info = ulabel2trials_info(ulabel)
-        time_picker = kkpandas.timepickers.TrialsInfoTimePicker(trials_info)
+        if trials_info is None:
+            trials_info = ulabel2trials_info(ulabel)
+
+        if time_picker is None:
+            time_picker = kkpandas.timepickers.TrialsInfoTimePicker(trials_info)
+        if time_picker_kwargs is None:
+            time_picker_kwargs = {'event_name': 'stim_onset'}
         
         res = kkpandas.pipeline.pipeline(trials_info,
             spike_server=SpikeServer,
             spike_server_kwargs={'ulabel': ulabel, 'sort_spikes': True},
             time_picker=time_picker,
-            time_picker_kwargs={'event_name': locking_event},
+            time_picker_kwargs=time_picker_kwargs,
             trial_picker_kwargs=trial_picker_kwargs,
             folding_kwargs=folding_kwargs,
             )
