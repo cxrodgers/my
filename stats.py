@@ -150,7 +150,7 @@ def anova(df, fmla, typ=3):
     from statsmodels.stats.anova import anova_lm
     
     # Anova/OLS
-    lm = ols(fmla, df=df).fit()
+    lm = ols(fmla, df).fit() # 'data' <==> 'df' keyword change with version
     
     # Grab the pvalues (note we use Type III)
     aov = anova_lm(lm, typ=typ)
