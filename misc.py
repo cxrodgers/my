@@ -6,6 +6,11 @@ import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
 import re
 
+def fix_pandas_display_width(dw=0):
+    """Sets display width to 0 (auto) or other"""
+    import pandas
+    pandas.set_option('display.width', dw)
+
 def UniquenessError(Exception):
     pass
 
