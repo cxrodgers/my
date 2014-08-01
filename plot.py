@@ -319,6 +319,9 @@ def scatter_with_trend(x, y, xname='X', yname='Y', ax=None,
     if 'color' not in kwargs:
         kwargs['color'] = 'g'
     
+    x = np.asarray(x)
+    y = np.asarray(y)
+    
     dropna = np.isnan(x) | np.isnan(y)
     x = x[~dropna]
     y = y[~dropna]
