@@ -92,6 +92,31 @@ def apply_and_filter_by_regex(pattern, list_of_strings, sort=True):
     else:
         return res
 
+def regex_filter(pattern, list_of_strings):
+    """Apply regex pattern to each string and return those that match.
+    
+    See also regex_capture
+    """
+    return [s for s in list_of_strings if re.match(pattern, s) is not None]
+
+def regex_capture(pattern, list_of_strings, take_index=0):
+    """Apply regex pattern to each string and return a captured group.
+
+    Same as old apply_and_filter_by_regex, but without the sorting.
+    See also regex_filter. This will match that order.
+    """
+    # Apply filter to each string
+    res_l = []
+    for s in list_of_strings:
+        m = re.match(pattern, s)
+        
+        # Append the capture, if any
+        if m is not None:
+            res_l.append(m.groups()[take_index])
+    
+    return res_l
+    
+
 def rint(arr):
     """Round with rint and cast to int"""
     return np.rint(arr).astype(np.int)
