@@ -620,13 +620,13 @@ def frame_dump(filename, frametime, output_filename='out.png',
         # Break the seek into a coarse and a fine
         coarse = np.max([0, frametime - subseek_cushion])
         fine = frametime - coarse
-        syscall = 'ffmpeg -ss %r -i %s -ss %r -vframes 1 %s' % (
+        syscall = 'ffmpeg -y -ss %r -i %s -ss %r -vframes 1 %s' % (
             coarse, filename, fine, output_filename)
     elif meth == 'ffmpeg accurate':
-        syscall = 'ffmpeg -i %s -ss %r -vframes 1 %s' % (
+        syscall = 'ffmpeg -y -i %s -ss %r -vframes 1 %s' % (
             filename, frametime, output_filename)
     elif meth == 'ffmpeg fast':
-        syscall = 'ffmpeg -ss %r -i %s -vframes 1 %s' % (
+        syscall = 'ffmpeg -y -ss %r -i %s -vframes 1 %s' % (
             frametime, filename, output_filename)
     
     if verbose:
