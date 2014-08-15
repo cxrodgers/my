@@ -588,7 +588,7 @@ def sem(data, axis=None):
 
 
 def frame_dump(filename, frametime, output_filename='out.png', 
-    meth='ffmpeg best', subseek_cushion=20., verbose=False, dry_run=False,
+    meth='ffmpeg fast', subseek_cushion=20., verbose=False, dry_run=False,
     very_verbose=False):
     """Dump the frame in the specified file
     
@@ -599,16 +599,23 @@ def frame_dump(filename, frametime, output_filename='out.png',
     
     Values for meth:
         'ffmpeg best' : Seek quickly, then accurately
-            ffmpeg -ss :coarse: -i :filename: -ss :fine: -vframes 1 \
+            ffmpeg -y -ss :coarse: -i :filename: -ss :fine: -vframes 1 \
                 :output_filename:
         'ffmpeg fast' : Seek quickly
-            ffmpeg -ss :frametime: -i :filename: -vframes 1 :output_filename:
+            ffmpeg -y -ss :frametime: -i :filename: -vframes 1 :output_filename:
         'ffmpeg accurate' : Seek accurately, but takes forever
-            ffmpeg -i :filename: -ss frametime -vframes 1 :output_filename:
+            ffmpeg -y -i :filename: -ss frametime -vframes 1 :output_filename:
         'mplayer' : This takes forever and also dumps two frames, the first 
             and the desired. Not currently working but something like this:
             mplayer -nosound -benchmark -vf framestep=:framenum: \
                 -frames 2 -vo png :filename:
+    
+    Note that output files are always overwritten without asking.
+    
+    With recent, non-avconv versions of ffmpeg, it appears that 'ffmpeg fast'
+    is just as accurate as 'ffmpeg best', and is now the preferred method.
+    
+    Use scipy.misc.imread to read them back in.
     
     Source
         https://trac.ffmpeg.org/wiki/Seeking%20with%20FFmpeg
