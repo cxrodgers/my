@@ -12,7 +12,7 @@ class Spectrogrammer:
     """Turns a waveform into a spectrogram"""
     def __init__(self, NFFT=256, downsample_ratio=1, new_bin_width_sec=None,
         max_freq=None, min_freq=None, Fs=1.0, noverlap=None, normalization=0,
-        detrend=matplotlib.pylab.detrend_mean, **kwargs):
+        detrend=mlab.detrend_mean, **kwargs):
         """Object to turn waveforms into spectrograms.
         
         This is a wrapper around mlab.specgram. What this object provides
