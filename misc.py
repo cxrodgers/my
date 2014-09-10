@@ -3,6 +3,7 @@
 import numpy as np
 import warnings
 import matplotlib.mlab as mlab
+import matplotlib # for spectrogrammer
 import os, subprocess # for frame_dump
 import re
 import datetime
@@ -18,6 +19,229 @@ def time_of_file(filename, fmt='%Y%m%d%H%M%S'):
         return dt
     else:
         return dt.strftime(fmt)
+
+
+class Spectrogrammer:
+    """Turns a waveform into a spectrogram"""
+    def __init__(self, NFFT=256, downsample_ratio=1, new_bin_width_sec=None,
+        max_freq=None, min_freq=None, Fs=1.0, noverlap=None, normalization=0,
+        detrend=mlab.detrend_mean, **kwargs):
+        """Object to turn waveforms into spectrograms.
+        
+        This is a wrapper around mlab.specgram. What this object provides
+        is slightly more intelligent parameter choice, and a nicer way
+        to trade off resolution in frequency and time. It also remembers
+        parameter choices, so that the same object can be used to batch
+        analyze a bunch of waveforms using the `transform` method.
+        
+        Arguments passed to mlab.specgram
+        ----------------------------------
+        NFFT - number of points used in each segment
+            Determines the number of frequency bins, which will be
+            NFFT / 2 before stripping out those outside min_freq and max_freq
+        
+        noverlap - int, number of samples of overlap between segments
+            Default is NFFT / 2
+        
+        Fs - sampling rate
+        
+        detrend - detrend each segment before FFT
+            Default is to remove the mean (DC component)
+        
+        **kwargs - anything else you want to pass to mlab.specgram
+        
+        
+        Other arguments
+        ---------------
+        downsample_ratio - int, amount to downsample in time
+            After all other calculations are done, the temporal resolution
+        
+        new_bin_width_sec - float, target temporal resolution
+            The returned spectrogram will have a temporal resolution as
+            close to this as possible.
+            If this is specified, then the downsample_ratio is adjusted
+            as necessary to achieve it. If noverlap is left as default,
+            it will try 50% first and then 0, to achieve the desired resolution.
+            If it is not possible to achieve within a factor of 2 of this
+            resolution, a warning is issued.
+        
+        normalization - the power in each frequency bin is multiplied by
+            the frequency raised to this power.
+            0 means do nothing.
+            1 means that 1/f noise becomes white.
+        
+        min_freq, max_freq - discard frequencies outside of this range
+        
+        
+        Returns
+        -------
+        Pxx - 2d array of power in dB. Shape (n_freq_bins, n_time_bins)
+            May contain -np.inf where the power was exactly zero.
+        
+        freqs - 1d array of frequency bins
+        
+        t - 1d array of times
+        
+        
+        Theory
+        ------
+        The fundamental tradeoff is between time and frequency resolution and
+        is set by NFFT.
+        
+        For instance, consider a 2-second signal, sampled at 1024Hz, chosen
+        such that the number of samples is 2048 = 2**11.
+        *   If NFFT is 2048, you will have 1024 frequency bins (spaced 
+            between 0KHz and 0.512KHz) and 1 time bin. 
+            This is a simple windowed FFT**2, with the redundant negative
+            frequencies discarded since the waveform is real.
+            Note that the phase information is lost.
+        *   If NFFT is 256, you will have 128 frequency bins and 8 time bins.
+        *   If NFFT is 16, you will have 8 freqency bins and 128 time bins.
+        
+        In each case the FFT-induced trade-off is:
+            n_freq_bins * n_time_bins_per_s = Fs / 2
+            n_freq_bins = NFFT / 2
+        
+        So far, using only NFFT, we have traded off time resolution for
+        frequency resolution. We can achieve greater noise reduction with
+        appropriate choice of noverlap and downsample_ratio. The PSD
+        function achieves this by using overlapping segments, then averaging
+        the FFT of each segment. The use of noverlap in mlab.specgram is 
+        a bit of a misnomer, since no temporal averaging occurs there!
+        But this object can reinstate this temporal averaging.
+        
+        For our signal above, if our desired temporal resolution is 64Hz,
+        that is, 128 samples total, and NFFT is 16, we have a choice.
+        *   noverlap = 0. Non-overlapping segments. As above, 8 frequency
+            bins and 128 time bins. No averaging
+        *   noverlap = 64. 50% overlap. Now we will get 256 time bins.
+            We can then average together each pair of adjacent bins
+            by downsampling, theoretically reducing the noise. Note that
+            this will be a biased estimate since the overlapping windows
+            are not redundant.
+        *   noverlap = 127. Maximal overlap. Now we will get about 2048 bins,
+            which we can then downsample by 128 times to get our desired
+            time resolution.
+        
+        The trade-off is now:
+            overlap_factor = (NFFT - overlap) / NFFT
+            n_freq_bins * n_time_bins_per_s * overlap_factor = Fs / downsample_ratio / 2
+        
+        Since we always do the smoothing in the time domain, n_freq bins = NFFT / 2
+        and the tradeoff becomes
+            n_time_bins_per_s = Fs / downsample_ratio / (NFFT - overlap)
+        
+        That is, to increase the time resolution, we can:
+            * Decrease the frequency resolution (NFFT)
+            * Increase the overlap, up to a maximum of NFFT - 1
+              This is a sort of spurious improvement because adjacent windows
+              are highly correlated.
+            * Decrease the downsample_ratio (less averaging)
+        
+        To decrease noise, we can:
+            * Decrease the frequency resolution (NFFT)
+            * Increase the downsample_ratio (more averaging, fewer timepoints)
+        
+        How to choose the overlap, or the downsample ratio? In general,
+        50% overlap seems good, since we'd like to use some averaging, but
+        we get limited benefit from averaging many redundant samples.        
+        
+        This object tries for 50% overlap and adjusts the downsample_ratio
+        (averaging) to achieve the requested temporal resolution. If this is
+        not possible, then no temporal averaging is done (just like mlab.specgram)
+        and the overlap is increased as necessary to achieve the requested
+        temporal resolution.
+        """
+        self.downsample_ratio = downsample_ratio # until set otherwise
+        
+        # figure out downsample_ratio
+        if new_bin_width_sec is not None:
+            # Set noverlap to default
+            if noverlap is None:
+                # Try to do it with 50% overlap
+                noverlap = NFFT / 2
+            
+            # Calculate downsample_ratio to achieve this
+            self.downsample_ratio = \
+                Fs * new_bin_width_sec / float(NFFT - noverlap)
+            
+            # If this is not achievable, then try again with minimal downsampling
+            if np.rint(self.downsample_ratio).astype(np.int) < 1:
+                self.downsample_ratio = 1
+                noverlap = np.rint(NFFT - Fs * new_bin_width_sec).astype(np.int)
+            
+        # Convert to nearest int and test if possible
+        self.downsample_ratio = np.rint(self.downsample_ratio).astype(np.int)        
+        if self.downsample_ratio == 0:
+            print "requested temporal resolution too high, using maximum"
+            self.downsample_ratio = 1
+    
+        # Default value for noverlap if still None
+        if noverlap is None:
+            noverlap = NFFT / 2
+        self.noverlap = noverlap
+        
+        # store other defaults
+        self.NFFT = NFFT
+        self.max_freq = max_freq
+        self.min_freq = min_freq
+        self.Fs = Fs
+        self.normalization = normalization
+        self.detrend = detrend
+        self.specgram_kwargs = kwargs
+
+    
+    def transform(self, waveform):
+        """Converts a waveform to a suitable spectrogram.
+        
+        Removes high and low frequencies, rebins in time (via median)
+        to reduce data size. Returned times are the midpoints of the new bins.
+        
+        Returns:  Pxx, freqs, t    
+        Pxx is an array of dB power of the shape (len(freqs), len(t)).
+        It will be real but may contain -infs due to log10
+        """
+        # For now use NFFT of 256 to get appropriately wide freq bands, then
+        # downsample in time
+        Pxx, freqs, t = mlab.specgram(waveform, NFFT=self.NFFT, 
+            noverlap=self.noverlap, Fs=self.Fs, detrend=self.detrend, 
+            **self.specgram_kwargs)
+        
+        # Apply the normalization
+        Pxx = Pxx * np.tile(freqs[:, np.newaxis] ** self.normalization, 
+            (1, Pxx.shape[1]))
+
+        # strip out unused frequencies
+        if self.max_freq is not None:
+            Pxx = Pxx[freqs < self.max_freq, :]
+            freqs = freqs[freqs < self.max_freq]
+        if self.min_freq is not None:
+            Pxx = Pxx[freqs > self.min_freq, :]
+            freqs = freqs[freqs > self.min_freq]
+
+        # Rebin in size "downsample_ratio". If last bin is not full, discard.
+        Pxx_rebinned = []
+        t_rebinned = []
+        for n in range(0, len(t) - self.downsample_ratio + 1, 
+            self.downsample_ratio):
+            Pxx_rebinned.append(
+                np.median(Pxx[:, n:n+self.downsample_ratio], axis=1).flatten())
+            t_rebinned.append(
+                np.mean(t[n:n+self.downsample_ratio]))
+
+        # Convert to arrays
+        Pxx_rebinned_a = np.transpose(np.array(Pxx_rebinned))
+        t_rebinned_a = np.array(t_rebinned)
+
+        # log it and deal with infs
+        Pxx_rebinned_a_log = -np.inf * np.ones_like(Pxx_rebinned_a)
+        Pxx_rebinned_a_log[np.nonzero(Pxx_rebinned_a)] = \
+            10 * np.log10(Pxx_rebinned_a[np.nonzero(Pxx_rebinned_a)])
+
+
+        self.freqs = freqs
+        self.t = t_rebinned_a
+        return Pxx_rebinned_a_log, freqs, t_rebinned_a
 
 def fix_pandas_display_width(dw=0):
     """Sets display width to 0 (auto) or other"""
@@ -601,7 +825,7 @@ def sem(data, axis=None):
 
 
 def frame_dump(filename, frametime, output_filename='out.png', 
-    meth='ffmpeg best', subseek_cushion=20., verbose=False, dry_run=False,
+    meth='ffmpeg fast', subseek_cushion=20., verbose=False, dry_run=False,
     very_verbose=False):
     """Dump the frame in the specified file
     
@@ -612,16 +836,23 @@ def frame_dump(filename, frametime, output_filename='out.png',
     
     Values for meth:
         'ffmpeg best' : Seek quickly, then accurately
-            ffmpeg -ss :coarse: -i :filename: -ss :fine: -vframes 1 \
+            ffmpeg -y -ss :coarse: -i :filename: -ss :fine: -vframes 1 \
                 :output_filename:
         'ffmpeg fast' : Seek quickly
-            ffmpeg -ss :frametime: -i :filename: -vframes 1 :output_filename:
+            ffmpeg -y -ss :frametime: -i :filename: -vframes 1 :output_filename:
         'ffmpeg accurate' : Seek accurately, but takes forever
-            ffmpeg -i :filename: -ss frametime -vframes 1 :output_filename:
+            ffmpeg -y -i :filename: -ss frametime -vframes 1 :output_filename:
         'mplayer' : This takes forever and also dumps two frames, the first 
             and the desired. Not currently working but something like this:
             mplayer -nosound -benchmark -vf framestep=:framenum: \
                 -frames 2 -vo png :filename:
+    
+    Note that output files are always overwritten without asking.
+    
+    With recent, non-avconv versions of ffmpeg, it appears that 'ffmpeg fast'
+    is just as accurate as 'ffmpeg best', and is now the preferred method.
+    
+    Use scipy.misc.imread to read them back in.
     
     Source
         https://trac.ffmpeg.org/wiki/Seeking%20with%20FFmpeg
@@ -633,13 +864,13 @@ def frame_dump(filename, frametime, output_filename='out.png',
         # Break the seek into a coarse and a fine
         coarse = np.max([0, frametime - subseek_cushion])
         fine = frametime - coarse
-        syscall = 'ffmpeg -ss %r -i %s -ss %r -vframes 1 %s' % (
+        syscall = 'ffmpeg -y -ss %r -i %s -ss %r -vframes 1 %s' % (
             coarse, filename, fine, output_filename)
     elif meth == 'ffmpeg accurate':
-        syscall = 'ffmpeg -i %s -ss %r -vframes 1 %s' % (
+        syscall = 'ffmpeg -y -i %s -ss %r -vframes 1 %s' % (
             filename, frametime, output_filename)
     elif meth == 'ffmpeg fast':
-        syscall = 'ffmpeg -ss %r -i %s -vframes 1 %s' % (
+        syscall = 'ffmpeg -y -ss %r -i %s -vframes 1 %s' % (
             frametime, filename, output_filename)
     
     if verbose:
