@@ -5,6 +5,19 @@ import warnings
 import matplotlib.mlab as mlab
 import os, subprocess # for frame_dump
 import re
+import datetime
+
+def time_of_file(filename, fmt='%Y%m%d%H%M%S'):
+    """Return the modification time of the file as a datetime.
+    
+    If fmt is not None: apply strftime(fmt) and return the string
+    """
+    dt = datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+    
+    if fmt is None:
+        return dt
+    else:
+        return dt.strftime(fmt)
 
 def fix_pandas_display_width(dw=0):
     """Sets display width to 0 (auto) or other"""
