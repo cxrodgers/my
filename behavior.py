@@ -6,6 +6,7 @@ L2, and L3 in the bruno lab.
 import os, numpy as np, glob, re, pandas, datetime
 import misc
 import subprocess # for ffprobe
+import ArduFSM
 
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 'KM24', 'KM25']
@@ -16,10 +17,85 @@ aliases = {
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
+def generate_mplayer_guesses_and_sync(metadata, 
+    user_results=None, guess=(1., 0.), N=4, pre_time=10):
+    """Generates best times to check video, and potentially also syncs.
+    
+    metadata : a row from bv_files to sync
+    
+    N times to check in the video are printed out. Typically this is run twice,
+    once before checking, then check, then run again now specifying the 
+    video times in `user_results`.
+
+    If the initial guess is very wrong, you may need to find a large
+    gap in the video and match it up to trials info manually, and use this
+    to fix `guess` to be closer.
+    """
+    # Load trials info
+    trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
+        metadata['filename'])
+    splines = ArduFSM.trials_info_tools.load_splines_from_file(
+        metadata['filename'])
+
+    # Insert servo retract time
+    trials_info['time_retract'] = \
+        ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
+
+    # Apply the delta-time guess to the retraction times
+    test_guess_vvsb = metadata['guess_vvsb_start'] / np.timedelta64(1, 's')
+    trials_info['time_retract_vbase'] = \
+        trials_info['time_retract'] - test_guess_vvsb
+
+    # Apply the initial guess on top
+    initial_guess = np.asarray(guess)
+    trials_info['time_retract_vbase2'] = np.polyval(initial_guess, 
+        trials_info['time_retract_vbase'])
+
+    # Choose test times for user
+    video_duration = metadata['duration_video'] / np.timedelta64(1, 's')
+    test_times, test_next_times = generate_test_times_for_user(
+        trials_info['time_retract_vbase'], video_duration,
+        initial_guess=initial_guess, N=N)
+
+    # Print mplayer commands
+    for test_time, test_next_time in zip(test_times, test_next_times):
+        pre_test_time = int(test_time) - pre_time
+        print 'mplayer -ss %d %s # guess %0.1f, next %0.1f' % (pre_test_time, 
+            metadata['filename_video'], test_time, test_next_time)
+
+    # If no data provided, just return
+    if user_results is None:
+        return
+    if len(user_results) != N:
+        print "warning: len(user_results) should be %d not %d" % (
+            N, len(user_results))
+        return
+    
+    # Otherwise, fit a correction to the original guess
+    new_fit = np.polyfit(test_times.values, user_results, deg=1)
+    resids = np.polyval(new_fit, test_times.values) - user_results
+
+    # Composite the two fits
+    # For some reason this is not transitive! This one appears correct.
+    combined_fit = np.polyval(np.poly1d(new_fit), np.poly1d(initial_guess))
+
+    #~ # Now apply the combined fit from scratch 
+    #~ trials_info['time_retract_vbase'] = trials_info['time_retract'] - test_guess_vvsb
+    #~ trials_info['time_retract_vbase'] = np.polyval(combined_fit, 
+        #~ trials_info['time_retract_vbase'])
+    #~ behavior.mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
+        #~ test_video_duration, buffer=30)
+
+    # Diagnostics
+    print os.path.split(metadata['filename'])[-1]
+    print os.path.split(metadata['filename_video'])[-1]
+    print "combined_fit: %r" % np.asarray(combined_fit)
+    print "resids: %r" % np.asarray(resids)    
 
 def search_for_behavior_and_video_files(
     behavior_dir='~/mnt/behave/runmice',
     video_dir='~/mnt/bruno-nix/compressed_eye',
+    cached_video_files_df=None,
     ):
     """Get a list of behavior and video files, with metadata.
     
@@ -30,11 +106,13 @@ def search_for_behavior_and_video_files(
     
     TODO: cache the video file probing, which takes a fair amount of time.
     
-    Returns as a data frame with the following columns:
-        u'dir', u'dt_end', u'dt_start', u'duration', u'filename', 
-        u'mouse', u'rig', u'best_video_index', u'best_video_overlap', 
-        u'dt_end_video', u'dt_start_video', u'duration_video', 
-        u'filename_video', u'rig_video'
+    Returns: joined, video_files_df
+        joined is a data frame with the following columns:
+            u'dir', u'dt_end', u'dt_start', u'duration', u'filename', 
+            u'mouse', u'rig', u'best_video_index', u'best_video_overlap', 
+            u'dt_end_video', u'dt_start_video', u'duration_video', 
+            u'filename_video', u'rig_video'
+        video_files_df is basically used only to re-cache
     """
     # expand path
     behavior_dir = os.path.expanduser(behavior_dir)
@@ -54,22 +132,23 @@ def search_for_behavior_and_video_files(
     video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
     if len(video_files) == 0:
         print "warning: no video files found"
-    video_files_df = parse_video_filenames(video_files, verbose=True)
+    video_files_df = parse_video_filenames(video_files, verbose=True,
+        cached_video_files_df=cached_video_files_df)
 
     # Find behavior files that overlapped with video files
     behavior_files_df['best_video_index'] = -1
     behavior_files_df['best_video_overlap'] = 0.0
+    
+    # Something is really slow in this loop
     for bidx, brow in behavior_files_df.iterrows():
         # Find the overlap between this behavioral session and video sessions
         # from the same rig
-        rig_video_files_df = video_files_df[
-            video_files_df.rig == brow['rig']].copy()
-        
-        # Calculate overlap as the
-        latest_start = rig_video_files_df['dt_start'].copy()
+        latest_start = video_files_df[
+            video_files_df.rig == brow['rig']]['dt_start'].copy()
         latest_start[latest_start < brow['dt_start']] = brow['dt_start']
-        
-        earliest_end = rig_video_files_df['dt_end'].copy()
+            
+        earliest_end = video_files_df[
+            video_files_df.rig == brow['rig']]['dt_end'].copy()
         earliest_end[earliest_end > brow['dt_end']] = brow['dt_end']
         
         # Find the video with the most overlap
@@ -88,7 +167,7 @@ def search_for_behavior_and_video_files(
     joined = behavior_files_df.join(video_files_df, on='best_video_index', 
         rsuffix='_video')    
     
-    return joined
+    return joined, video_files_df
 
 
 def parse_behavior_filenames(all_behavior_files, clean=True):
@@ -137,18 +216,40 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
 
     return behavior_files_df
 
-def parse_video_filenames(video_filenames, verbose=False):
+def parse_video_filenames(video_filenames, verbose=False, 
+    cached_video_files_df=None):
     """Given list of video files, extract metadata and return df.
 
     For each filename, we extract the date (from the filename) and duration
     (using ffprobe).
+    
+    If cached_video_files_df is given:
+        1) Checks that everything in cached_video_files_df.filename is also in
+        video_filenames, else errors (because probably something
+        has gone wrong, like the filenames are misformatted).
+        2) Skips the probing of any video file already present in 
+        cached_video_files_df
+        3) Concatenates the new video files info with cached_video_files_df
+        and returns.
+    
+    Returns:
+        video_files_df, a DataFrame with the following columns: 
+            dt_end dt_start duration filename rig
     """
+    # Error check
+    if cached_video_files_df is not None and not np.all([f in video_filenames 
+        for f in cached_video_files_df.filename]):
+        raise ValueError("cached_video_files contains unneeded video files")
+    
     # Extract info from filename
     # directory, rigname, datestring, extension
     pattern = '(\S+)/(\S+)\.(\d+)\.(\S+)'
     rec_l = []
 
     for video_filename in video_filenames:
+        if video_filename in cached_video_files_df.filename.values:
+            continue
+        
         if verbose:
             print video_filename
         
@@ -196,6 +297,15 @@ def parse_video_filenames(video_filenames, verbose=False):
             })
 
     resdf = pandas.DataFrame.from_records(rec_l)
+    
+    # Join with cache, if necessary
+    if cached_video_files_df is not None:
+        if len(resdf) == 0:
+            resdf = cached_video_files_df
+        else:
+            resdf = pandas.concat([resdf, cached_video_files_df], axis=1, 
+                ignore_index=True, verify_integrity=True)
+    
     return resdf
 
 def mask_by_buffer_from_end(ser, end_time, buffer=10):
