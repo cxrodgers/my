@@ -17,6 +17,65 @@ aliases = {
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
+
+def cached_dump_frames_at_retraction_times(rows, frame_dir='./frames'):
+    """Wrapper around dump_frames_at_retraction_time
+    
+    Repeats call for each row in rows, as long as the subdir doesn't exist.
+    """
+    if not os.path.exists(frame_dir):
+        print "auto-creating", frame_dir
+        os.mkdir(frame_dir)
+
+    # Iterate over sessions
+    for idx, row in rows.iterrows():
+        # Set up output_dir and continue if already exists
+        output_dir = os.path.join(frame_dir, row['behave_filename'])
+        if os.path.exists(output_dir):
+            continue
+        else:
+            print "auto-creating", output_dir
+            os.mkdir(output_dir)
+            print output_dir
+
+        # Dump the frames
+        dump_frames_at_retraction_time(row, session_dir=output_dir)
+
+def dump_frames_at_retraction_time(metadata, session_dir):
+    """Dump the retraction time frame into a subdirectory.
+    
+    metadata : row containing behavior info, video info, and fit info    
+    """
+    # Load trials info
+    trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
+        metadata['filename'])
+
+    # Insert servo retract time
+    splines = ArduFSM.trials_info_tools.load_splines_from_file(
+        metadata['filename'])
+    trials_info['time_retract'] = \
+        ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
+    
+    # Fit to video times
+    fit = metadata['fit0'], metadata['fit1']
+    video_times = trials_info['time_retract'].values - (
+        metadata['guess_vvsb_start'] / 1e9)
+    trials_info['time_retract_vbase'] = np.polyval(fit, video_times)
+    
+    # Mask
+    duration_s = behavior.parse_video_filenames(
+        [metadata['filename_video']])['duration'][0] / np.timedelta64(1, 's')
+    behavior.mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
+        end_time=duration_s, buffer=10)
+    
+    # Dump frames
+    frametimes_to_dump = trials_info['time_retract_vbase'].dropna()
+    for trialnum, frametime in trials_info['time_retract_vbase'].dropna().iterkv():
+        output_filename = os.path.join(session_dir, 'trial%03d.png' % trialnum)
+        my.misc.frame_dump(row['filename_video'], frametime, meth='ffmpeg fast',
+            output_filename=output_filename)
+
+
 def generate_mplayer_guesses_and_sync(metadata, 
     user_results=None, guess=(1., 0.), N=4, pre_time=10):
     """Generates best times to check video, and potentially also syncs.
