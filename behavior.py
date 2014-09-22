@@ -1,15 +1,94 @@
-"""Module for parsing behavior files and video"""
+"""Module for parsing behavior files and video.
+
+These are mainly for dealing with the idiosyncracies of rigs L1,
+L2, and L3 in the bruno lab.
+"""
 import os, numpy as np, glob, re, pandas, datetime
 import misc
 import subprocess # for ffprobe
 
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 'KM24', 'KM25']
+rigs = ['L1', 'L2', 'L3']
 aliases = {
     'KF13A': 'KF13',
     'AM03A': 'AM03',
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
+
+
+def search_for_behavior_and_video_files(
+    behavior_dir='~/mnt/behave/runmice',
+    video_dir='~/mnt/bruno-nix/compressed_eye',
+    ):
+    """Get a list of behavior and video files, with metadata.
+    
+    Looks for all behavior directories in behavior_dir/rignumber.
+    Looks for all video files in video_dir.
+    Gets metadata about video files using parse_video_filenames.
+    Finds which video file maximally overlaps with which behavior file.
+    
+    TODO: cache the video file probing, which takes a fair amount of time.
+    
+    Returns as a data frame with the following columns:
+        u'dir', u'dt_end', u'dt_start', u'duration', u'filename', 
+        u'mouse', u'rig', u'best_video_index', u'best_video_overlap', 
+        u'dt_end_video', u'dt_start_video', u'duration_video', 
+        u'filename_video', u'rig_video'
+    """
+    # expand path
+    behavior_dir = os.path.expanduser(behavior_dir)
+    video_dir = os.path.expanduser(video_dir)
+    
+    # Acquire all behavior files in the subdirectories
+    all_behavior_files = []
+    for subdir in rigs:
+        all_behavior_files += glob.glob(os.path.join(
+            behavior_dir, subdir, 'ardulines.*'))
+
+    # Parse out metadata for each
+    behavior_files_df = parse_behavior_filenames(all_behavior_files, 
+        clean=True)
+
+    # Acquire all video files
+    video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
+    if len(video_files) == 0:
+        print "warning: no video files found"
+    video_files_df = parse_video_filenames(video_files, verbose=True)
+
+    # Find behavior files that overlapped with video files
+    behavior_files_df['best_video_index'] = -1
+    behavior_files_df['best_video_overlap'] = 0.0
+    for bidx, brow in behavior_files_df.iterrows():
+        # Find the overlap between this behavioral session and video sessions
+        # from the same rig
+        rig_video_files_df = video_files_df[
+            video_files_df.rig == brow['rig']].copy()
+        
+        # Calculate overlap as the
+        latest_start = rig_video_files_df['dt_start'].copy()
+        latest_start[latest_start < brow['dt_start']] = brow['dt_start']
+        
+        earliest_end = rig_video_files_df['dt_end'].copy()
+        earliest_end[earliest_end > brow['dt_end']] = brow['dt_end']
+        
+        # Find the video with the most overlap
+        overlap = (earliest_end - latest_start)
+        vidx_max_overlap = overlap.argmax()
+        
+        # Convert from numpy timedelta64 to a normal number
+        max_overlap_sec = overlap.ix[vidx_max_overlap] / np.timedelta64(1, 's')
+        
+        # Store if it's more than zero
+        if max_overlap_sec > 0:
+            behavior_files_df['best_video_index'][bidx] = vidx_max_overlap
+            behavior_files_df['best_video_overlap'][bidx] = max_overlap_sec
+
+    # Join video info
+    joined = behavior_files_df.join(video_files_df, on='best_video_index', 
+        rsuffix='_video')    
+    
+    return joined
 
 
 def parse_behavior_filenames(all_behavior_files, clean=True):
@@ -45,7 +124,10 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
                 'filename': filename})
     behavior_files_df = pandas.DataFrame.from_records(rec_l)
 
-    if clean:
+    if len(behavior_files_df) == 0:
+        print "warning: no behavior files found"
+
+    elif clean:
         # Clean the behavior files by upcasing and applying aliases
         behavior_files_df.mouse = behavior_files_df.mouse.apply(str.upper)
         behavior_files_df.mouse.replace(aliases, inplace=True)
