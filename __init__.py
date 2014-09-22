@@ -10,6 +10,8 @@ reload(misc)
 import stats
 reload(stats)
 
+import behavior
+reload(behavior)
 
 # shortcuts
 from misc import rint, pick, pick_rows, printnow
