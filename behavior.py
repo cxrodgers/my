@@ -7,6 +7,7 @@ import os, numpy as np, glob, re, pandas, datetime
 import misc
 import subprocess # for ffprobe
 import ArduFSM
+import scipy.misc
 
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 'KM24', 'KM25']
@@ -16,6 +17,23 @@ aliases = {
     'AM03A': 'AM03',
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
+
+def make_overlay(sess_meaned_frames, ax):
+    import my.plot
+    
+    # Split into L and R
+    L = np.mean(
+        sess_meaned_frames['meaned'][sess_meaned_frames.rewside == 0], axis=0)
+    R = np.mean(
+        sess_meaned_frames['meaned'][sess_meaned_frames.rewside == 1], axis=0)
+
+    # Color them into the R and G space, with zeros for B
+    C = np.array([L, R, np.zeros_like(L)])
+    C = C.swapaxes(0, 2).swapaxes(0, 1) / 255.
+
+    my.plot.imshow(C, ax=ax, axis_call='image', origin='upper')
+    ax.set_xticks([]); ax.set_yticks([])
+
 
 
 def cached_dump_frames_at_retraction_times(rows, frame_dir='./frames'):
@@ -41,6 +59,53 @@ def cached_dump_frames_at_retraction_times(rows, frame_dir='./frames'):
         # Dump the frames
         dump_frames_at_retraction_time(row, session_dir=output_dir)
 
+def generate_meaned_frames(rows, frame_dir='./frames'):
+    """Iterate over rows and extract frames meaned by type.
+    
+    Get session name from each row.
+    Skips any where no frame subdirectory is found.
+    
+    Returns all meaned frames.
+    """
+    resdf_d = {}
+    for idx, sessrow in rows.iterrows():
+        # Check that frame_dir exists
+        frame_dir = os.path.join(frame_dir, sessrow['behave_filename'])
+        if not os.path.exists(frame_dir):
+            continue        
+        
+        # Load trials info
+        trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
+            sessrow['filename'])
+
+        # Load all images
+        trialnum2frame = {}
+        for trialnum in trials_info.index:
+            filename = os.path.join(frame_dir, 'trial%03d.png' % trialnum)
+            if os.path.exists(filename):
+                im = scipy.misc.imread(filename, flatten=True)
+                trialnum2frame[trialnum] = im
+
+        # Keep only those trials that we found images for
+        trials_info = trials_info.ix[sorted(trialnum2frame.keys())]
+
+        # Split on side, servo_pos, stim_number
+        res = []
+        gobj = trials_info.groupby(['rewside', 'servo_position', 'stim_number'])
+        for (rewside, servo_pos, stim_number), subti in gobj:
+            meaned = np.mean([trialnum2frame[trialnum] for trialnum in subti.index],
+                axis=0)
+            res.append({'rewside': rewside, 'servo_pos': servo_pos, 
+                'stim_number': stim_number, 'meaned': meaned})
+        resdf = pandas.DataFrame.from_records(res)
+
+        # Store
+        resdf_d[sessrow['behave_filename']] = resdf        
+
+    # Store all results
+    meaned_frames = pandas.concat(resdf_d, verify_integrity=True)
+    return meaned_frames
+
 def dump_frames_at_retraction_time(metadata, session_dir):
     """Dump the retraction time frame into a subdirectory.
     
@@ -63,16 +128,15 @@ def dump_frames_at_retraction_time(metadata, session_dir):
     trials_info['time_retract_vbase'] = np.polyval(fit, video_times)
     
     # Mask
-    duration_s = behavior.parse_video_filenames(
-        [metadata['filename_video']])['duration'][0] / np.timedelta64(1, 's')
-    behavior.mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
+    duration_s = metadata['duration'] / 1e9 #np.timedelta64(1, 's')
+    mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
         end_time=duration_s, buffer=10)
     
     # Dump frames
     frametimes_to_dump = trials_info['time_retract_vbase'].dropna()
     for trialnum, frametime in trials_info['time_retract_vbase'].dropna().iterkv():
         output_filename = os.path.join(session_dir, 'trial%03d.png' % trialnum)
-        my.misc.frame_dump(row['filename_video'], frametime, meth='ffmpeg fast',
+        misc.frame_dump(metadata['filename_video'], frametime, meth='ffmpeg fast',
             output_filename=output_filename)
 
 
@@ -137,13 +201,6 @@ def generate_mplayer_guesses_and_sync(metadata,
     # Composite the two fits
     # For some reason this is not transitive! This one appears correct.
     combined_fit = np.polyval(np.poly1d(new_fit), np.poly1d(initial_guess))
-
-    #~ # Now apply the combined fit from scratch 
-    #~ trials_info['time_retract_vbase'] = trials_info['time_retract'] - test_guess_vvsb
-    #~ trials_info['time_retract_vbase'] = np.polyval(combined_fit, 
-        #~ trials_info['time_retract_vbase'])
-    #~ behavior.mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
-        #~ test_video_duration, buffer=30)
 
     # Diagnostics
     print os.path.split(metadata['filename'])[-1]
