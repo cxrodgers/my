@@ -146,14 +146,13 @@ def dump_frames_at_retraction_time(metadata, session_dir):
         timedelta_to_seconds2(metadata['guess_vvsb_start'])
     trials_info['time_retract_vbase'] = np.polyval(fit, video_times)
     
-    # Mask
-    duration_s = timedelta_to_seconds2(metadata['duration'])# / 1e9 #np.timedelta64(1, 's')
+    # Mask out any frametimes that are before or after the video
+    duration_s = timedelta_to_seconds2(metadata['duration_video'])
     mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
         end_time=duration_s, buffer=10)
     
     # Dump frames
     frametimes_to_dump = trials_info['time_retract_vbase'].dropna()
-
     for trialnum, frametime in trials_info['time_retract_vbase'].dropna().iterkv():
         output_filename = os.path.join(session_dir, 'trial%03d.png' % trialnum)
         misc.frame_dump(metadata['filename_video'], frametime, meth='ffmpeg fast',
