@@ -46,7 +46,11 @@ def cached_dump_frames_at_retraction_times(rows, frame_dir='./frames'):
         os.mkdir(frame_dir)
 
     # Iterate over sessions
-    for idx, row in rows.iterrows():
+    for idx in rows.index:
+        # Something very strange here where iterrows distorts the dtype
+        # of the object arrays
+        row = rows.ix[idx]
+
         # Set up output_dir and continue if already exists
         output_dir = os.path.join(frame_dir, row['behave_filename'])
         if os.path.exists(output_dir):
@@ -106,6 +110,21 @@ def generate_meaned_frames(rows, frame_dir='./frames'):
     meaned_frames = pandas.concat(resdf_d, verify_integrity=True)
     return meaned_frames
 
+def timedelta_to_seconds1(val):
+    """Often it ends up as a 0d timedelta array.
+    
+    This especially happens when taking a single row from a df, which becomes
+    a series. Then you sometimes cannot divide by np.timedelta64(1, 's')
+    or by 1e9
+    """
+    ite = val.item() # in nanoseconds
+    return ite / 1e9
+
+def timedelta_to_seconds2(val):
+    """More preferred ... might have been broken in old versions."""
+    return val / np.timedelta64(1, 's')
+
+
 def dump_frames_at_retraction_time(metadata, session_dir):
     """Dump the retraction time frame into a subdirectory.
     
@@ -120,20 +139,21 @@ def dump_frames_at_retraction_time(metadata, session_dir):
         metadata['filename'])
     trials_info['time_retract'] = \
         ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
-    
+
     # Fit to video times
     fit = metadata['fit0'], metadata['fit1']
-    video_times = trials_info['time_retract'].values - (
-        metadata['guess_vvsb_start'] / 1e9)
+    video_times = trials_info['time_retract'].values - \
+        timedelta_to_seconds2(metadata['guess_vvsb_start'])
     trials_info['time_retract_vbase'] = np.polyval(fit, video_times)
     
     # Mask
-    duration_s = metadata['duration'] / 1e9 #np.timedelta64(1, 's')
+    duration_s = timedelta_to_seconds2(metadata['duration'])# / 1e9 #np.timedelta64(1, 's')
     mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
         end_time=duration_s, buffer=10)
     
     # Dump frames
     frametimes_to_dump = trials_info['time_retract_vbase'].dropna()
+
     for trialnum, frametime in trials_info['time_retract_vbase'].dropna().iterkv():
         output_filename = os.path.join(session_dir, 'trial%03d.png' % trialnum)
         misc.frame_dump(metadata['filename_video'], frametime, meth='ffmpeg fast',
