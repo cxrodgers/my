@@ -74,8 +74,8 @@ def generate_meaned_frames(rows, frame_dir='./frames'):
     resdf_d = {}
     for idx, sessrow in rows.iterrows():
         # Check that frame_dir exists
-        frame_dir = os.path.join(frame_dir, sessrow['behave_filename'])
-        if not os.path.exists(frame_dir):
+        sess_dir = os.path.join(frame_dir, sessrow['behave_filename'])
+        if not os.path.exists(sess_dir):
             continue        
         
         # Load trials info
@@ -85,7 +85,7 @@ def generate_meaned_frames(rows, frame_dir='./frames'):
         # Load all images
         trialnum2frame = {}
         for trialnum in trials_info.index:
-            filename = os.path.join(frame_dir, 'trial%03d.png' % trialnum)
+            filename = os.path.join(sess_dir, 'trial%03d.png' % trialnum)
             if os.path.exists(filename):
                 im = scipy.misc.imread(filename, flatten=True)
                 trialnum2frame[trialnum] = im
