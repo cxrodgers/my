@@ -18,14 +18,92 @@ aliases = {
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
-def make_overlay(sess_meaned_frames, ax):
+
+def calculate_performance(trials_info, p_servothrow):
+    """Use p_servothrow to calculate performance by stim number"""
+    rec_l = []
+    
+    # Assign pos_delta
+    raw_servo_positions = np.unique(trials_info.servo_position)
+    if len(raw_servo_positions) == 1:
+        pos_delta = 25
+    else:
+        pos_delta = raw_servo_positions[1] - raw_servo_positions[0]
+    p_servothrow.pos_delta = pos_delta
+    
+    # Convert
+    ti2 = p_servothrow.assign_trial_type_to_trials_info(trials_info)
+    
+    # Perf by ST and by SN
+    gobj = ti2.groupby(['rewside', 'servo_intpos', 'stim_number'])
+    for (rewside, servo_intpos, stim_number), sub_ti in gobj:
+        nhits, ntots = ArduFSM.trials_info_tools.calculate_nhit_ntot(sub_ti)
+        if ntots > 0:
+            rec_l.append({
+                'rewside': rewside, 'servo_intpos': servo_intpos,
+                'stim_number': stim_number,
+                'perf': nhits / float(ntots),
+                })
+
+    # Form dataframe
+    df = pandas.DataFrame.from_records(rec_l)
+    return df
+
+
+
+def plot_side_perf(ax, perf):
+    """Plot performance on each side vs servo position"""
+    colors = ['b', 'r']
+    for rewside in [0, 1]:
+        # Form 2d perf matrix for this side by unstacking
+        sideperf = perf[rewside].unstack() # servo on rows, stimnum on cols
+        yvals = map(int, sideperf.index)
+        
+        # Mean over stim numbers
+        meaned_sideperf = sideperf.mean(axis=0)
+        
+        # Plot
+        ax.plot(yvals, sideperf.mean(axis=1), color=colors[rewside])
+    
+    # Avg over sides
+    meaned = perf.unstack(1).mean()
+    ax.plot(yvals, meaned, color='k')
+    
+    ax.set_xlabel('servo position')
+    ax.set_ylim((0, 1))
+    ax.set_yticks((0, .5, 1))
+    ax.set_xticks(yvals) # because on rows
+    
+    ax.plot(ax.get_xlim(), [.5, .5], 'k:')
+
+
+def make_overlay(sess_meaned_frames, ax, meth='all'):
     import my.plot
     
     # Split into L and R
-    L = np.mean(
-        sess_meaned_frames['meaned'][sess_meaned_frames.rewside == 0], axis=0)
-    R = np.mean(
-        sess_meaned_frames['meaned'][sess_meaned_frames.rewside == 1], axis=0)
+    if meth == 'all':
+        L = np.mean(sess_meaned_frames['meaned'][
+            sess_meaned_frames.rewside == 0], axis=0)
+        R = np.mean(sess_meaned_frames['meaned'][
+            sess_meaned_frames.rewside == 1], axis=0)
+    elif meth == 'L':
+        closest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+            'servo_pos'].min()
+        furthest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+            'servo_pos'].max()
+        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+            servo_pos=closest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+            servo_pos=furthest_R).irow(0)['meaned']
+    elif meth == 'R':
+        closest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+            'servo_pos'].min()
+        furthest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+            'servo_pos'].max()
+        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+            servo_pos=furthest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+            servo_pos=closest_R).irow(0)['meaned']     
 
     # Color them into the R and G space, with zeros for B
     C = np.array([L, R, np.zeros_like(L)])
