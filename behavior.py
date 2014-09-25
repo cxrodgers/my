@@ -19,6 +19,34 @@ aliases = {
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
 
+def load_frames_by_trial(frame_dir, trials_info):
+    """Read all trial%03d.png in frame_dir and return as dict"""
+    trialnum2frame = {}
+    for trialnum in trials_info.index:
+        filename = os.path.join(frame_dir, 'trial%03d.png' % trialnum)
+        if os.path.exists(filename):
+            im = scipy.misc.imread(filename, flatten=True)
+            trialnum2frame[trialnum] = im    
+    return trialnum2frame
+
+def mean_frames_by_choice(trials_info, trialnum2frame):
+    # Keep only those trials that we found images for
+    trials_info = trials_info.ix[sorted(trialnum2frame.keys())]
+
+    # Dump those with a spoiled trial
+    trials_info = misc.pick_rows(trials_info, choice=[0, 1], bad=False)
+
+    # Split on choice
+    res = []
+    gobj = trials_info.groupby('choice')
+    for choice, subti in gobj:
+        meaned = np.mean([trialnum2frame[trialnum] for trialnum in subti.index],
+            axis=0)
+        res.append({'choice': choice, 'meaned': meaned})
+    resdf_choice = pandas.DataFrame.from_records(res)
+
+    return resdf_choice
+
 def calculate_performance(trials_info, p_servothrow):
     """Use p_servothrow to calculate performance by stim number"""
     rec_l = []
@@ -516,7 +544,7 @@ def parse_video_filenames(video_filenames, verbose=False,
         if len(resdf) == 0:
             resdf = cached_video_files_df
         else:
-            resdf = pandas.concat([resdf, cached_video_files_df], axis=1, 
+            resdf = pandas.concat([resdf, cached_video_files_df], axis=0, 
                 ignore_index=True, verify_integrity=True)
     
     return resdf
