@@ -10,7 +10,8 @@ import ArduFSM
 import scipy.misc
 
 # Known mice
-mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 'KM24', 'KM25']
+mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
+    'KM24', 'KM25', 'KF26']
 rigs = ['L1', 'L2', 'L3']
 aliases = {
     'KF13A': 'KF13',
