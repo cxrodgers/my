@@ -208,6 +208,26 @@ def generate_mplayer_guesses_and_sync(metadata,
     print "combined_fit: %r" % np.asarray(combined_fit)
     print "resids: %r" % np.asarray(resids)    
 
+def search_for_behavior_files(behavior_dir='~/mnt/behave/runmice'):
+    """Load behavior files into data frame.
+    
+    See also search_for_behavior_and_video_files
+    """
+    # expand path
+    behavior_dir = os.path.expanduser(behavior_dir)
+    
+    # Acquire all behavior files in the subdirectories
+    all_behavior_files = []
+    for subdir in rigs:
+        all_behavior_files += glob.glob(os.path.join(
+            behavior_dir, subdir, 'logfiles', 'ardulines.*'))
+
+    # Parse out metadata for each
+    behavior_files_df = parse_behavior_filenames(all_behavior_files, 
+        clean=True)    
+    
+    return behavior_files_df
+
 def search_for_behavior_and_video_files(
     behavior_dir='~/mnt/behave/runmice',
     video_dir='~/mnt/bruno-nix/compressed_eye',
@@ -216,11 +236,9 @@ def search_for_behavior_and_video_files(
     """Get a list of behavior and video files, with metadata.
     
     Looks for all behavior directories in behavior_dir/rignumber.
-    Looks for all video files in video_dir.
+    Looks for all video files in video_dir (using cache).
     Gets metadata about video files using parse_video_filenames.
     Finds which video file maximally overlaps with which behavior file.
-    
-    TODO: cache the video file probing, which takes a fair amount of time.
     
     Returns: joined, video_files_df
         joined is a data frame with the following columns:
@@ -233,16 +251,9 @@ def search_for_behavior_and_video_files(
     # expand path
     behavior_dir = os.path.expanduser(behavior_dir)
     video_dir = os.path.expanduser(video_dir)
-    
-    # Acquire all behavior files in the subdirectories
-    all_behavior_files = []
-    for subdir in rigs:
-        all_behavior_files += glob.glob(os.path.join(
-            behavior_dir, subdir, 'ardulines.*'))
 
-    # Parse out metadata for each
-    behavior_files_df = parse_behavior_filenames(all_behavior_files, 
-        clean=True)
+    # Search for behavior files
+    behavior_files_df = search_for_behavior_files(behavior_dir)
 
     # Acquire all video files
     video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
