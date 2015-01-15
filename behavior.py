@@ -10,7 +10,8 @@ import ArduFSM
 import scipy.misc
 
 # Known mice
-mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 'KM24', 'KM25']
+mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
+    'KM24', 'KM25', 'KF26']
 rigs = ['L1', 'L2', 'L3']
 aliases = {
     'KF13A': 'KF13',
@@ -18,14 +19,120 @@ aliases = {
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
-def make_overlay(sess_meaned_frames, ax):
+
+def load_frames_by_trial(frame_dir, trials_info):
+    """Read all trial%03d.png in frame_dir and return as dict"""
+    trialnum2frame = {}
+    for trialnum in trials_info.index:
+        filename = os.path.join(frame_dir, 'trial%03d.png' % trialnum)
+        if os.path.exists(filename):
+            im = scipy.misc.imread(filename, flatten=True)
+            trialnum2frame[trialnum] = im    
+    return trialnum2frame
+
+def mean_frames_by_choice(trials_info, trialnum2frame):
+    # Keep only those trials that we found images for
+    trials_info = trials_info.ix[sorted(trialnum2frame.keys())]
+
+    # Dump those with a spoiled trial
+    trials_info = misc.pick_rows(trials_info, choice=[0, 1], bad=False)
+
+    # Split on choice
+    res = []
+    gobj = trials_info.groupby('choice')
+    for choice, subti in gobj:
+        meaned = np.mean([trialnum2frame[trialnum] for trialnum in subti.index],
+            axis=0)
+        res.append({'choice': choice, 'meaned': meaned})
+    resdf_choice = pandas.DataFrame.from_records(res)
+
+    return resdf_choice
+
+def calculate_performance(trials_info, p_servothrow):
+    """Use p_servothrow to calculate performance by stim number"""
+    rec_l = []
+    
+    # Assign pos_delta
+    raw_servo_positions = np.unique(trials_info.servo_position)
+    if len(raw_servo_positions) == 1:
+        pos_delta = 25
+    else:
+        pos_delta = raw_servo_positions[1] - raw_servo_positions[0]
+    p_servothrow.pos_delta = pos_delta
+    
+    # Convert
+    ti2 = p_servothrow.assign_trial_type_to_trials_info(trials_info)
+    
+    # Perf by ST and by SN
+    gobj = ti2.groupby(['rewside', 'servo_intpos', 'stim_number'])
+    for (rewside, servo_intpos, stim_number), sub_ti in gobj:
+        nhits, ntots = ArduFSM.trials_info_tools.calculate_nhit_ntot(sub_ti)
+        if ntots > 0:
+            rec_l.append({
+                'rewside': rewside, 'servo_intpos': servo_intpos,
+                'stim_number': stim_number,
+                'perf': nhits / float(ntots),
+                })
+
+    # Form dataframe
+    df = pandas.DataFrame.from_records(rec_l)
+    return df
+
+
+
+def plot_side_perf(ax, perf):
+    """Plot performance on each side vs servo position"""
+    colors = ['b', 'r']
+    for rewside in [0, 1]:
+        # Form 2d perf matrix for this side by unstacking
+        sideperf = perf[rewside].unstack() # servo on rows, stimnum on cols
+        yvals = map(int, sideperf.index)
+        
+        # Mean over stim numbers
+        meaned_sideperf = sideperf.mean(axis=0)
+        
+        # Plot
+        ax.plot(yvals, sideperf.mean(axis=1), color=colors[rewside])
+    
+    # Avg over sides
+    meaned = perf.unstack(1).mean()
+    ax.plot(yvals, meaned, color='k')
+    
+    ax.set_xlabel('servo position')
+    ax.set_ylim((0, 1))
+    ax.set_yticks((0, .5, 1))
+    ax.set_xticks(yvals) # because on rows
+    
+    ax.plot(ax.get_xlim(), [.5, .5], 'k:')
+
+
+def make_overlay(sess_meaned_frames, ax, meth='all'):
     import my.plot
     
     # Split into L and R
-    L = np.mean(
-        sess_meaned_frames['meaned'][sess_meaned_frames.rewside == 0], axis=0)
-    R = np.mean(
-        sess_meaned_frames['meaned'][sess_meaned_frames.rewside == 1], axis=0)
+    if meth == 'all':
+        L = np.mean(sess_meaned_frames['meaned'][
+            sess_meaned_frames.rewside == 0], axis=0)
+        R = np.mean(sess_meaned_frames['meaned'][
+            sess_meaned_frames.rewside == 1], axis=0)
+    elif meth == 'L':
+        closest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+            'servo_pos'].min()
+        furthest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+            'servo_pos'].max()
+        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+            servo_pos=closest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+            servo_pos=furthest_R).irow(0)['meaned']
+    elif meth == 'R':
+        closest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+            'servo_pos'].min()
+        furthest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+            'servo_pos'].max()
+        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+            servo_pos=furthest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+            servo_pos=closest_R).irow(0)['meaned']     
 
     # Color them into the R and G space, with zeros for B
     C = np.array([L, R, np.zeros_like(L)])
@@ -46,7 +153,11 @@ def cached_dump_frames_at_retraction_times(rows, frame_dir='./frames'):
         os.mkdir(frame_dir)
 
     # Iterate over sessions
-    for idx, row in rows.iterrows():
+    for idx in rows.index:
+        # Something very strange here where iterrows distorts the dtype
+        # of the object arrays
+        row = rows.ix[idx]
+
         # Set up output_dir and continue if already exists
         output_dir = os.path.join(frame_dir, row['behave_filename'])
         if os.path.exists(output_dir):
@@ -70,8 +181,8 @@ def generate_meaned_frames(rows, frame_dir='./frames'):
     resdf_d = {}
     for idx, sessrow in rows.iterrows():
         # Check that frame_dir exists
-        frame_dir = os.path.join(frame_dir, sessrow['behave_filename'])
-        if not os.path.exists(frame_dir):
+        sess_dir = os.path.join(frame_dir, sessrow['behave_filename'])
+        if not os.path.exists(sess_dir):
             continue        
         
         # Load trials info
@@ -81,7 +192,7 @@ def generate_meaned_frames(rows, frame_dir='./frames'):
         # Load all images
         trialnum2frame = {}
         for trialnum in trials_info.index:
-            filename = os.path.join(frame_dir, 'trial%03d.png' % trialnum)
+            filename = os.path.join(sess_dir, 'trial%03d.png' % trialnum)
             if os.path.exists(filename):
                 im = scipy.misc.imread(filename, flatten=True)
                 trialnum2frame[trialnum] = im
@@ -106,6 +217,21 @@ def generate_meaned_frames(rows, frame_dir='./frames'):
     meaned_frames = pandas.concat(resdf_d, verify_integrity=True)
     return meaned_frames
 
+def timedelta_to_seconds1(val):
+    """Often it ends up as a 0d timedelta array.
+    
+    This especially happens when taking a single row from a df, which becomes
+    a series. Then you sometimes cannot divide by np.timedelta64(1, 's')
+    or by 1e9
+    """
+    ite = val.item() # in nanoseconds
+    return ite / 1e9
+
+def timedelta_to_seconds2(val):
+    """More preferred ... might have been broken in old versions."""
+    return val / np.timedelta64(1, 's')
+
+
 def dump_frames_at_retraction_time(metadata, session_dir):
     """Dump the retraction time frame into a subdirectory.
     
@@ -120,15 +246,15 @@ def dump_frames_at_retraction_time(metadata, session_dir):
         metadata['filename'])
     trials_info['time_retract'] = \
         ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
-    
+
     # Fit to video times
     fit = metadata['fit0'], metadata['fit1']
-    video_times = trials_info['time_retract'].values - (
-        metadata['guess_vvsb_start'] / 1e9)
+    video_times = trials_info['time_retract'].values - \
+        timedelta_to_seconds2(metadata['guess_vvsb_start'])
     trials_info['time_retract_vbase'] = np.polyval(fit, video_times)
     
-    # Mask
-    duration_s = metadata['duration'] / 1e9 #np.timedelta64(1, 's')
+    # Mask out any frametimes that are before or after the video
+    duration_s = timedelta_to_seconds2(metadata['duration_video'])
     mask_by_buffer_from_end(trials_info['time_retract_vbase'], 
         end_time=duration_s, buffer=10)
     
@@ -430,7 +556,7 @@ def parse_video_filenames(video_filenames, verbose=False,
         if len(resdf) == 0:
             resdf = cached_video_files_df
         else:
-            resdf = pandas.concat([resdf, cached_video_files_df], axis=1, 
+            resdf = pandas.concat([resdf, cached_video_files_df], axis=0, 
                 ignore_index=True, verify_integrity=True)
     
     return resdf
