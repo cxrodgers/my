@@ -11,7 +11,8 @@ import scipy.misc
 
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
-    'KM24', 'KM25', 'KF26']
+    'KM24', 'KM25', 'KF26', 'KF28', 'KF30', 'KF32', 'KF33', 'KF35', 'KF36',
+    'KF37']
 rigs = ['L1', 'L2', 'L3']
 aliases = {
     'KF13A': 'KF13',
@@ -334,8 +335,12 @@ def generate_mplayer_guesses_and_sync(metadata,
     print "combined_fit: %r" % np.asarray(combined_fit)
     print "resids: %r" % np.asarray(resids)    
 
-def search_for_behavior_files(behavior_dir='~/mnt/behave/runmice'):
+def search_for_behavior_files(behavior_dir='~/mnt/behave/runmice',
+    clean=True):
     """Load behavior files into data frame.
+    
+    behavior_dir : where to look
+    clean : see parse_behavior_filenames
     
     See also search_for_behavior_and_video_files
     """
@@ -350,7 +355,7 @@ def search_for_behavior_files(behavior_dir='~/mnt/behave/runmice'):
 
     # Parse out metadata for each
     behavior_files_df = parse_behavior_filenames(all_behavior_files, 
-        clean=True)    
+        clean=clean)    
     
     return behavior_files_df
 
@@ -388,6 +393,27 @@ def search_for_behavior_and_video_files(
     video_files_df = parse_video_filenames(video_files, verbose=True,
         cached_video_files_df=cached_video_files_df)
 
+    # Find the best overlap
+    new_behavior_files_df = find_best_overlap_video(
+        behavior_files_df, video_files_df)
+    
+    # Join video info
+    joined = new_behavior_files_df.join(video_files_df, 
+        on='best_video_index', rsuffix='_video')    
+    
+    return joined, video_files_df
+
+def find_best_overlap_video(behavior_files_df, video_files_df):
+    """Find the video file with the best overlap for each behavior file.
+    
+    Returns : behavior_files_df, but now with a best_video_index and
+        a best_video_overlap columns. Suitable for the following:
+        behavior_files_df.join(video_files_df, on='best_video_index', 
+            rsuffix='_video')
+    """
+    # Operate on a copy
+    behavior_files_df = behavior_files_df.copy()
+    
     # Find behavior files that overlapped with video files
     behavior_files_df['best_video_index'] = -1
     behavior_files_df['best_video_overlap'] = 0.0
@@ -416,12 +442,7 @@ def search_for_behavior_and_video_files(
             behavior_files_df['best_video_index'][bidx] = vidx_max_overlap
             behavior_files_df['best_video_overlap'][bidx] = max_overlap_sec
 
-    # Join video info
-    joined = behavior_files_df.join(video_files_df, on='best_video_index', 
-        rsuffix='_video')    
-    
-    return joined, video_files_df
-
+    return behavior_files_df
 
 def parse_behavior_filenames(all_behavior_files, clean=True):
     """Given list of ardulines files, extract metadata and return as df.
@@ -434,7 +455,7 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
     """
     # Extract info from filename
     # directory, rigname, datestring, mouse
-    pattern = '(\S+)/(\S+)/ardulines\.(\d+)\.(\S+)'
+    pattern = '(\S+)/(\S+)/logfiles/ardulines\.(\d+)\.(\S+)'
     rec_l = []
     for filename in all_behavior_files:
         # Match filename pattern
@@ -450,7 +471,7 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
                 misc.get_file_time(filename))
             
             # Store
-            rec_l.append({'dir': dir, 'rig': rig, 'mouse': mouse,
+            rec_l.append({'rig': rig, 'mouse': mouse,
                 'dt_start': date, 'dt_end': behavior_end_time,
                 'duration': behavior_end_time - date,
                 'filename': filename})
@@ -466,6 +487,11 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
 
         # Drop any that are not in the list of accepted mouse names
         behavior_files_df = behavior_files_df.ix[behavior_files_df.mouse.isin(mice)]
+
+    # Add a session name based on the date and cleaned mouse name
+    behavior_files_df['session'] = behavior_files_df['filename'].apply(
+        lambda s: os.path.split(s)[1].split('.')[1]) + \
+        '.' + behavior_files_df['mouse']
 
     return behavior_files_df
 
