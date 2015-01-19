@@ -526,7 +526,8 @@ def parse_video_filenames(video_filenames, verbose=False,
     rec_l = []
 
     for video_filename in video_filenames:
-        if video_filename in cached_video_files_df.filename.values:
+        if cached_video_files_df is not None and \
+            video_filename in cached_video_files_df.filename.values:
             continue
         
         if verbose:
