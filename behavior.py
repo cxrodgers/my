@@ -9,6 +9,14 @@ import subprocess # for ffprobe
 import ArduFSM
 import scipy.misc
 
+import sys
+tcv2_path = os.path.expanduser('~/dev/ArduFSM/TwoChoice_v2')
+if tcv2_path not in sys.path:
+    sys.path.append(tcv2_path)
+
+import TrialMatrix, TrialSpeak
+
+
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
     'KM24', 'KM25', 'KF26', 'KF28', 'KF30', 'KF32', 'KF33', 'KF35', 'KF36',
@@ -282,14 +290,22 @@ def generate_mplayer_guesses_and_sync(metadata,
     to fix `guess` to be closer.
     """
     # Load trials info
-    trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
+    #~ trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
+        #~ metadata['filename'])
+    #~ splines = ArduFSM.trials_info_tools.load_splines_from_file(
+        #~ metadata['filename'])
+    trials_info = TrialMatrix.make_trial_matrix_from_file(
         metadata['filename'])
-    splines = ArduFSM.trials_info_tools.load_splines_from_file(
+    splines = TrialSpeak.load_splines_from_file(
         metadata['filename'])
+    lines = TrialSpeak.read_lines_from_file(metadata['filename'])
+    parsed_df_split_by_trial = TrialSpeak.parse_lines_into_df_split_by_trial(lines)
 
     # Insert servo retract time
-    trials_info['time_retract'] = \
-        ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
+    #~ trials_info['time_retract'] = \
+        #~ ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
+    trials_info['time_retract'] = TrialSpeak.identify_servo_retract_times(
+        parsed_df_split_by_trial)
 
     # Apply the delta-time guess to the retraction times
     test_guess_vvsb = metadata['guess_vvsb_start'] / np.timedelta64(1, 's')
