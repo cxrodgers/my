@@ -448,6 +448,9 @@ def find_best_overlap_video(behavior_files_df, video_files_df):
         
         # Find the video with the most overlap
         overlap = (earliest_end - latest_start)
+        if len(overlap) == 0:
+            # ie, no video files found
+            continue
         vidx_max_overlap = overlap.argmax()
         
         # Convert from numpy timedelta64 to a normal number
@@ -455,8 +458,8 @@ def find_best_overlap_video(behavior_files_df, video_files_df):
         
         # Store if it's more than zero
         if max_overlap_sec > 0:
-            behavior_files_df['best_video_index'][bidx] = vidx_max_overlap
-            behavior_files_df['best_video_overlap'][bidx] = max_overlap_sec
+            behavior_files_df.loc[bidx, 'best_video_index'] = vidx_max_overlap
+            behavior_files_df.loc[bidx, 'best_video_overlap'] = max_overlap_sec
 
     return behavior_files_df
 
