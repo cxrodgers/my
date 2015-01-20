@@ -116,33 +116,64 @@ def plot_side_perf(ax, perf):
 
 
 def make_overlay(sess_meaned_frames, ax, meth='all'):
+    """Plot various overlays
+    
+    sess_meaned_frames - df with columns 'meaned', 'rewside', 'servo_pos'
+    meth -
+        'all' - average all with the same rewside together
+        'L' - take closest L and furthest R
+        'R' - take furthest R and closest L
+        'close' - take closest of both
+        'far' - take furthest of both
+    """
+    
     import my.plot
     
     # Split into L and R
     if meth == 'all':
         L = np.mean(sess_meaned_frames['meaned'][
-            sess_meaned_frames.rewside == 0], axis=0)
+            sess_meaned_frames.rewside == 'left'], axis=0)
         R = np.mean(sess_meaned_frames['meaned'][
-            sess_meaned_frames.rewside == 1], axis=0)
+            sess_meaned_frames.rewside == 'right'], axis=0)
     elif meth == 'L':
-        closest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+        closest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
             'servo_pos'].min()
-        furthest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+        furthest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
             'servo_pos'].max()
-        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
             servo_pos=closest_L).irow(0)['meaned']
-        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
             servo_pos=furthest_R).irow(0)['meaned']
     elif meth == 'R':
-        closest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+        closest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
             'servo_pos'].min()
-        furthest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+        furthest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
             'servo_pos'].max()
-        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
             servo_pos=furthest_L).irow(0)['meaned']
-        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
             servo_pos=closest_R).irow(0)['meaned']     
-
+    elif meth == 'close':
+        closest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
+            'servo_pos'].min()
+        closest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
+            'servo_pos'].min()
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
+            servo_pos=closest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
+            servo_pos=closest_R).irow(0)['meaned']     
+    elif meth == 'far':
+        furthest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
+            'servo_pos'].max()            
+        furthest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
+            'servo_pos'].max()
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
+            servo_pos=furthest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
+            servo_pos=furthest_R).irow(0)['meaned']     
+    else:
+        raise ValueError("meth not understood: " + str(meth))
+            
     # Color them into the R and G space, with zeros for B
     C = np.array([L, R, np.zeros_like(L)])
     C = C.swapaxes(0, 2).swapaxes(0, 1) / 255.
@@ -247,14 +278,15 @@ def dump_frames_at_retraction_time(metadata, session_dir):
     metadata : row containing behavior info, video info, and fit info    
     """
     # Load trials info
-    trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
-        metadata['filename'])
+    trials_info = TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
+    splines = TrialSpeak.load_splines_from_file(metadata['filename'])
 
     # Insert servo retract time
-    splines = ArduFSM.trials_info_tools.load_splines_from_file(
-        metadata['filename'])
-    trials_info['time_retract'] = \
-        ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
+    lines = TrialSpeak.read_lines_from_file(metadata['filename'])
+    parsed_df_split_by_trial = \
+        TrialSpeak.parse_lines_into_df_split_by_trial(lines)    
+    trials_info['time_retract'] = TrialSpeak.identify_servo_retract_times(
+        parsed_df_split_by_trial)        
 
     # Fit to video times
     fit = metadata['fit0'], metadata['fit1']
@@ -290,20 +322,13 @@ def generate_mplayer_guesses_and_sync(metadata,
     to fix `guess` to be closer.
     """
     # Load trials info
-    #~ trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
-        #~ metadata['filename'])
-    #~ splines = ArduFSM.trials_info_tools.load_splines_from_file(
-        #~ metadata['filename'])
-    trials_info = TrialMatrix.make_trial_matrix_from_file(
-        metadata['filename'])
-    splines = TrialSpeak.load_splines_from_file(
-        metadata['filename'])
+    trials_info = TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
+    splines = TrialSpeak.load_splines_from_file(metadata['filename'])
     lines = TrialSpeak.read_lines_from_file(metadata['filename'])
-    parsed_df_split_by_trial = TrialSpeak.parse_lines_into_df_split_by_trial(lines)
+    parsed_df_split_by_trial = \
+        TrialSpeak.parse_lines_into_df_split_by_trial(lines)
 
     # Insert servo retract time
-    #~ trials_info['time_retract'] = \
-        #~ ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
     trials_info['time_retract'] = TrialSpeak.identify_servo_retract_times(
         parsed_df_split_by_trial)
 
