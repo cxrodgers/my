@@ -36,6 +36,9 @@ def daily_update():
     
     This should be run on marvin locale.
     """
+    daily_update_behavior()
+    daily_update_video()
+    daily_update_overlap_behavior_and_video()
 
 def daily_update_behavior(behavior_dir='/home/mouse/runmice'):
     """Update behavior database"""
@@ -49,7 +52,8 @@ def daily_update_behavior(behavior_dir='/home/mouse/runmice'):
     
     # Test the reading/writing is working
     bdf = get_behavior_df()
-    if not behavior_files_df.equals(bdf):
+    #~ if not behavior_files_df.equals(bdf):
+    if not (behavior_files_df == bdf).all().all():
         raise ValueError("read/write error in behavior database")
     
 def daily_update_video(video_dir='/home/mouse/compressed_eye'):
@@ -61,7 +65,7 @@ def daily_update_video(video_dir='/home/mouse/compressed_eye'):
     # TODO: error check here; if no videos; do not trash cache
     
     # Parse into df
-    video_files_df = parse_video_filenames(video_files, verbose=True,
+    video_files_df = parse_video_filenames(video_files, verbose=False,
         cached_video_files_df=None)
     
     # Save
@@ -70,7 +74,8 @@ def daily_update_video(video_dir='/home/mouse/compressed_eye'):
     
     # Test the reading/writing is working
     vdf = get_video_df()
-    if not video_files_df.equals(vdf):
+    if not (video_files_df == vdf).all().all():
+    #~ if not video_files_df.equals(vdf):
         raise ValueError("read/write error in video database")    
 
 def daily_update_overlap_behavior_and_video():
@@ -90,9 +95,53 @@ def daily_update_overlap_behavior_and_video():
     joined = new_behavior_files_df.join(video_files_df, 
         on='best_video_index', rsuffix='_video')
     
+    # Drop on unmatched
+    joined = joined.dropna()
+    
+    # Add the delta-time guess
+    joined['guess_vvsb_start'] = joined['dt_start_video'] - joined['dt_start']
+    
     # Save
     filename = os.path.join(database_root, 'behave_and_video.csv')
-    joined.to_csv(filename)
+    joined.to_csv(filename, index=False)
+
+def daily_update_trial_matrix(verbose=False):
+    """Cache the trial matrix for every session
+    
+    TODO: use cache
+    """
+    # Get
+    behavior_files_df = get_behavior_df()
+    
+    # Calculate trial_matrix for each
+    session2trial_matrix = {}
+    for irow, row in behavior_files_df.iterrows():
+        if verbose:
+            print irow
+        trial_matrix = TrialMatrix.make_trial_matrix_from_file(row['filename'])
+        session2trial_matrix[row['session']] = trial_matrix
+
+    # Cache the trial matrices
+    for session, trial_matrix in session2trial_matrix.items():
+        filename = os.path.join(database_root, 'trial_matrix', session)
+        trial_matrix.to_csv(filename)
+
+def get_trial_matrix(session):
+    filename = os.path.join(database_root, 'trial_matrix', session)
+    res = pandas.read_csv(filename)
+    return res
+
+def get_all_trial_matrix():
+    all_filenames = glob.glob(os.path.join(
+        database_root, 'trial_matrix', '*'))
+    
+    session2trial_matrix = {}
+    for filename in all_filenames:
+        session = os.path.split(filename)[1]
+        trial_matrix = pandas.read_csv(filename)
+        session2trial_matrix[session] = trial_matrix
+    
+    return session2trial_matrix
 
 def get_behavior_df():
     """Returns the current behavior database"""
@@ -110,7 +159,6 @@ def get_behavior_df():
     
     return behavior_files_df
     
-
 def get_video_df():
     """Returns the current video database"""
     filename = os.path.join(database_root, 'video.csv')
@@ -132,9 +180,18 @@ def get_synced_behavior_and_video_df():
     filename = os.path.join(database_root, 'behave_and_video.csv')
     
     try:
-        synced_bv_df = pandas.read_csv(filename)
+        synced_bv_df = pandas.read_csv(filename, parse_dates=[
+            'dt_end', 'dt_start', 'dt_end_video', 'dt_start_video'])
     except IOError:
         raise IOError("cannot find synced database at %s" % filename)
+    
+    # Alternatively, could store as floating point seconds
+    synced_bv_df['duration'] = pandas.to_timedelta(
+        synced_bv_df['duration'])    
+    synced_bv_df['duration_video'] = pandas.to_timedelta(
+        synced_bv_df['duration_video'])    
+    synced_bv_df['guess_vvsb_start'] = pandas.to_timedelta(
+        synced_bv_df['guess_vvsb_start'])    
     
     return synced_bv_df    
 
