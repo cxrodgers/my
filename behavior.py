@@ -28,6 +28,96 @@ aliases = {
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
+database_root = '/home/mouse/dev/behavior_db'
+
+## database management
+def daily_update():
+    """Update the databases with current behavior and video files
+    
+    This should be run on marvin locale.
+    """
+
+def daily_update_behavior(behavior_dir='/home/mouse/runmice'):
+    """Update behavior database"""
+    # load
+    behavior_files_df = search_for_behavior_files(behavior_dir=behavior_dir,
+        clean=True)
+    
+    # save
+    filename = os.path.join(database_root, 'behavior.csv')
+    behavior_files_df.to_csv(filename)
+    
+
+def daily_update_video(video_dir='/home/mouse/Videos'):
+    """Update video database"""
+    # find video files
+    video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
+    
+    # TODO: load existing video files and use as cache
+    # TODO: error check here; if no videos; do not trash cache
+    
+    # Parse into df
+    video_files_df = parse_video_filenames(video_files, verbose=True,
+        cached_video_files_df=None)
+    
+    # Save
+    filename = os.path.join(database_root, 'video.csv')
+    video_files_df.to_csv(filename)    
+
+def daily_update_overlap_behavior_and_video():
+    """Update the linkage betweeen behavior and video df
+    
+    Should run daily_update_behavior and daily_update_video first
+    """
+    # Load the databases
+    behavior_files_df = get_behavior_df()
+    video_files_df = get_video_df()
+
+    # Find the best overlap
+    new_behavior_files_df = find_best_overlap_video(
+        behavior_files_df, video_files_df)
+    
+    # Join video info
+    joined = new_behavior_files_df.join(video_files_df, 
+        on='best_video_index', rsuffix='_video')
+    
+    # Save
+    filename = os.path.join(database_root, 'behave_and_video.csv')
+    joined.to_csv(filename)
+
+def get_behavior_df():
+    """Returns the current behavior database"""
+    filename = os.path.join(database_root, 'behavior.csv')
+
+    try:
+        behavior_files_df = pandas.read_csv(filename)
+    except IOError:
+        raise IOError("cannot find behavior database at %s" % filename)
+    
+    return behavior_files_df
+    
+
+def get_video_df():
+    """Returns the current video database"""
+    filename = os.path.join(database_root, 'video.csv')
+
+    try:
+        video_files_df = pandas.read_csv(filename)
+    except IOError:
+        raise IOError("cannot find video database at %s" % filename)
+    
+    return video_files_df
+
+def get_synced_behavior_and_video_df():
+    """Return the synced behavior/video database"""
+    filename = os.path.join(database_root, 'behave_and_video.csv')
+    
+    try:
+        synced_bv_df = pandas.read_csv(filename)
+    except IOError:
+        raise IOError("cannot find synced database at %s" % filename)
+    
+    return synced_bv_df    
 
 def load_frames_by_trial(frame_dir, trials_info):
     """Read all trial%03d.png in frame_dir and return as dict"""
