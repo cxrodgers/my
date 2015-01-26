@@ -45,10 +45,14 @@ def daily_update_behavior(behavior_dir='/home/mouse/runmice'):
     
     # save
     filename = os.path.join(database_root, 'behavior.csv')
-    behavior_files_df.to_csv(filename)
+    behavior_files_df.to_csv(filename, index=False)
     
-
-def daily_update_video(video_dir='/home/mouse/Videos'):
+    # Test the reading/writing is working
+    bdf = get_behavior_df()
+    if not behavior_files_df.equals(bdf):
+        raise ValueError("read/write error in behavior database")
+    
+def daily_update_video(video_dir='/home/mouse/compressed_eye'):
     """Update video database"""
     # find video files
     video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
@@ -62,7 +66,12 @@ def daily_update_video(video_dir='/home/mouse/Videos'):
     
     # Save
     filename = os.path.join(database_root, 'video.csv')
-    video_files_df.to_csv(filename)    
+    video_files_df.to_csv(filename, index=False)    
+    
+    # Test the reading/writing is working
+    vdf = get_video_df()
+    if not video_files_df.equals(vdf):
+        raise ValueError("read/write error in video database")    
 
 def daily_update_overlap_behavior_and_video():
     """Update the linkage betweeen behavior and video df
@@ -90,9 +99,14 @@ def get_behavior_df():
     filename = os.path.join(database_root, 'behavior.csv')
 
     try:
-        behavior_files_df = pandas.read_csv(filename)
+        behavior_files_df = pandas.read_csv(filename, 
+            parse_dates=['dt_end', 'dt_start', 'duration'])
     except IOError:
         raise IOError("cannot find behavior database at %s" % filename)
+    
+    # Alternatively, could store as floating point seconds
+    behavior_files_df['duration'] = pandas.to_timedelta(
+        behavior_files_df['duration'])
     
     return behavior_files_df
     
@@ -102,9 +116,14 @@ def get_video_df():
     filename = os.path.join(database_root, 'video.csv')
 
     try:
-        video_files_df = pandas.read_csv(filename)
+        video_files_df = pandas.read_csv(filename,
+            parse_dates=['dt_end', 'dt_start'])
     except IOError:
         raise IOError("cannot find video database at %s" % filename)
+    
+    # Alternatively, could store as floating point seconds
+    video_files_df['duration'] = pandas.to_timedelta(
+        video_files_df['duration'])    
     
     return video_files_df
 
