@@ -28,9 +28,27 @@ aliases = {
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
-database_root = '/home/mouse/dev/behavior_db'
-
 ## database management
+import socket
+LOCALE = socket.gethostname()
+if LOCALE == 'chris-pyramid':
+    PATHS = {
+        'database_root': '/home/chris/mnt/marvin/dev/behavior_db',
+        'behavior_dir': '/home/chris/mnt/marvin/runmice',
+        'video_dir': '/home/chris/mnt/marvin/compressed_eye',
+        }
+
+elif LOCALE == 'marvin':
+    PATHS = {
+        'database_root': '/home/mouse/dev/behavior_db',
+        'behavior_dir': '/home/mouse/runmice',
+        'video_dir': '/home/mouse/compressed_eye',
+        }
+
+else:
+    raise ValueError("unknown locale %s" % LOCALE)
+
+
 def daily_update():
     """Update the databases with current behavior and video files
     
@@ -40,14 +58,15 @@ def daily_update():
     daily_update_video()
     daily_update_overlap_behavior_and_video()
 
-def daily_update_behavior(behavior_dir='/home/mouse/runmice'):
+def daily_update_behavior():
     """Update behavior database"""
     # load
-    behavior_files_df = search_for_behavior_files(behavior_dir=behavior_dir,
+    behavior_files_df = search_for_behavior_files(
+        behavior_dir=PATHS['behavior_dir'],
         clean=True)
     
     # save
-    filename = os.path.join(database_root, 'behavior.csv')
+    filename = os.path.join(PATHS['database_root'], 'behavior.csv')
     behavior_files_df.to_csv(filename, index=False)
     
     # Test the reading/writing is working
@@ -56,10 +75,10 @@ def daily_update_behavior(behavior_dir='/home/mouse/runmice'):
     if not (behavior_files_df == bdf).all().all():
         raise ValueError("read/write error in behavior database")
     
-def daily_update_video(video_dir='/home/mouse/compressed_eye'):
+def daily_update_video():
     """Update video database"""
     # find video files
-    video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
+    video_files = glob.glob(os.path.join(PATHS['video_dir'], '*.mp4'))
     
     # TODO: load existing video files and use as cache
     # TODO: error check here; if no videos; do not trash cache
@@ -69,7 +88,7 @@ def daily_update_video(video_dir='/home/mouse/compressed_eye'):
         cached_video_files_df=None)
     
     # Save
-    filename = os.path.join(database_root, 'video.csv')
+    filename = os.path.join(PATHS['database_root'], 'video.csv')
     video_files_df.to_csv(filename, index=False)    
     
     # Test the reading/writing is working
@@ -102,7 +121,7 @@ def daily_update_overlap_behavior_and_video():
     joined['guess_vvsb_start'] = joined['dt_start_video'] - joined['dt_start']
     
     # Save
-    filename = os.path.join(database_root, 'behave_and_video.csv')
+    filename = os.path.join(PATHS['database_root'], 'behave_and_video.csv')
     joined.to_csv(filename, index=False)
 
 def daily_update_trial_matrix(verbose=False):
@@ -123,17 +142,17 @@ def daily_update_trial_matrix(verbose=False):
 
     # Cache the trial matrices
     for session, trial_matrix in session2trial_matrix.items():
-        filename = os.path.join(database_root, 'trial_matrix', session)
+        filename = os.path.join(PATHS['database_root'], 'trial_matrix', session)
         trial_matrix.to_csv(filename)
 
 def get_trial_matrix(session):
-    filename = os.path.join(database_root, 'trial_matrix', session)
+    filename = os.path.join(PATHS['database_root'], 'trial_matrix', session)
     res = pandas.read_csv(filename)
     return res
 
 def get_all_trial_matrix():
     all_filenames = glob.glob(os.path.join(
-        database_root, 'trial_matrix', '*'))
+        PATHS['database_root'], 'trial_matrix', '*'))
     
     session2trial_matrix = {}
     for filename in all_filenames:
@@ -145,7 +164,7 @@ def get_all_trial_matrix():
 
 def get_behavior_df():
     """Returns the current behavior database"""
-    filename = os.path.join(database_root, 'behavior.csv')
+    filename = os.path.join(PATHS['database_root'], 'behavior.csv')
 
     try:
         behavior_files_df = pandas.read_csv(filename, 
@@ -161,7 +180,7 @@ def get_behavior_df():
     
 def get_video_df():
     """Returns the current video database"""
-    filename = os.path.join(database_root, 'video.csv')
+    filename = os.path.join(PATHS['database_root'], 'video.csv')
 
     try:
         video_files_df = pandas.read_csv(filename,
@@ -177,7 +196,7 @@ def get_video_df():
 
 def get_synced_behavior_and_video_df():
     """Return the synced behavior/video database"""
-    filename = os.path.join(database_root, 'behave_and_video.csv')
+    filename = os.path.join(PATHS['database_root'], 'behave_and_video.csv')
     
     try:
         synced_bv_df = pandas.read_csv(filename, parse_dates=[
