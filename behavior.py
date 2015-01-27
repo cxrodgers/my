@@ -68,6 +68,9 @@ def daily_update_behavior():
         behavior_dir=PATHS['behavior_dir'],
         clean=True)
     
+    # store copy for error check
+    behavior_files_df_local = behavior_files_df.copy()
+    
     # locale-ify
     behavior_files_df['filename'] = behavior_files_df['filename'].str.replace(
         PATHS['behavior_dir'], '$behavior_dir$')
@@ -78,8 +81,7 @@ def daily_update_behavior():
     
     # Test the reading/writing is working
     bdf = get_behavior_df()
-    #~ if not behavior_files_df.equals(bdf):
-    if not (behavior_files_df == bdf).all().all():
+    if not (behavior_files_df_local == bdf).all().all():
         raise ValueError("read/write error in behavior database")
     
 def daily_update_video():
@@ -94,6 +96,9 @@ def daily_update_video():
     video_files_df = parse_video_filenames(video_files, verbose=False,
         cached_video_files_df=None)
 
+    # store copy for error check
+    video_files_df_local = video_files_df.copy()
+
     # locale-ify
     video_files_df['filename'] = video_files_df['filename'].str.replace(
         PATHS['video_dir'], '$video_dir$')
@@ -104,8 +109,7 @@ def daily_update_video():
     
     # Test the reading/writing is working
     vdf = get_video_df()
-    if not (video_files_df == vdf).all().all():
-    #~ if not video_files_df.equals(vdf):
+    if not (video_files_df_local == vdf).all().all():
         raise ValueError("read/write error in video database")    
 
 def daily_update_overlap_behavior_and_video():
