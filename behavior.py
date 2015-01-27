@@ -9,9 +9,18 @@ import subprocess # for ffprobe
 import ArduFSM
 import scipy.misc
 
+import sys
+tcv2_path = os.path.expanduser('~/dev/ArduFSM/TwoChoice_v2')
+if tcv2_path not in sys.path:
+    sys.path.append(tcv2_path)
+
+import TrialMatrix, TrialSpeak
+
+
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
-    'KM24', 'KM25', 'KF26']
+    'KM24', 'KM25', 'KF26', 'KF28', 'KF30', 'KF32', 'KF33', 'KF35', 'KF36',
+    'KF37']
 rigs = ['L1', 'L2', 'L3']
 aliases = {
     'KF13A': 'KF13',
@@ -19,6 +28,298 @@ aliases = {
     }
 assert np.all([alias_val in mice for alias_val in aliases.values()])
 
+## database management
+import socket
+LOCALE = socket.gethostname()
+if LOCALE == 'chris-pyramid':
+    PATHS = {
+        'database_root': '/home/chris/mnt/marvin/dev/behavior_db',
+        'behavior_dir': '/home/chris/mnt/marvin/runmice',
+        'video_dir': '/home/chris/mnt/marvin/compressed_eye',
+        }
+
+elif LOCALE == 'marvin':
+    PATHS = {
+        'database_root': '/home/mouse/dev/behavior_db',
+        'behavior_dir': '/home/mouse/runmice',
+        'video_dir': '/home/mouse/compressed_eye',
+        }
+
+else:
+    raise ValueError("unknown locale %s" % LOCALE)
+
+
+def daily_update():
+    """Update the databases with current behavior and video files
+    
+    This should be run on marvin locale.
+    """
+    if LOCALE != 'marvin':
+        raise ValueError("this must be run on marvin")
+    
+    daily_update_behavior()
+    daily_update_video()
+    daily_update_overlap_behavior_and_video()
+
+def daily_update_behavior():
+    """Update behavior database"""
+    # load
+    behavior_files_df = search_for_behavior_files(
+        behavior_dir=PATHS['behavior_dir'],
+        clean=True)
+    
+    # store copy for error check
+    behavior_files_df_local = behavior_files_df.copy()
+    
+    # locale-ify
+    behavior_files_df['filename'] = behavior_files_df['filename'].str.replace(
+        PATHS['behavior_dir'], '$behavior_dir$')
+    
+    # save
+    filename = os.path.join(PATHS['database_root'], 'behavior.csv')
+    behavior_files_df.to_csv(filename, index=False)
+    
+    # Test the reading/writing is working
+    bdf = get_behavior_df()
+    if not (behavior_files_df_local == bdf).all().all():
+        raise ValueError("read/write error in behavior database")
+    
+def daily_update_video():
+    """Update video database"""
+    # find video files
+    video_files = glob.glob(os.path.join(PATHS['video_dir'], '*.mp4'))
+    
+    # TODO: load existing video files and use as cache
+    # TODO: error check here; if no videos; do not trash cache
+    
+    # Parse into df
+    video_files_df = parse_video_filenames(video_files, verbose=False,
+        cached_video_files_df=None)
+
+    # store copy for error check
+    video_files_df_local = video_files_df.copy()
+
+    # locale-ify
+    video_files_df['filename'] = video_files_df['filename'].str.replace(
+        PATHS['video_dir'], '$video_dir$')
+    
+    # Save
+    filename = os.path.join(PATHS['database_root'], 'video.csv')
+    video_files_df.to_csv(filename, index=False)    
+    
+    # Test the reading/writing is working
+    vdf = get_video_df()
+    if not (video_files_df_local == vdf).all().all():
+        raise ValueError("read/write error in video database")    
+
+def daily_update_overlap_behavior_and_video():
+    """Update the linkage betweeen behavior and video df
+    
+    Should run daily_update_behavior and daily_update_video first
+    """
+    # Load the databases
+    behavior_files_df = get_behavior_df()
+    video_files_df = get_video_df()
+
+    # Find the best overlap
+    new_behavior_files_df = find_best_overlap_video(
+        behavior_files_df, video_files_df)
+    
+    # Join video info
+    joined = new_behavior_files_df.join(video_files_df, 
+        on='best_video_index', rsuffix='_video')
+    
+    # Drop on unmatched
+    joined = joined.dropna()
+    
+    # Add the delta-time guess
+    # Negative timedeltas aren't handled by to_timedelta in the loading function
+    # So store as seconds here
+    guess = joined['dt_start_video'] - joined['dt_start']
+    joined['guess_vvsb_start'] = guess / np.timedelta64(1, 's')
+    
+    # locale-ify
+    joined['filename'] = joined['filename'].str.replace(
+        PATHS['behavior_dir'], '$behavior_dir$')    
+    joined['filename_video'] = joined['filename_video'].str.replace(
+        PATHS['video_dir'], '$video_dir$')    
+        
+    # Save
+    filename = os.path.join(PATHS['database_root'], 'behave_and_video.csv')
+    joined.to_csv(filename, index=False)
+
+def daily_update_trial_matrix(verbose=False):
+    """Cache the trial matrix for every session
+    
+    TODO: use cache
+    """
+    # Get
+    behavior_files_df = get_behavior_df()
+    
+    # Calculate trial_matrix for each
+    session2trial_matrix = {}
+    for irow, row in behavior_files_df.iterrows():
+        if verbose:
+            print irow
+        trial_matrix = TrialMatrix.make_trial_matrix_from_file(row['filename'])
+        session2trial_matrix[row['session']] = trial_matrix
+
+    # Cache the trial matrices
+    for session, trial_matrix in session2trial_matrix.items():
+        filename = os.path.join(PATHS['database_root'], 'trial_matrix', session)
+        trial_matrix.to_csv(filename)
+
+def get_trial_matrix(session):
+    filename = os.path.join(PATHS['database_root'], 'trial_matrix', session)
+    res = pandas.read_csv(filename)
+    return res
+
+def get_all_trial_matrix():
+    all_filenames = glob.glob(os.path.join(
+        PATHS['database_root'], 'trial_matrix', '*'))
+    
+    session2trial_matrix = {}
+    for filename in all_filenames:
+        session = os.path.split(filename)[1]
+        trial_matrix = pandas.read_csv(filename)
+        session2trial_matrix[session] = trial_matrix
+    
+    return session2trial_matrix
+
+def get_behavior_df():
+    """Returns the current behavior database"""
+    filename = os.path.join(PATHS['database_root'], 'behavior.csv')
+
+    try:
+        behavior_files_df = pandas.read_csv(filename, 
+            parse_dates=['dt_end', 'dt_start', 'duration'])
+    except IOError:
+        raise IOError("cannot find behavior database at %s" % filename)
+    
+    # de-localeify
+    behavior_files_df['filename'] = behavior_files_df['filename'].str.replace(
+        '\$behavior_dir\$', PATHS['behavior_dir'])
+    
+    # Alternatively, could store as floating point seconds
+    behavior_files_df['duration'] = pandas.to_timedelta(
+        behavior_files_df['duration'])
+    
+    return behavior_files_df
+    
+def get_video_df():
+    """Returns the current video database"""
+    filename = os.path.join(PATHS['database_root'], 'video.csv')
+
+    try:
+        video_files_df = pandas.read_csv(filename,
+            parse_dates=['dt_end', 'dt_start'])
+    except IOError:
+        raise IOError("cannot find video database at %s" % filename)
+
+    # de-localeify
+    video_files_df['filename'] = video_files_df['filename'].str.replace(
+        '\$video_dir\$', PATHS['video_dir'])
+    
+    # Alternatively, could store as floating point seconds
+    video_files_df['duration'] = pandas.to_timedelta(
+        video_files_df['duration'])    
+    
+    return video_files_df
+
+def get_synced_behavior_and_video_df():
+    """Return the synced behavior/video database"""
+    filename = os.path.join(PATHS['database_root'], 'behave_and_video.csv')
+    
+    try:
+        synced_bv_df = pandas.read_csv(filename, parse_dates=[
+            'dt_end', 'dt_start', 'dt_end_video', 'dt_start_video'])
+    except IOError:
+        raise IOError("cannot find synced database at %s" % filename)
+    
+    # Alternatively, could store as floating point seconds
+    synced_bv_df['duration'] = pandas.to_timedelta(
+        synced_bv_df['duration'])    
+    synced_bv_df['duration_video'] = pandas.to_timedelta(
+        synced_bv_df['duration_video'])    
+
+    # de-localeify
+    synced_bv_df['filename_video'] = synced_bv_df['filename_video'].str.replace(
+        '\$video_dir\$', PATHS['video_dir'])
+    synced_bv_df['filename'] = synced_bv_df['filename'].str.replace(
+        '\$behavior_dir\$', PATHS['behavior_dir'])        
+    
+    return synced_bv_df    
+
+def get_manual_sync_df():
+    filename = os.path.join(PATHS['database_root'], 'manual_bv_sync.csv')
+    
+    try:
+        manual_bv_sync = pandas.read_csv(filename).set_index('session')
+    except IOError:
+        raise IOError("cannot find manual sync database at %s" % filename)    
+    
+    return manual_bv_sync
+
+def set_manual_bv_sync(session, sync_poly):
+    """Store the manual behavior-video sync for session"""
+    
+    # Load any existing manual results
+    manual_sync_df = get_manual_sync_df()
+    
+    # Add
+    if session in manual_sync_df.index:
+        raise ValueError("sync already exists for %s" % session)
+    
+    manual_sync_df.ix[session] = np.asarray(sync_poly)
+    
+    # Store
+    filename = os.path.join(PATHS['database_root'], 'manual_bv_sync.csv')
+    manual_sync_df.to_csv(filename)
+
+def interactive_bv_sync():
+    """Interactively sync behavior and video"""
+    # Load synced data
+    sbvdf = get_synced_behavior_and_video_df()
+
+    # TODO: join on manual results here
+
+    # Choose session
+    choices = sbvdf[['session', 'mouse', 'dt_start', 'best_video_overlap', 'rig']]
+    print "Here are the most recent sessions:"
+    print choices[-20:]
+    choice = None
+    while choice is None:
+        choice = raw_input('Which index to analyze? ')
+        try:
+            choice = int(choice)
+        except ValueError:
+            pass
+    test_row = sbvdf.ix[choice]
+
+    # Run sync
+    N_pts = 3
+    sync_res0 = generate_mplayer_guesses_and_sync(test_row, N=N_pts)
+
+    # Get results
+    n_results = []
+    for n in range(N_pts):
+        res = raw_input('Enter result: ')
+        n_results.append(float(res))
+
+    # Run sync again
+    sync_res1 = generate_mplayer_guesses_and_sync(test_row, N=N_pts,
+        user_results=n_results)
+
+    # Store
+    res = raw_input('Confirm insertion [y/N]? ')
+    if res == 'y':
+        set_manual_bv_sync(test_row['session'], 
+            sync_res1['combined_fit'])
+        print "inserted"
+    else:
+        print "not inserting"    
+
+## End of database stuff
 
 def load_frames_by_trial(frame_dir, trials_info):
     """Read all trial%03d.png in frame_dir and return as dict"""
@@ -107,33 +408,64 @@ def plot_side_perf(ax, perf):
 
 
 def make_overlay(sess_meaned_frames, ax, meth='all'):
+    """Plot various overlays
+    
+    sess_meaned_frames - df with columns 'meaned', 'rewside', 'servo_pos'
+    meth -
+        'all' - average all with the same rewside together
+        'L' - take closest L and furthest R
+        'R' - take furthest R and closest L
+        'close' - take closest of both
+        'far' - take furthest of both
+    """
+    
     import my.plot
     
     # Split into L and R
     if meth == 'all':
         L = np.mean(sess_meaned_frames['meaned'][
-            sess_meaned_frames.rewside == 0], axis=0)
+            sess_meaned_frames.rewside == 'left'], axis=0)
         R = np.mean(sess_meaned_frames['meaned'][
-            sess_meaned_frames.rewside == 1], axis=0)
+            sess_meaned_frames.rewside == 'right'], axis=0)
     elif meth == 'L':
-        closest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+        closest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
             'servo_pos'].min()
-        furthest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+        furthest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
             'servo_pos'].max()
-        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
             servo_pos=closest_L).irow(0)['meaned']
-        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
             servo_pos=furthest_R).irow(0)['meaned']
     elif meth == 'R':
-        closest_R = my.pick_rows(sess_meaned_frames, rewside=1)[
+        closest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
             'servo_pos'].min()
-        furthest_L = my.pick_rows(sess_meaned_frames, rewside=0)[
+        furthest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
             'servo_pos'].max()
-        L = my.pick_rows(sess_meaned_frames, rewside=0, 
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
             servo_pos=furthest_L).irow(0)['meaned']
-        R = my.pick_rows(sess_meaned_frames, rewside=1, 
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
             servo_pos=closest_R).irow(0)['meaned']     
-
+    elif meth == 'close':
+        closest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
+            'servo_pos'].min()
+        closest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
+            'servo_pos'].min()
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
+            servo_pos=closest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
+            servo_pos=closest_R).irow(0)['meaned']     
+    elif meth == 'far':
+        furthest_L = my.pick_rows(sess_meaned_frames, rewside='left')[
+            'servo_pos'].max()            
+        furthest_R = my.pick_rows(sess_meaned_frames, rewside='right')[
+            'servo_pos'].max()
+        L = my.pick_rows(sess_meaned_frames, rewside='left', 
+            servo_pos=furthest_L).irow(0)['meaned']
+        R = my.pick_rows(sess_meaned_frames, rewside='right', 
+            servo_pos=furthest_R).irow(0)['meaned']     
+    else:
+        raise ValueError("meth not understood: " + str(meth))
+            
     # Color them into the R and G space, with zeros for B
     C = np.array([L, R, np.zeros_like(L)])
     C = C.swapaxes(0, 2).swapaxes(0, 1) / 255.
@@ -238,14 +570,15 @@ def dump_frames_at_retraction_time(metadata, session_dir):
     metadata : row containing behavior info, video info, and fit info    
     """
     # Load trials info
-    trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
-        metadata['filename'])
+    trials_info = TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
+    splines = TrialSpeak.load_splines_from_file(metadata['filename'])
 
     # Insert servo retract time
-    splines = ArduFSM.trials_info_tools.load_splines_from_file(
-        metadata['filename'])
-    trials_info['time_retract'] = \
-        ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
+    lines = TrialSpeak.read_lines_from_file(metadata['filename'])
+    parsed_df_split_by_trial = \
+        TrialSpeak.parse_lines_into_df_split_by_trial(lines)    
+    trials_info['time_retract'] = TrialSpeak.identify_servo_retract_times(
+        parsed_df_split_by_trial)        
 
     # Fit to video times
     fit = metadata['fit0'], metadata['fit1']
@@ -281,17 +614,18 @@ def generate_mplayer_guesses_and_sync(metadata,
     to fix `guess` to be closer.
     """
     # Load trials info
-    trials_info = ArduFSM.trials_info_tools.load_trials_info_from_file(
-        metadata['filename'])
-    splines = ArduFSM.trials_info_tools.load_splines_from_file(
-        metadata['filename'])
+    trials_info = TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
+    splines = TrialSpeak.load_splines_from_file(metadata['filename'])
+    lines = TrialSpeak.read_lines_from_file(metadata['filename'])
+    parsed_df_split_by_trial = \
+        TrialSpeak.parse_lines_into_df_split_by_trial(lines)
 
     # Insert servo retract time
-    trials_info['time_retract'] = \
-        ArduFSM.trials_info_tools.identify_servo_retract_times(splines)
+    trials_info['time_retract'] = TrialSpeak.identify_servo_retract_times(
+        parsed_df_split_by_trial)
 
     # Apply the delta-time guess to the retraction times
-    test_guess_vvsb = metadata['guess_vvsb_start'] / np.timedelta64(1, 's')
+    test_guess_vvsb = metadata['guess_vvsb_start'] #/ np.timedelta64(1, 's')
     trials_info['time_retract_vbase'] = \
         trials_info['time_retract'] - test_guess_vvsb
 
@@ -314,11 +648,11 @@ def generate_mplayer_guesses_and_sync(metadata,
 
     # If no data provided, just return
     if user_results is None:
-        return
+        return {'test_times': test_times}
     if len(user_results) != N:
         print "warning: len(user_results) should be %d not %d" % (
             N, len(user_results))
-        return
+        return {'test_times': test_times}
     
     # Otherwise, fit a correction to the original guess
     new_fit = np.polyfit(test_times.values, user_results, deg=1)
@@ -333,6 +667,37 @@ def generate_mplayer_guesses_and_sync(metadata,
     print os.path.split(metadata['filename_video'])[-1]
     print "combined_fit: %r" % np.asarray(combined_fit)
     print "resids: %r" % np.asarray(resids)    
+    
+    return {'test_times': test_times, 'resids': resids, 
+        'combined_fit': combined_fit}
+
+def search_for_behavior_files(behavior_dir='~/mnt/behave/runmice',
+    clean=True):
+    """Load behavior files into data frame.
+    
+    behavior_dir : where to look
+    clean : see parse_behavior_filenames
+    
+    See also search_for_behavior_and_video_files
+    """
+    # expand path
+    behavior_dir = os.path.expanduser(behavior_dir)
+    
+    # Acquire all behavior files in the subdirectories
+    all_behavior_files = []
+    for subdir in rigs:
+        all_behavior_files += glob.glob(os.path.join(
+            behavior_dir, subdir, 'logfiles', 'ardulines.*'))
+
+    # Parse out metadata for each
+    behavior_files_df = parse_behavior_filenames(all_behavior_files, 
+        clean=clean)    
+    
+    # Sort and reindex
+    behavior_files_df = behavior_files_df.sort('dt_start')
+    behavior_files_df.index = range(len(behavior_files_df))
+    
+    return behavior_files_df
 
 def search_for_behavior_and_video_files(
     behavior_dir='~/mnt/behave/runmice',
@@ -342,11 +707,9 @@ def search_for_behavior_and_video_files(
     """Get a list of behavior and video files, with metadata.
     
     Looks for all behavior directories in behavior_dir/rignumber.
-    Looks for all video files in video_dir.
+    Looks for all video files in video_dir (using cache).
     Gets metadata about video files using parse_video_filenames.
     Finds which video file maximally overlaps with which behavior file.
-    
-    TODO: cache the video file probing, which takes a fair amount of time.
     
     Returns: joined, video_files_df
         joined is a data frame with the following columns:
@@ -359,16 +722,9 @@ def search_for_behavior_and_video_files(
     # expand path
     behavior_dir = os.path.expanduser(behavior_dir)
     video_dir = os.path.expanduser(video_dir)
-    
-    # Acquire all behavior files in the subdirectories
-    all_behavior_files = []
-    for subdir in rigs:
-        all_behavior_files += glob.glob(os.path.join(
-            behavior_dir, subdir, 'ardulines.*'))
 
-    # Parse out metadata for each
-    behavior_files_df = parse_behavior_filenames(all_behavior_files, 
-        clean=True)
+    # Search for behavior files
+    behavior_files_df = search_for_behavior_files(behavior_dir)
 
     # Acquire all video files
     video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
@@ -377,6 +733,27 @@ def search_for_behavior_and_video_files(
     video_files_df = parse_video_filenames(video_files, verbose=True,
         cached_video_files_df=cached_video_files_df)
 
+    # Find the best overlap
+    new_behavior_files_df = find_best_overlap_video(
+        behavior_files_df, video_files_df)
+    
+    # Join video info
+    joined = new_behavior_files_df.join(video_files_df, 
+        on='best_video_index', rsuffix='_video')    
+    
+    return joined, video_files_df
+
+def find_best_overlap_video(behavior_files_df, video_files_df):
+    """Find the video file with the best overlap for each behavior file.
+    
+    Returns : behavior_files_df, but now with a best_video_index and
+        a best_video_overlap columns. Suitable for the following:
+        behavior_files_df.join(video_files_df, on='best_video_index', 
+            rsuffix='_video')
+    """
+    # Operate on a copy
+    behavior_files_df = behavior_files_df.copy()
+    
     # Find behavior files that overlapped with video files
     behavior_files_df['best_video_index'] = -1
     behavior_files_df['best_video_overlap'] = 0.0
@@ -395,6 +772,9 @@ def search_for_behavior_and_video_files(
         
         # Find the video with the most overlap
         overlap = (earliest_end - latest_start)
+        if len(overlap) == 0:
+            # ie, no video files found
+            continue
         vidx_max_overlap = overlap.argmax()
         
         # Convert from numpy timedelta64 to a normal number
@@ -402,15 +782,10 @@ def search_for_behavior_and_video_files(
         
         # Store if it's more than zero
         if max_overlap_sec > 0:
-            behavior_files_df['best_video_index'][bidx] = vidx_max_overlap
-            behavior_files_df['best_video_overlap'][bidx] = max_overlap_sec
+            behavior_files_df.loc[bidx, 'best_video_index'] = vidx_max_overlap
+            behavior_files_df.loc[bidx, 'best_video_overlap'] = max_overlap_sec
 
-    # Join video info
-    joined = behavior_files_df.join(video_files_df, on='best_video_index', 
-        rsuffix='_video')    
-    
-    return joined, video_files_df
-
+    return behavior_files_df
 
 def parse_behavior_filenames(all_behavior_files, clean=True):
     """Given list of ardulines files, extract metadata and return as df.
@@ -423,7 +798,7 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
     """
     # Extract info from filename
     # directory, rigname, datestring, mouse
-    pattern = '(\S+)/(\S+)/ardulines\.(\d+)\.(\S+)'
+    pattern = '(\S+)/(\S+)/logfiles/ardulines\.(\d+)\.(\S+)'
     rec_l = []
     for filename in all_behavior_files:
         # Match filename pattern
@@ -439,7 +814,7 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
                 misc.get_file_time(filename))
             
             # Store
-            rec_l.append({'dir': dir, 'rig': rig, 'mouse': mouse,
+            rec_l.append({'rig': rig, 'mouse': mouse,
                 'dt_start': date, 'dt_end': behavior_end_time,
                 'duration': behavior_end_time - date,
                 'filename': filename})
@@ -455,6 +830,11 @@ def parse_behavior_filenames(all_behavior_files, clean=True):
 
         # Drop any that are not in the list of accepted mouse names
         behavior_files_df = behavior_files_df.ix[behavior_files_df.mouse.isin(mice)]
+
+    # Add a session name based on the date and cleaned mouse name
+    behavior_files_df['session'] = behavior_files_df['filename'].apply(
+        lambda s: os.path.split(s)[1].split('.')[1]) + \
+        '.' + behavior_files_df['mouse']
 
     return behavior_files_df
 
@@ -489,7 +869,8 @@ def parse_video_filenames(video_filenames, verbose=False,
     rec_l = []
 
     for video_filename in video_filenames:
-        if video_filename in cached_video_files_df.filename.values:
+        if cached_video_files_df is not None and \
+            video_filename in cached_video_files_df.filename.values:
             continue
         
         if verbose:
@@ -547,6 +928,11 @@ def parse_video_filenames(video_filenames, verbose=False,
         else:
             resdf = pandas.concat([resdf, cached_video_files_df], axis=0, 
                 ignore_index=True, verify_integrity=True)
+    
+    
+    # Sort and reindex
+    resdf = resdf.sort('dt_start')
+    resdf.index = range(len(resdf))    
     
     return resdf
 
