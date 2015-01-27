@@ -583,6 +583,10 @@ def search_for_behavior_files(behavior_dir='~/mnt/behave/runmice',
     behavior_files_df = parse_behavior_filenames(all_behavior_files, 
         clean=clean)    
     
+    # Sort and reindex
+    behavior_files_df = behavior_files_df.sort('dt_start')
+    behavior_files_df.index = range(len(behavior_files_df))
+    
     return behavior_files_df
 
 def search_for_behavior_and_video_files(
@@ -814,6 +818,11 @@ def parse_video_filenames(video_filenames, verbose=False,
         else:
             resdf = pandas.concat([resdf, cached_video_files_df], axis=0, 
                 ignore_index=True, verify_integrity=True)
+    
+    
+    # Sort and reindex
+    resdf = resdf.sort('dt_start')
+    resdf.index = range(len(resdf))    
     
     return resdf
 
