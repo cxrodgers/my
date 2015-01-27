@@ -188,7 +188,7 @@ def get_behavior_df():
     
     # de-localeify
     behavior_files_df['filename'] = behavior_files_df['filename'].str.replace(
-        '$behavior_dir$', PATHS['behavior_dir'])
+        '\$behavior_dir\$', PATHS['behavior_dir'])
     
     # Alternatively, could store as floating point seconds
     behavior_files_df['duration'] = pandas.to_timedelta(
@@ -208,7 +208,7 @@ def get_video_df():
 
     # de-localeify
     video_files_df['filename'] = video_files_df['filename'].str.replace(
-        '$video_dir$', PATHS['video_dir'])
+        '\$video_dir\$', PATHS['video_dir'])
     
     # Alternatively, could store as floating point seconds
     video_files_df['duration'] = pandas.to_timedelta(
