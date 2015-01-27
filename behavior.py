@@ -54,6 +54,9 @@ def daily_update():
     
     This should be run on marvin locale.
     """
+    if LOCALE != 'marvin':
+        raise ValueError("this must be run on marvin")
+    
     daily_update_behavior()
     daily_update_video()
     daily_update_overlap_behavior_and_video()
@@ -118,7 +121,10 @@ def daily_update_overlap_behavior_and_video():
     joined = joined.dropna()
     
     # Add the delta-time guess
-    joined['guess_vvsb_start'] = joined['dt_start_video'] - joined['dt_start']
+    # Negative timedeltas aren't handled by to_timedelta in the loading function
+    # So store as seconds here
+    guess = joined['dt_start_video'] - joined['dt_start']
+    joined['guess_vvsb_start'] = guess / np.timedelta64(1, 's')
     
     # Save
     filename = os.path.join(PATHS['database_root'], 'behave_and_video.csv')
@@ -209,8 +215,6 @@ def get_synced_behavior_and_video_df():
         synced_bv_df['duration'])    
     synced_bv_df['duration_video'] = pandas.to_timedelta(
         synced_bv_df['duration_video'])    
-    synced_bv_df['guess_vvsb_start'] = pandas.to_timedelta(
-        synced_bv_df['guess_vvsb_start'])    
     
     return synced_bv_df    
 
