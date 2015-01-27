@@ -138,6 +138,12 @@ def daily_update_overlap_behavior_and_video():
     guess = joined['dt_start_video'] - joined['dt_start']
     joined['guess_vvsb_start'] = guess / np.timedelta64(1, 's')
     
+    # locale-ify
+    joined['filename'] = joined['filename'].str.replace(
+        PATHS['behavior_dir'], '$behavior_dir$')    
+    joined['filename_video'] = joined['filename_video'].str.replace(
+        PATHS['video_dir'], '$video_dir$')    
+        
     # Save
     filename = os.path.join(PATHS['database_root'], 'behave_and_video.csv')
     joined.to_csv(filename, index=False)
@@ -235,6 +241,12 @@ def get_synced_behavior_and_video_df():
         synced_bv_df['duration'])    
     synced_bv_df['duration_video'] = pandas.to_timedelta(
         synced_bv_df['duration_video'])    
+
+    # de-localeify
+    joined['filename_video'] = joined['filename_video'].str.replace(
+        '\$video_dir\$', PATHS['video_dir'])
+    joined['filename'] = joined['filename'].str.replace(
+        '\$behavior_dir\$', PATHS['behavior_dir'])        
     
     return synced_bv_df    
 
