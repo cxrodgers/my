@@ -250,6 +250,34 @@ def get_synced_behavior_and_video_df():
     
     return synced_bv_df    
 
+def get_manual_sync_df():
+    filename = os.path.join(PATHS['database_root'], 'manual_bv_sync.csv')
+    
+    try:
+        manual_bv_sync = pandas.read_csv(filename).set_index('session')
+    except IOError:
+        raise IOError("cannot find manual sync database at %s" % filename)    
+    
+    return manual_bv_sync
+
+def set_manual_bv_sync(session, sync_poly):
+    """Store the manual behavior-video sync for session"""
+    
+    # Load any existing manual results
+    manual_sync_df = get_manual_sync_df()
+    
+    # Add
+    if session in manual_sync_df.index:
+        raise ValueError("sync already exists for %s" % session)
+    
+    manual_sync_df.ix[session] = np.asarray(sync_poly)
+    
+    # Store
+    filename = os.path.join(PATHS['database_root'], 'manual_bv_sync.csv')
+    manual_sync_df.to_csv(filename)
+
+## End of database stuff
+
 def load_frames_by_trial(frame_dir, trials_info):
     """Read all trial%03d.png in frame_dir and return as dict"""
     trialnum2frame = {}
@@ -577,11 +605,11 @@ def generate_mplayer_guesses_and_sync(metadata,
 
     # If no data provided, just return
     if user_results is None:
-        return
+        return {'test_times': test_times}
     if len(user_results) != N:
         print "warning: len(user_results) should be %d not %d" % (
             N, len(user_results))
-        return
+        return {'test_times': test_times}
     
     # Otherwise, fit a correction to the original guess
     new_fit = np.polyfit(test_times.values, user_results, deg=1)
@@ -596,6 +624,9 @@ def generate_mplayer_guesses_and_sync(metadata,
     print os.path.split(metadata['filename_video'])[-1]
     print "combined_fit: %r" % np.asarray(combined_fit)
     print "resids: %r" % np.asarray(resids)    
+    
+    return {'test_times': test_times, 'resids': resids, 
+        'combined_fit': combined_fit}
 
 def search_for_behavior_files(behavior_dir='~/mnt/behave/runmice',
     clean=True):
