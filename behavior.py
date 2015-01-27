@@ -68,6 +68,10 @@ def daily_update_behavior():
         behavior_dir=PATHS['behavior_dir'],
         clean=True)
     
+    # locale-ify
+    behavior_files_df['filename'] = behavior_files_df['filename'].str.replace(
+        PATHS['behavior_dir'], '$behavior_dir$')
+    
     # save
     filename = os.path.join(PATHS['database_root'], 'behavior.csv')
     behavior_files_df.to_csv(filename, index=False)
@@ -89,6 +93,10 @@ def daily_update_video():
     # Parse into df
     video_files_df = parse_video_filenames(video_files, verbose=False,
         cached_video_files_df=None)
+
+    # locale-ify
+    video_files_df['filename'] = video_files_df['filename'].str.replace(
+        PATHS['video_dir'], '$video_dir$')
     
     # Save
     filename = os.path.join(PATHS['database_root'], 'video.csv')
@@ -178,6 +186,10 @@ def get_behavior_df():
     except IOError:
         raise IOError("cannot find behavior database at %s" % filename)
     
+    # de-localeify
+    behavior_files_df['filename'] = behavior_files_df['filename'].str.replace(
+        '$behavior_dir$', PATHS['behavior_dir'])
+    
     # Alternatively, could store as floating point seconds
     behavior_files_df['duration'] = pandas.to_timedelta(
         behavior_files_df['duration'])
@@ -193,6 +205,10 @@ def get_video_df():
             parse_dates=['dt_end', 'dt_start'])
     except IOError:
         raise IOError("cannot find video database at %s" % filename)
+
+    # de-localeify
+    video_files_df['filename'] = video_files_df['filename'].str.replace(
+        '$video_dir$', PATHS['video_dir'])
     
     # Alternatively, could store as floating point seconds
     video_files_df['duration'] = pandas.to_timedelta(
