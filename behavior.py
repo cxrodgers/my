@@ -243,9 +243,9 @@ def get_synced_behavior_and_video_df():
         synced_bv_df['duration_video'])    
 
     # de-localeify
-    joined['filename_video'] = joined['filename_video'].str.replace(
+    synced_bv_df['filename_video'] = synced_bv_df['filename_video'].str.replace(
         '\$video_dir\$', PATHS['video_dir'])
-    joined['filename'] = joined['filename'].str.replace(
+    synced_bv_df['filename'] = synced_bv_df['filename'].str.replace(
         '\$behavior_dir\$', PATHS['behavior_dir'])        
     
     return synced_bv_df    
