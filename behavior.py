@@ -276,6 +276,49 @@ def set_manual_bv_sync(session, sync_poly):
     filename = os.path.join(PATHS['database_root'], 'manual_bv_sync.csv')
     manual_sync_df.to_csv(filename)
 
+def interactive_bv_sync():
+    """Interactively sync behavior and video"""
+    # Load synced data
+    sbvdf = get_synced_behavior_and_video_df()
+
+    # TODO: join on manual results here
+
+    # Choose session
+    choices = sbvdf[['session', 'mouse', 'dt_start', 'best_video_overlap', 'rig']]
+    print "Here are the most recent sessions:"
+    print choices[-20:]
+    choice = None
+    while choice is None:
+        choice = raw_input('Which index to analyze? ')
+        try:
+            choice = int(choice)
+        except ValueError:
+            pass
+    test_row = sbvdf.ix[choice]
+
+    # Run sync
+    N_pts = 3
+    sync_res0 = generate_mplayer_guesses_and_sync(test_row, N=N_pts)
+
+    # Get results
+    n_results = []
+    for n in range(N_pts):
+        res = raw_input('Enter result: ')
+        n_results.append(float(res))
+
+    # Run sync again
+    sync_res1 = generate_mplayer_guesses_and_sync(test_row, N=N_pts,
+        user_results=n_results)
+
+    # Store
+    res = raw_input('Confirm insertion [y/N]? ')
+    if res == 'y':
+        set_manual_bv_sync(test_row['session'], 
+            sync_res1['combined_fit'])
+        print "inserted"
+    else:
+        print "not inserting"    
+
 ## End of database stuff
 
 def load_frames_by_trial(frame_dir, trials_info):
