@@ -554,7 +554,7 @@ def generate_mplayer_guesses_and_sync(metadata,
         parsed_df_split_by_trial)
 
     # Apply the delta-time guess to the retraction times
-    test_guess_vvsb = metadata['guess_vvsb_start'] / np.timedelta64(1, 's')
+    test_guess_vvsb = metadata['guess_vvsb_start'] #/ np.timedelta64(1, 's')
     trials_info['time_retract_vbase'] = \
         trials_info['time_retract'] - test_guess_vvsb
 
