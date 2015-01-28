@@ -266,11 +266,17 @@ def set_manual_bv_sync(session, sync_poly):
     # Load any existing manual results
     manual_sync_df = get_manual_sync_df()
     
+    sync_poly = np.asarray(sync_poly) # indexing is backwards for poly
+    
     # Add
     if session in manual_sync_df.index:
         raise ValueError("sync already exists for %s" % session)
     
-    manual_sync_df.ix[session] = np.asarray(sync_poly)
+    manual_sync_df = manual_sync_df.append(
+        pandas.DataFrame([[sync_poly[0], sync_poly[1]]],
+            index=[session],
+            columns=['fit0', 'fit1']))
+    manual_sync_df.index.name = 'session' # it forgets
     
     # Store
     filename = os.path.join(PATHS['database_root'], 'manual_bv_sync.csv')
