@@ -15,7 +15,28 @@ def binom_confint(x=None, n=None, data=None, alpha=.95, meth='exact'):
     r("library(binom)")
     res = r("binom.confint(%d, %d, %f, methods='%s')" % (x, n, alpha, meth))
     return res[res.names.index('lower')][0], res[res.names.index('upper')][0]
+
+def bootstrap_regress(x, y, n_boot=1000):
+    from matplotlib import mlab
+    x = np.asarray(x)
+    y = np.asarray(y)
     
+    m_l, b_l = [], []
+    for n in range(n_boot):
+        msk = np.random.randint(0, len(x), size=len(x))
+        m, b, rval, pval, stderr = scipy.stats.stats.linregress(x[msk], y[msk])
+        m_l.append(m)
+        b_l.append(b)
+    
+    res = {
+        'slope_m': np.mean(m_l),
+        'slope_l': mlab.prctile(m_l, p=2.5),
+        'slope_h': mlab.prctile(m_l, p=97.5),
+        'intercept_m': np.mean(b_l),
+        'intercept_l': mlab.prctile(b_l, p=2.5),
+        'intercept_h': mlab.prctile(b_l, p=97.5),
+        }
+    return res    
     
 
 
