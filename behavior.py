@@ -9,6 +9,7 @@ import subprocess # for ffprobe
 import ArduFSM
 import scipy.misc
 import my
+import datetime
 
 import sys
 tcv2_path = os.path.expanduser('~/dev/ArduFSM/TwoChoice_v2')
@@ -49,6 +50,15 @@ elif LOCALE == 'marvin':
 else:
     raise ValueError("unknown locale %s" % LOCALE)
 
+
+def status_check():
+    """Run the daily status check"""
+    import matplotlib.pyplot as plt
+    
+    # For right now this same function checks for missing sessions, etc,
+    # but this should be broken out
+    plot_pivoted_performances()
+    plt.show()
 
 def daily_update():
     """Update the databases with current behavior and video files
@@ -189,6 +199,9 @@ def daily_update_perf_metrics(start_date=None, verbose=False):
     
     This assumes trial matrices have been cached for all sessions in bdf.
     Should error check for this.
+    
+    To add: percentage of forced trials. EV of various biases instead
+    of FEV
     """
     # Get
     behavior_files_df = get_behavior_df()
@@ -417,6 +430,137 @@ def interactive_bv_sync():
 
 
 ## End of database stuff
+
+def calculate_pivoted_performances(start_date=None, delta_days=15):
+    """Returns pivoted performance metrics"""
+    # Choose start date
+    if start_date is None:
+        start_date = datetime.datetime.now() - \
+            datetime.timedelta(days=delta_days)    
+    
+    # Get data and add the mouse column
+    bdf = my.behavior.get_behavior_df()
+    pmdf = my.behavior.get_perf_metrics()
+    pmdf = pmdf.join(bdf.set_index('session')[['mouse', 'dt_start']], on='session')
+    pmdf = pmdf.ix[pmdf.dt_start >= start_date].drop('dt_start', 1)
+    #pmdf.index = range(len(pmdf))
+
+    # always sort on session
+    pmdf = pmdf.sort('session')
+
+    # add a "date_s" column which is just taken from the session for now
+    pmdf['date_s'] = pmdf['session'].str[2:8]
+    pmdf['date_s'] = pmdf['date_s'].apply(lambda s: s[:2]+'-'+s[2:4]+'-'+s[4:6])
+
+    # Check for duplicate sessions for a given mouse
+    # This gives you the indices to drop, so confusingly, take_last means
+    # it returns idx of the first
+    # We want to keep the last of the day (??) so take_first
+    dup_idxs = pmdf[['date_s', 'mouse']].duplicated(take_last=False)
+    if dup_idxs.sum() > 0:
+        print "warning: dropping %d duplicated sessions" % dup_idxs.sum()
+        print "\n".join(pmdf['session'][dup_idxs].values)
+        pmdf = pmdf.drop(pmdf.index[dup_idxs])
+
+    # pivot on all metrics
+    piv = pmdf.drop('session', 1).pivot_table(index='mouse', columns='date_s')
+
+    # Find missing data
+    missing_data = piv['n_trials'].isnull().unstack()
+    missing_data = missing_data.ix[missing_data].reset_index()
+    missing_rows = []
+    for idx, row in missing_data.iterrows():
+        missing_rows.append(row['date_s'] + ' ' + row['mouse'])
+    if len(missing_rows) > 0:
+        print "warning: missing the following sessions:"
+        print "\n".join(missing_rows)
+    
+    return piv
+
+
+def plot_pivoted_performances(start_date=None, delta_days=15, piv=None):
+    """Plots figures of performances over times and returns list of figs"""
+    import matplotlib.pyplot as plt
+    from my.plot import generate_colorbar
+    
+    # Choose start date
+    if start_date is None:
+        start_date = datetime.datetime.now() - \
+            datetime.timedelta(days=delta_days)
+    
+    # Get pivoted unless provided
+    if piv is None:
+        piv = calculate_pivoted_performances(start_date=start_date)
+    
+    # plot each
+    to_plot_f_l = [
+        ['perf_unforced', 'perf_all', 'n_trials', 'spoil_frac',],
+        ['perf_all', 'fev_corr_all', 'fev_side_all', 'fev_stay_all'],
+        ['perf_unforced', 'fev_corr_unforced', 'fev_side_unforced', 'fev_stay_unforced',]
+        ]
+    mouse_order = piv['perf_unforced'].mean(1)
+    mouse_order.sort()
+    mouse_order = mouse_order.index.values
+
+    res_l = []
+    for to_plot in to_plot_f_l:
+        f, axa = plt.subplots(len(to_plot), 1, figsize=(7, 15))
+        f.subplots_adjust(top=.95, bottom=.075)
+        xlabels = piv.columns.levels[1].values
+        xlabels_num = np.arange(len(xlabels))
+        mice = mouse_order #piv.index.values
+        colors = generate_colorbar(len(mice), 'jet')
+        
+        # Iterate over metrics
+        for ax, metric in zip(axa, to_plot):
+            pm = piv[metric]
+            
+            # Plot the metric
+            for nmouse, mouse in enumerate(mice):
+                ax.plot(xlabels_num, pm.ix[mouse].values, color=colors[nmouse])
+                ax.set_ylabel(metric)
+
+            # ylims and chance line
+            if metric != 'n_trials':            
+                ax.set_ylim((0, 1))
+                ax.set_yticks((0, .25, .5, .75, 1))
+            if metric.startswith('perf'):
+                ax.plot(xlabels_num, np.ones_like(xlabels_num) * .5, 'k-')
+
+            # Plot error X on missing sessions
+            if ax is axa[-1]:
+                for nmouse, mouse in enumerate(mice):
+                    null_dates = piv['n_trials'].isnull().ix[mouse].values
+                    pm_copy = np.ones_like(null_dates) * \
+                        (nmouse + 0.5) / float(len(mice))
+                    pm_copy[~null_dates] = np.nan
+                    ax.plot(xlabels_num, pm_copy, color=colors[nmouse], marker='x',
+                        ls='none', mew=1)
+
+            # xticks
+            ax.set_xlim((xlabels_num[0], xlabels_num[-1]))
+            if ax is axa[-1]:
+                ax.set_xticks(xlabels_num)
+                ax.set_xticklabels(xlabels, rotation=45, ha='right', size='small')
+            else:
+                ax.set_xticks(xlabels_num)
+                ax.set_xticklabels([''] * len(xlabels_num))
+        
+        # mouse names in the top
+        ax = axa[0]
+        xlims = ax.get_xlim()
+        for nmouse, (mouse, color) in enumerate(zip(mice, colors)):
+            xpos = xlims[0] + (nmouse + 0.5) / float(len(mice)) * \
+                (xlims[1] - xlims[0])
+            ax.text(xpos, 0.2, mouse, color=color, ha='center', va='center', 
+                rotation=90)
+        
+        # Store to return
+        res_l.append(f)
+    
+    return res_l
+
+
 
 
 def calculate_perf_metrics(trial_matrix):

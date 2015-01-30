@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import scipy.stats
 import misc
+import my
 
 def connected_pairs(v1, v2, p=None, signif=None, shapes=None, colors=None, 
     labels=None, ax=None):
@@ -651,6 +652,12 @@ def harmonize_clim_in_subplots(fig=None, axa=None, clim=(None, None),
             im.set_clim(new_clim)
     
     return new_clim
+
+def generate_colorbar(n_colors, mapname='jet', rounding=100, start=0., stop=1.):
+    """Generate N evenly spaced colors from start to stop in map"""
+    color_idxs = my.rint(rounding * np.linspace(start, stop, n_colors))[::-1]
+    colors = plt.cm.get_cmap('jet', rounding)(color_idxs)
+    return colors
 
 def pie(n_list, labels, ax=None, autopct=None, colors=None):
     """Make a pie chart
