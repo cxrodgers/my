@@ -61,9 +61,8 @@ def daily_update():
     daily_update_behavior()
     daily_update_video()
     daily_update_overlap_behavior_and_video()
-    
-    # TODO:
-    # daily_update_trial_matrix
+    daily_update_trial_matrix()
+    daily_update_perf_metrics()
 
 def daily_update_behavior():
     """Update behavior database"""
