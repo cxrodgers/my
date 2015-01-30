@@ -8,6 +8,7 @@ import misc
 import subprocess # for ffprobe
 import ArduFSM
 import scipy.misc
+import my
 
 import sys
 tcv2_path = os.path.expanduser('~/dev/ArduFSM/TwoChoice_v2')
@@ -60,6 +61,9 @@ def daily_update():
     daily_update_behavior()
     daily_update_video()
     daily_update_overlap_behavior_and_video()
+    
+    # TODO:
+    # daily_update_trial_matrix
 
 def daily_update_behavior():
     """Update behavior database"""
@@ -148,7 +152,7 @@ def daily_update_overlap_behavior_and_video():
     filename = os.path.join(PATHS['database_root'], 'behave_and_video.csv')
     joined.to_csv(filename, index=False)
 
-def daily_update_trial_matrix(verbose=False):
+def daily_update_trial_matrix(start_date=None, verbose=False):
     """Cache the trial matrix for every session
     
     TODO: use cache
@@ -156,18 +160,102 @@ def daily_update_trial_matrix(verbose=False):
     # Get
     behavior_files_df = get_behavior_df()
     
+    # Filter by those after start date
+    behavior_files_df = behavior_files_df[ 
+        behavior_files_df.dt_start >= start_date]
+    
     # Calculate trial_matrix for each
     session2trial_matrix = {}
     for irow, row in behavior_files_df.iterrows():
-        if verbose:
-            print irow
-        trial_matrix = TrialMatrix.make_trial_matrix_from_file(row['filename'])
-        session2trial_matrix[row['session']] = trial_matrix
+        # Check if it already exists
+        filename = os.path.join(PATHS['database_root'], 'trial_matrix', 
+            row['session'])
+        if os.path.exists(filename):
+            continue
 
-    # Cache the trial matrices
-    for session, trial_matrix in session2trial_matrix.items():
-        filename = os.path.join(PATHS['database_root'], 'trial_matrix', session)
+        if verbose:
+            print filename
+
+        # Otherwise make it
+        trial_matrix = TrialMatrix.make_trial_matrix_from_file(row['filename'])
+        
+        # And store it
         trial_matrix.to_csv(filename)
+
+def daily_update_perf_metrics(start_date=None):
+    """Calculate simple perf metrics for anything that needs it.
+    
+    start_date : if not None, ignores all behavior files before this date
+        You can also pass a string like '20150120'
+    
+    This assumes trial matrices have been cached for all sessions in bdf.
+    Should error check for this.
+    """
+    # Get
+    behavior_files_df = get_behavior_df()
+
+    # Filter by those after start date
+    behavior_files_df = behavior_files_df[ 
+        behavior_files_df.dt_start >= start_date]
+
+    # Load what we've already calculated
+    pmdf = get_perf_metrics()
+
+    # Calculate any that need it
+    new_pmdf_rows_l = []
+    for idx, brow in behavior_files_df.iterrows():
+        # Check if it already exists
+        session = brow['session']
+        if session in pmdf['session']:
+            continue
+        
+        # Otherwise run
+        trial_matrix = get_trial_matrix(session)
+        metrics = calculate_perf_metrics(trial_matrix)
+        
+        # Store
+        metrics['session'] = session
+        new_pmdf_rows_l.append(metrics)
+    
+    # Join on the existing pmdf
+    new_pmdf_rows = pandas.DataFrame.from_records(new_pmdf_rows_l)
+    new_pmdf = pandas.concat([pmdf, new_pmdf_rows],
+        verify_integrity=True,
+        ignore_index=True)
+    
+    # Columns are sorted after concatting
+    # Re-use original, this should be specified somewhere though
+    if new_pmdf.shape[1] != pmdf.shape[1]:
+        raise ValueError("missing/extra columns in perf metrics")
+    new_pmdf = new_pmdf[pmdf.columns]
+    
+    # Save
+    filename = os.path.join(PATHS['database_root'], 'perf_metrics.csv')
+    new_pmdf.to_csv(filename, index=False)
+
+def get_perf_metrics():
+    """Return the df of perf metrics over sessions"""
+    filename = os.path.join(PATHS['database_root'], 'perf_metrics.csv')
+
+    try:
+        pmdf = pandas.read_csv(filename)
+    except IOError:
+        raise IOError("cannot find perf metrics database at %s" % filename)
+    
+    return pmdf
+
+def flush_perf_metrics():
+    """Create an empty perf metrics file"""
+    filename = os.path.join(PATHS['database_root'], 'perf_metrics.csv')
+    columns=['session', 'n_trials', 'spoil_frac',
+        'perf_all', 'perf_unforced',
+        'fev_corr_all', 'fev_corr_unforced',
+        'fev_side_all', 'fev_side_unforced',
+        'fev_stay_all','fev_stay_unforced',
+        ]
+
+    pmdf = pandas.DataFrame(np.zeros((0, len(columns))), columns=columns)
+    pmdf.to_csv(filename, index=False)
 
 def get_trial_matrix(session):
     filename = os.path.join(PATHS['database_root'], 'trial_matrix', session)
@@ -319,7 +407,61 @@ def interactive_bv_sync():
     else:
         print "not inserting"    
 
+
+
 ## End of database stuff
+
+
+def calculate_perf_metrics(trial_matrix):
+    """Calculate simple performance metrics on a session"""
+    rec = {}
+    
+    # Trials and spoiled fraction
+    rec['n_trials'] = len(trial_matrix)
+    rec['spoil_frac'] = float(np.sum(trial_matrix.outcome == 'spoil')) / \
+        len(trial_matrix)
+
+    # Calculate performance
+    rec['perf_all'] = float(len(my.pick(trial_matrix, outcome='hit'))) / \
+        len(my.pick(trial_matrix, outcome=['hit', 'error']))
+    
+    # Calculate unforced performance, protecting against low trial count
+    n_nonbad_nonspoiled_trials = len(
+        my.pick(trial_matrix, outcome=['hit', 'error'], isrnd=True))
+    if n_nonbad_nonspoiled_trials < 10:
+        rec['perf_unforced'] = np.nan
+    else:
+        rec['perf_unforced'] = float(
+            len(my.pick(trial_matrix, outcome='hit', isrnd=True))) / \
+            n_nonbad_nonspoiled_trials
+
+    # Anova with and without remove bad
+    for remove_bad in [True, False]:
+        # Numericate and optionally remove non-random trials
+        numericated_trial_matrix = TrialMatrix.numericate_trial_matrix(
+            trial_matrix)
+        if remove_bad:
+            suffix = '_unforced'
+            numericated_trial_matrix = numericated_trial_matrix.ix[
+                numericated_trial_matrix.isrnd == True]
+        else:
+            suffix = '_all'
+        
+        # Run anova
+        aov_res = TrialMatrix._run_anova(numericated_trial_matrix)
+        
+        # Parse FEV
+        if aov_res is not None:
+            rec['fev_stay' + suffix], rec['fev_side' + suffix], \
+                rec['fev_corr' + suffix] = aov_res['ess'][
+                ['ess_prevchoice', 'ess_Intercept', 'ess_rewside']]
+        else:
+            rec['fev_stay' + suffix], rec['fev_side' + suffix], \
+                rec['fev_corr' + suffix] = np.nan, np.nan, np.nan    
+    
+    return rec
+
+
 
 def load_frames_by_trial(frame_dir, trials_info):
     """Read all trial%03d.png in frame_dir and return as dict"""
