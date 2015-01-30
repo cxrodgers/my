@@ -182,7 +182,7 @@ def daily_update_trial_matrix(start_date=None, verbose=False):
         # And store it
         trial_matrix.to_csv(filename)
 
-def daily_update_perf_metrics(start_date=None):
+def daily_update_perf_metrics(start_date=None, verbose=False):
     """Calculate simple perf metrics for anything that needs it.
     
     start_date : if not None, ignores all behavior files before this date
@@ -206,7 +206,9 @@ def daily_update_perf_metrics(start_date=None):
     for idx, brow in behavior_files_df.iterrows():
         # Check if it already exists
         session = brow['session']
-        if session in pmdf['session']:
+        if session in pmdf['session'].values:
+            if verbose:
+                print "skipping", session
             continue
         
         # Otherwise run
