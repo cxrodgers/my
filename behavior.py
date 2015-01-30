@@ -16,8 +16,8 @@ tcv2_path = os.path.expanduser('~/dev/ArduFSM/TwoChoice_v2')
 if tcv2_path not in sys.path:
     sys.path.append(tcv2_path)
 
-import TrialMatrix, TrialSpeak
-
+import TrialMatrix, TrialSpeak, mainloop
+import ArduFSM.plot2
 
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
@@ -271,12 +271,31 @@ def flush_perf_metrics():
     pmdf = pandas.DataFrame(np.zeros((0, len(columns))), columns=columns)
     pmdf.to_csv(filename, index=False)
 
+def get_logfile_lines(session):
+    """Look up the logfile for a session and return it"""
+    # Find the filename
+    bdf = get_behavior_df()
+    rows = bdf[bdf.session == session]
+    if len(rows) != 1:
+        raise ValueError("cannot find unique session for %s" % session)
+    filename = rows.irow(0)['filename']
+    
+    # Read lines
+    lines = TrialSpeak.read_lines_from_file(filename)
+    
+    # Split by trial
+    #~ splines = split_by_trial(lines)
+    
+    return lines
+
 def get_trial_matrix(session):
+    """Return the (cached) trial matrix for a session"""
     filename = os.path.join(PATHS['database_root'], 'trial_matrix', session)
     res = pandas.read_csv(filename)
     return res
 
 def get_all_trial_matrix():
+    """Return a dict of all cached trial matrices"""
     all_filenames = glob.glob(os.path.join(
         PATHS['database_root'], 'trial_matrix', '*'))
     
@@ -560,8 +579,57 @@ def plot_pivoted_performances(start_date=None, delta_days=15, piv=None):
     
     return res_l
 
+def display_session_plots_from_day(date=None):
+    """Display all session plots from date, or most recent date"""
+    bdf = get_behavior_df()
+    bdf_dates = bdf['dt_end'].apply(lambda dt: dt.date())
+    
+    # Set to most recent date in database if None
+    if date is None:
+        date = bdf_dates.max()
+    
+    # Choose the ones to display
+    display_dates = bdf.ix[bdf_dates == date]
+    if len(display_dates) > 20:
+        raise ValueError("too many dates")
+    
+    # Display each
+    f_l = []
+    for idx, row in display_dates.iterrows():
+        f = display_session_plot(row['session'])
+        f.text(.99, .99, row['session'], size='small', ha='right', va='top')
+        f_l.append(f)
+        if len(f_l) > 1:
+            return f_l
+    return f_l
 
+def display_session_plot(session, assumed_trial_types='trial_types_4srvpos'):
+    """Display the real-time plot that was shown during the session.
+    
+    Currently the trial_types is not saved anywhere, so we'll have to
+    assume. Should think of a way to save metadata from trial_setter that
+    is not saved in the logfile.
+    """
+    import matplotlib.pyplot as plt
+    # Find the filename
+    bdf = get_behavior_df()
+    rows = bdf[bdf.session == session]
+    if len(rows) != 1:
+        raise ValueError("cannot find unique session for %s" % session)
+    filename = rows.irow(0)['filename']
 
+    # Guess the trial types
+    trial_types = mainloop.get_trial_types(assumed_trial_types)
+    plotter = ArduFSM.plot2.PlotterWithServoThrow(trial_types)
+    plotter.init_handles()
+    plotter.update(filename)     
+    
+    # Set xlim to include entire session
+    trial_matrix = get_trial_matrix(session)
+    plotter.graphics_handles['ax'].set_xlim((0, len(trial_matrix)))
+    
+    plt.show()
+    return plotter.graphics_handles['f']
 
 def calculate_perf_metrics(trial_matrix):
     """Calculate simple performance metrics on a session"""
