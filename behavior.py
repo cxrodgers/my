@@ -599,8 +599,6 @@ def display_session_plots_from_day(date=None):
         f = display_session_plot(row['session'])
         f.text(.99, .99, row['session'], size='small', ha='right', va='top')
         f_l.append(f)
-        if len(f_l) > 1:
-            return f_l
     return f_l
 
 def display_session_plot(session, assumed_trial_types='trial_types_4srvpos'):
