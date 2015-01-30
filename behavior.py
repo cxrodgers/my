@@ -354,11 +354,17 @@ def set_manual_bv_sync(session, sync_poly):
     # Load any existing manual results
     manual_sync_df = get_manual_sync_df()
     
+    sync_poly = np.asarray(sync_poly) # indexing is backwards for poly
+    
     # Add
     if session in manual_sync_df.index:
         raise ValueError("sync already exists for %s" % session)
     
-    manual_sync_df.ix[session] = np.asarray(sync_poly)
+    manual_sync_df = manual_sync_df.append(
+        pandas.DataFrame([[sync_poly[0], sync_poly[1]]],
+            index=[session],
+            columns=['fit0', 'fit1']))
+    manual_sync_df.index.name = 'session' # it forgets
     
     # Store
     filename = os.path.join(PATHS['database_root'], 'manual_bv_sync.csv')
@@ -705,6 +711,77 @@ def timedelta_to_seconds2(val):
     """More preferred ... might have been broken in old versions."""
     return val / np.timedelta64(1, 's')
 
+def make_overlays_from_all_fits(overwrite_frames=False, savefig=True):
+    """Makes overlays for all available sessions"""
+    # Load data
+    sbvdf = get_synced_behavior_and_video_df()
+    msdf = get_manual_sync_df()
+    
+    # Join all the dataframes we need
+    jdf = sbvdf.join(msdf, on='session', how='right')
+
+    # Do each
+    for session in jdf.session:
+        make_overlays_from_fits(session, overwrite_frames=overwrite_frames,
+            savefig=savefig)
+
+def make_overlays_from_fits(session, overwrite_frames=False, savefig=True):
+    """Given a session name, generates overlays and stores in db"""
+    # Load data
+    sbvdf = get_synced_behavior_and_video_df()
+    msdf = get_manual_sync_df()
+    
+    # Join all the dataframes we need and check that session is in there
+    jdf = sbvdf.join(msdf, on='session', how='right')
+    metadata = jdf[jdf.session == session]
+    if len(metadata) != 1:
+        raise ValueError("session %s not found for overlays" % session)
+    metadata = metadata.irow(0)
+    
+    # Dump the frames
+    frame_dir = os.path.join(PATHS['database_root'], 'frames', session)
+    if not os.path.exists(frame_dir):
+        os.mkdir(frame_dir)
+        dump_frames_at_retraction_time(metadata, frame_dir)
+    elif overwrite_frames:
+        dump_frames_at_retraction_time(metadata, frame_dir)
+
+    # Reload the frames
+    trial_matrix = get_trial_matrix(session)
+    trialnum2frame = load_frames_by_trial(frame_dir, trial_matrix)
+
+    # Keep only those trials that we found images for
+    trial_matrix = trial_matrix.ix[sorted(trialnum2frame.keys())]
+
+    # Split on side, servo_pos, stim_number
+    res = []
+    gobj = trial_matrix.groupby(['rewside', 'servo_pos', 'stepper_pos'])
+    for (rewside, servo_pos, stim_number), subti in gobj:
+        meaned = np.mean([trialnum2frame[trialnum] for trialnum in subti.index],
+            axis=0)
+        res.append({'rewside': rewside, 'servo_pos': servo_pos, 
+            'stim_number': stim_number, 'meaned': meaned})
+    resdf = pandas.DataFrame.from_records(res)
+
+    # Make the various overlays
+    import matplotlib.pyplot as plt
+    f, axa = plt.subplots(2, 3, figsize=(13, 6))
+    make_overlay(resdf, axa[0, 0], meth='all')
+    make_overlay(resdf, axa[1, 1], meth='L')
+    make_overlay(resdf, axa[1, 2], meth='R')
+    make_overlay(resdf, axa[0, 1], meth='close')
+    make_overlay(resdf, axa[0, 2], meth='far')
+    f.suptitle(session)
+    
+    # Save or show
+    if savefig:
+        savename = os.path.join(PATHS['database_root'], 'overlays',
+            session + '.png')
+        f.savefig(savename)
+        plt.close(f)
+    else:
+        plt.show()    
+
 
 def dump_frames_at_retraction_time(metadata, session_dir):
     """Dump the retraction time frame into a subdirectory.
@@ -725,7 +802,7 @@ def dump_frames_at_retraction_time(metadata, session_dir):
     # Fit to video times
     fit = metadata['fit0'], metadata['fit1']
     video_times = trials_info['time_retract'].values - \
-        timedelta_to_seconds2(metadata['guess_vvsb_start'])
+        metadata['guess_vvsb_start']
     trials_info['time_retract_vbase'] = np.polyval(fit, video_times)
     
     # Mask out any frametimes that are before or after the video
