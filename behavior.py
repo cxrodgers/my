@@ -536,7 +536,8 @@ def plot_pivoted_performances(start_date=None, delta_days=15, piv=None):
             
             # Plot the metric
             for nmouse, mouse in enumerate(mice):
-                ax.plot(xlabels_num, pm.ix[mouse].values, color=colors[nmouse])
+                ax.plot(xlabels_num, pm.ix[mouse].values, color=colors[nmouse],
+                    ls='-', marker='s', mec='none', mfc=colors[nmouse])
                 ax.set_ylabel(metric)
 
             # ylims and chance line
@@ -599,8 +600,6 @@ def display_session_plots_from_day(date=None):
         f = display_session_plot(row['session'])
         f.text(.99, .99, row['session'], size='small', ha='right', va='top')
         f_l.append(f)
-        if len(f_l) > 1:
-            return f_l
     return f_l
 
 def display_perf_by_servo_from_day(date=None):
