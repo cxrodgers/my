@@ -536,7 +536,8 @@ def plot_pivoted_performances(start_date=None, delta_days=15, piv=None):
             
             # Plot the metric
             for nmouse, mouse in enumerate(mice):
-                ax.plot(xlabels_num, pm.ix[mouse].values, color=colors[nmouse])
+                ax.plot(xlabels_num, pm.ix[mouse].values, color=colors[nmouse],
+                    ls='-', marker='s', mec='none', mfc=colors[nmouse])
                 ax.set_ylabel(metric)
 
             # ylims and chance line
