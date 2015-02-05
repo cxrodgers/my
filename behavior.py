@@ -603,6 +603,77 @@ def display_session_plots_from_day(date=None):
             return f_l
     return f_l
 
+def display_perf_by_servo_from_day(date=None):
+    """Plot perf vs servo position from all sessions from date"""
+    import matplotlib.pyplot as plt 
+    
+    # Get bdf and its dates
+    bdf = get_behavior_df()
+    bdf_dates = bdf['dt_end'].apply(lambda dt: dt.date())
+    
+    # Set to most recent date in database if None
+    if date is None:
+        date = bdf_dates.max()
+    
+    # Choose the ones to display
+    display_dates = bdf.ix[bdf_dates == date]
+    if len(display_dates) > 20:
+        raise ValueError("too many dates")
+    
+    # Display each
+    f, axa = plt.subplots(2, my.rint(np.ceil(len(display_dates) / 2.0)),
+        figsize=(15, 5))
+    for nax, (idx, row) in enumerate(display_dates.iterrows()):
+        ax = axa.flatten()[nax]
+        display_perf_by_servo(row['session'], ax)
+        ax.set_title(row['session'], size='small')
+    f.tight_layout()
+
+
+def display_perf_by_servo(session, ax=None):
+    import matplotlib.pyplot as plt 
+    
+    # Get trial matrix
+    tm = my.behavior.get_trial_matrix(session)
+    
+    # Ax
+    if ax is None:
+        f, ax = plt.subplots()
+
+    # Pivot perf by servo pos and rewside
+    tm = my.pick_rows(tm, isrnd=True)
+    if len(tm) < 5:
+        return ax
+    
+    # Group by side and servo and calculate perf
+    gobj = tm.groupby(['rewside', 'servo_pos'])
+    rec_l = []
+    for (rwsd, sp), subdf in gobj:
+        ntots = len(subdf)
+        nhits = np.sum(subdf.outcome == 'hit')
+        rec_l.append({'rewside': rwsd, 'servo_pos': sp, 
+            'nhits': nhits, 'ntots': ntots})
+    resdf = pandas.DataFrame.from_records(rec_l)
+    resdf['perf'] = resdf['nhits'] / resdf['ntots']
+
+    # mean
+    meanperf = resdf.groupby('servo_pos')['perf'].mean()
+
+    # Plot
+    colors = {'left': 'blue', 'right': 'red', 'mean': 'purple'}
+    xticks = resdf['servo_pos'].unique()
+    for rwsd, subperf in resdf.groupby('rewside'):
+        xax = subperf['servo_pos']
+        yax = subperf['perf']
+        ax.plot(xax, yax, color=colors[rwsd], marker='s', ls='-')
+    ax.plot(xax, meanperf.values, color=colors['mean'], marker='s', ls='-')
+    ax.set_xlim((resdf['servo_pos'].min() - 50, resdf['servo_pos'].max() + 50))
+    ax.set_xticks(xticks)
+    ax.plot(ax.get_xlim(), [.5, .5], 'k-')
+    ax.set_ylim((0, 1))    
+    
+    return ax
+
 def display_session_plot(session, assumed_trial_types='trial_types_4srvpos'):
     """Display the real-time plot that was shown during the session.
     
