@@ -407,11 +407,13 @@ def interactive_bv_sync():
     """Interactively sync behavior and video"""
     # Load synced data
     sbvdf = get_synced_behavior_and_video_df()
-
-    # TODO: join on manual results here
+    msdf = get_manual_sync_df()
+    sbvdf = sbvdf.join(msdf, on='session')
 
     # Choose session
-    choices = sbvdf[['session', 'mouse', 'dt_start', 'best_video_overlap', 'rig']]
+    choices = sbvdf[['session', 'dt_start', 'best_video_overlap', 'rig', 'fit1']]
+    choices = choices.rename(columns={'best_video_overlap': 'vid_overlap'})
+
     print "Here are the most recent sessions:"
     print choices[-20:]
     choice = None
