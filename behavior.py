@@ -382,7 +382,11 @@ def get_manual_sync_df():
     return manual_bv_sync
 
 def set_manual_bv_sync(session, sync_poly):
-    """Store the manual behavior-video sync for session"""
+    """Store the manual behavior-video sync for session
+    
+    TODO: also store guess_vvsb, even though it's redundant with
+    the main sync df. These fits are relative to that.
+    """
     
     # Load any existing manual results
     manual_sync_df = get_manual_sync_df()
@@ -1109,6 +1113,15 @@ def generate_mplayer_guesses_and_sync(metadata,
     
     metadata : a row from bv_files to sync
     
+    The fit is between these datasets:
+        X : time of retraction from behavior file, minus the test_guess_vvsb
+            in the metadata.
+        Y : user-supplied times of retraction from video
+    The purpose of 'initial_guess' is to generate better guesses for the user
+    to look in the video, but the returned data always use the combined fit
+    that includes any initial guess. However, test_guess_vvsb is not
+    accounted for in the returned value.
+    
     N times to check in the video are printed out. Typically this is run twice,
     once before checking, then check, then run again now specifying the 
     video times in `user_results`.
@@ -1117,6 +1130,8 @@ def generate_mplayer_guesses_and_sync(metadata,
     gap in the video and match it up to trials info manually, and use this
     to fix `guess` to be closer.
     """
+    initial_guess = np.asarray(guess)
+    
     # Load trials info
     trials_info = TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
     splines = TrialSpeak.load_splines_from_file(metadata['filename'])
@@ -1132,11 +1147,6 @@ def generate_mplayer_guesses_and_sync(metadata,
     test_guess_vvsb = metadata['guess_vvsb_start'] #/ np.timedelta64(1, 's')
     trials_info['time_retract_vbase'] = \
         trials_info['time_retract'] - test_guess_vvsb
-
-    # Apply the initial guess on top
-    initial_guess = np.asarray(guess)
-    trials_info['time_retract_vbase2'] = np.polyval(initial_guess, 
-        trials_info['time_retract_vbase'])
 
     # Choose test times for user
     video_duration = metadata['duration_video'] / np.timedelta64(1, 's')
@@ -1485,3 +1495,154 @@ def generate_test_times_for_user(times, max_time, initial_guess=(.9991, 7.5),
     test_next_times = times.shift(-1).ix[test_idxs]
     
     return test_times, test_next_times
+    
+
+## Functions for syncing behavior and video automatically from house light
+def extract_onsets_and_durations(lums, delta=30, diffsize=3, refrac=5):
+    """Extract house light times.
+    
+    First, we diff the sig to find onsets or offsets of at least delta
+    within diffisze frames. Drop any that occur within refrac.
+    
+    Then we calculate the duration of each.
+    
+    Returns: onsets, durations
+    """
+    # diff the sig
+    # maybe a better way is to boxcar by 30frames first
+    diffsig = lums[diffsize:] - lums[:-diffsize]
+    onsets = np.where(diffsig > delta)[0]
+    offsets = np.where(diffsig < -delta)[0]
+    
+    # drop refractory onsets, offsets
+    onsets2 = drop_refrac(onsets, refrac)
+    offsets2 = drop_refrac(offsets, refrac)    
+    
+    # get durations
+    remaining_onsets, durations = extract_duration_of_onsets(onsets2, offsets2)
+    
+    return remaining_onsets, durations
+    
+
+def drop_refrac(arr, refrac):
+    """Drop all values in arr after a refrac from an earlier val"""
+    drop_mask = np.zeros_like(arr).astype(np.bool)
+    for idx, val in enumerate(arr):
+        drop_mask[(arr < val + refrac) & (arr > val)] = 1
+    return arr[~drop_mask]
+
+def extract_duration_of_onsets(onsets, offsets):
+    """Extract duration of each onset.
+    
+    This is the time to the next offset. If there is another intervening 
+    onset, then drop the first one.
+    
+    Returns: remaining_onsets, durations
+    """
+    onsets3 = []
+    durations = []
+    for idx, val in enumerate(onsets):
+        # Find upcoming offsets and skip if none
+        upcoming_offsets = offsets[offsets > val]
+        if len(upcoming_offsets) == 0:
+            continue
+        next_offset = upcoming_offsets[0]
+        
+        # Find upcoming onsets and skip if there is one before next offset
+        upcoming_onsets = onsets[onsets > val]
+        if len(upcoming_onsets) > 0 and upcoming_onsets[0] < next_offset:
+            continue
+        
+        # Store duration and this onset
+        onsets3.append(val)
+        durations.append(next_offset - val)    
+
+    return np.asarray(onsets3), np.asarray(durations)
+
+def get_light_times_from_behavior_file(session):
+    """Return time light goes on and off in logfile from session"""
+    lines = my.behavior.get_logfile_lines(session)
+
+    # They turn on in ERROR (14), INTER_TRIAL_INTERVAL (13), 
+    # and off in ROTATE_STEPPER1 (2)
+    parsed_df_by_trial = TrialSpeak.parse_lines_into_df_split_by_trial(lines)
+    light_on = TrialSpeak.identify_state_change_times(
+        parsed_df_by_trial, state1=[13, 14])
+    light_off = TrialSpeak.identify_state_change_times(
+        parsed_df_by_trial, state0=2)
+    
+    return light_on, light_off
+
+def longest_unique_fit(xdata, ydata, start_fitlen=3, ss_thresh=.0003):
+    """Find the longest consecutive string of fit points between x and y.
+
+    # Finally, sync up
+    # How about, start with N=5 trials from the middle of the behavior, 
+    # find optimal matching 5 consecutive hits from house light
+    # by scanning over all possible matches and keeping under some resid, 
+    # increase N until only one unique hit foudn
+
+    # If SS_THRESH is too generous, then we'll start including bad data points
+    # at the ends and potentially corrupt the fit
+    # Perhaps add another outer loop where we start with a very tight SS_THRESH
+    # and increase if no fit found, or only fit of a very short length.
+    # Also, could add an intermediate loop with various different starting
+    # indexes, in case the middle of the session is corrupted.  
+
+    Note ss_thresh is in terms of the units of y, eg frames or sec.
+    
+    Returns: best fit poly, or None if none found
+    """
+    # Choose the idx to start with in behavior
+    fitlen = start_fitlen
+    mid_idx = len(ydata) / 2
+    keep_going = True
+    best_fitpoly = None
+
+    while keep_going:
+        # Choose the data to fit
+        print fitlen
+        chosen_idxs = xdata[mid_idx - fitlen:mid_idx + fitlen]
+        
+        # Check if we ran out of data
+        if len(chosen_idxs) != fitlen * 2:
+            break
+        if np.any(np.isnan(chosen_idxs)):
+            break
+            
+
+        # Find the best consecutive fit among onsets
+        rec_l = []
+        for idx in range(0, len(ydata) - len(chosen_idxs) + 1):
+            # The data to fit with
+            test = ydata[idx:idx + len(chosen_idxs)]
+            if np.any(np.isnan(test)):
+                continue
+            
+            # fit
+            fitpoly = np.polyfit(test, chosen_idxs, deg=1)
+            fit_to_input = np.polyval(fitpoly, test)
+            resids = chosen_idxs - fit_to_input
+            ss = np.sum(resids ** 2)
+            rec_l.append({'idx': idx, 'ss': ss, 'fitpoly': fitpoly})
+        
+        # Look at results
+        rdf = pandas.DataFrame.from_records(rec_l).set_index('idx').dropna()
+
+        # Keep only those under thresh
+        rdf = rdf[rdf['ss'] < ss_thresh * len(chosen_idxs)]    
+
+        # If no fits, then quit
+        if len(rdf) == 0:
+            keep_going = False
+            break
+        
+        # Take the best fit
+        best_index = rdf['ss'].argmin()
+        best_ss = rdf['ss'].min()
+        best_fitpoly = rdf['fitpoly'].ix[best_index]
+
+        # Increase the size
+        fitlen = fitlen + 1    
+    
+    return best_fitpoly
