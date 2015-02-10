@@ -1646,3 +1646,97 @@ def longest_unique_fit(xdata, ydata, start_fitlen=3, ss_thresh=.0003):
         fitlen = fitlen + 1    
     
     return best_fitpoly
+
+
+
+def get_or_save_lums(session, lumdir):
+    # Old style filenames, but keep so we can use our existing lums
+    #~ old_lum_filename = session + '.lums'
+    
+    # Get metadata about session
+    sbvdf = my.behavior.get_synced_behavior_and_video_df().set_index('session')
+    session_row = sbvdf.ix[session]
+    guess_vvsb_start = session_row['guess_vvsb_start']
+    vfilename = session_row['filename_video']
+    
+    # New style filenames
+    new_lum_filename = os.path.join(lumdir, 
+        os.path.split(vfilename)[1] + '.lums')
+    
+    #~ # If old exists, save as new and return
+    #~ if os.path.exists(old_lum_filename):
+        #~ print "old cached lums found"
+        #~ lums = my.misc.pickle_load(old_lum_filename)
+        
+        #~ if not os.path.exists(new_lum_filename):
+            #~ my.misc.pickle_dump(lums, new_lum_filename)
+        
+        #~ return lums
+    
+    # If new exists, return
+    if os.path.exists(new_lum_filename):
+        print "cached lums found"
+        lums = my.misc.pickle_load(new_lum_filename)
+        return lums    
+
+    # Get the lums ... this takes a while
+    lums = my.misc.process_chunks_of_video(vfilename, n_frames=np.inf)
+    
+    # Save
+    my.misc.pickle_dump(lums, new_lum_filename)
+    
+    return lums
+    
+
+def autosync_behavior_and_video_with_houselight(session):
+    """Main autosync function"""
+    # Get metadata about session
+    sbvdf = get_synced_behavior_and_video_df().set_index('session')
+    session_row = sbvdf.ix[session]
+    guess_vvsb_start = session_row['guess_vvsb_start']
+    vfilename = session_row['filename_video']
+
+    # Get the lums ... this takes a while
+    lums = get_or_save_lums(session)
+
+    # Get onsets and durations
+    onsets, durations = extract_onsets_and_durations(lums, 
+        delta=30, diffsize=3, refrac=5)
+
+    # Same data from ardulines
+    light_on, light_off = get_light_times_from_behavior_file(session)
+
+    # Subtract test_guess_vvsb from the behavior data
+    light_on = light_on - guess_vvsb_start
+    light_off = light_off - guess_vvsb_start
+
+    # Divide by XXX fps in the video data
+    onsets = onsets / 29.97
+    durations = durations / 29.97
+    
+    # TODO: Try subtracting the video duration from the video timestamps,
+    # I bet it will result in a near zero offset.
+    
+    # A crude initial guess strategy
+    # We need to get rid of the ones that were clearly from other sessions
+    # in the same video. We've already applied vvsb guess to light_on,
+    # the behavioral data, so use the min and max from this to mask the 
+    # video data
+    vmask_min = np.nanmin(light_on)
+    vmask_max = np.nanmax(light_on)
+    masked_onsets = onsets[(onsets > vmask_min) & (onsets < vmask_max)]
+
+    # Fit from behavior to video, because we want to start with good
+    # video onsets and go from there.
+    for ss_thresh in [.0003, .001, .003]:
+        best_fitpoly = longest_unique_fit(light_on, masked_onsets, 
+            start_fitlen=3, ss_thresh=ss_thresh)
+        if best_fitpoly is not None:
+            break
+    
+    # Invert fit to go from video to behavior
+    if best_fitpoly is None:
+        return None
+    fit_v2b = my.misc.invert_linear_poly(best_fitpoly)
+    
+    return fit_v2b
