@@ -882,3 +882,92 @@ def frame_dump(filename, frametime, output_filename='out.png',
             stderr=subprocess.STDOUT)
         if very_verbose:
             print syscall_result
+
+def process_chunks_of_video(filename, n_frames, func=None, verbose=True,
+    frame_chunk_sz=1000, bufsize=10**9,
+    image_w=320, image_h=240, pix_fmt='gray'):
+    """Read frames from video, apply function, return result
+    
+    Uses a pipe to ffmpeg to load chunks of frame_chunk_sz frames, applies
+    func, then stores just the result of func to save memory.
+    
+    If n_frames > # available, returns just the available frames with a
+    warning.
+    
+    TODO: 
+    if n_frames is None, set to max or inf
+    get video params using ffprobe
+    """
+    # Default function is mean luminance
+    if func is None:
+        func = lambda frame: frame.mean()
+    
+    # Create the command
+    command = ['ffmpeg', 
+        '-i', filename,
+        '-f', 'image2pipe',
+        '-pix_fmt', pix_fmt,
+        '-vcodec', 'rawvideo', '-']
+    
+    # To store result
+    res_l = []
+    frames_read = 0
+
+    # Init the pipe
+    # We set stderr to PIPE to keep it from writing to screen
+    # Do this outside the try, because errors here won't init the pipe anyway
+    pipe = subprocess.Popen(command, 
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+        bufsize=bufsize)
+
+    # Catch any IO errors and restore stdout
+    try:
+        # Read in chunks
+        out_of_frames = False
+        while frames_read < n_frames and not out_of_frames:
+            print frames_read
+            # Figure out how much to acquire
+            if frames_read + frame_chunk_sz > n_frames:
+                this_chunk = n_frames - frames_read
+            else:
+                this_chunk = frame_chunk_sz
+            
+            # Read this_chunk, or as much as we can
+            raw_image = pipe.stdout.read(image_w*image_h*this_chunk)
+            
+            # check if we ran out of frames
+            if len(raw_image) < image_w * image_h * this_chunk:
+                print "warning: ran out of frames"
+                out_of_frames = True
+                this_chunk = len(raw_image) / image_w / image_h
+                assert this_chunk * image_w * image_h == len(raw_image)
+            
+            # Process
+            flattened_im = np.fromstring(raw_image, dtype='uint8')
+            video = flattened_im.reshape((this_chunk, image_h, image_w))
+            chunk_res = np.asarray(map(func, video))
+            
+            # Store
+            res_l.append(chunk_res)
+            
+            # Update
+            frames_read += this_chunk
+
+    except:
+        raise
+
+    finally:
+        # Restore stdout
+        pipe.terminate()
+
+        # Keep the leftover data and the error signal (ffmpeg output)
+        stdout, stderr = pipe.communicate()
+
+    # Stick chunks together
+    if len(res_l) == 0:
+        print "warning: no data found"
+        res = np.array([])
+    else:
+        res = np.concatenate(res_l)
+        
+    return res
