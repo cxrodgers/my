@@ -630,16 +630,22 @@ def display_perf_by_servo_from_day(date=None):
         figsize=(15, 5))
     for nax, (idx, row) in enumerate(display_dates.iterrows()):
         ax = axa.flatten()[nax]
-        display_perf_by_servo(row['session'], ax)
+        display_perf_by_servo(session=row['session'], ax=ax)
         ax.set_title(row['session'], size='small')
     f.tight_layout()
 
 
-def display_perf_by_servo(session, ax=None):
+def display_perf_by_servo(session=None, tm=None, ax=None):
+    """Plot perf by servo from single session into ax.
+    
+    if session is not None, loads trial matrix from it.
+    if session is None, uses tm.
+    """
     import matplotlib.pyplot as plt 
     
     # Get trial matrix
-    tm = my.behavior.get_trial_matrix(session)
+    if session is not None:
+        tm = my.behavior.get_trial_matrix(session)
     
     # Ax
     if ax is None:
