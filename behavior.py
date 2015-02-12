@@ -1579,7 +1579,8 @@ def get_light_times_from_behavior_file(session):
     
     return light_on, light_off
 
-def longest_unique_fit(xdata, ydata, start_fitlen=3, ss_thresh=.0003):
+def longest_unique_fit(xdata, ydata, start_fitlen=3, ss_thresh=.0003,
+    verbose=True):
     """Find the longest consecutive string of fit points between x and y.
 
     # Finally, sync up
@@ -1607,7 +1608,6 @@ def longest_unique_fit(xdata, ydata, start_fitlen=3, ss_thresh=.0003):
 
     while keep_going:
         # Choose the data to fit
-        print fitlen
         chosen_idxs = xdata[mid_idx - fitlen:mid_idx + fitlen]
         
         # Check if we ran out of data
@@ -1651,13 +1651,17 @@ def longest_unique_fit(xdata, ydata, start_fitlen=3, ss_thresh=.0003):
         # Increase the size
         fitlen = fitlen + 1    
     
+    if verbose:
+        print "fit found,", fitlen
+    
     return best_fitpoly
 
 
 
-def get_or_save_lums(session, lumdir):
-    # Old style filenames, but keep so we can use our existing lums
-    #~ old_lum_filename = session + '.lums'
+def get_or_save_lums(session, lumdir=None):
+    """Load lum for session from video or if available from cache"""    
+    if lumdir is None:
+        lumdir = os.path.join(PATHS['database_root'], 'lums')
     
     # Get metadata about session
     sbvdf = my.behavior.get_synced_behavior_and_video_df().set_index('session')
@@ -1668,16 +1672,6 @@ def get_or_save_lums(session, lumdir):
     # New style filenames
     new_lum_filename = os.path.join(lumdir, 
         os.path.split(vfilename)[1] + '.lums')
-    
-    #~ # If old exists, save as new and return
-    #~ if os.path.exists(old_lum_filename):
-        #~ print "old cached lums found"
-        #~ lums = my.misc.pickle_load(old_lum_filename)
-        
-        #~ if not os.path.exists(new_lum_filename):
-            #~ my.misc.pickle_dump(lums, new_lum_filename)
-        
-        #~ return lums
     
     # If new exists, return
     if os.path.exists(new_lum_filename):
@@ -1694,7 +1688,7 @@ def get_or_save_lums(session, lumdir):
     return lums
     
 
-def autosync_behavior_and_video_with_houselight(session):
+def autosync_behavior_and_video_with_houselight(session, save_result=True):
     """Main autosync function"""
     # Get metadata about session
     sbvdf = get_synced_behavior_and_video_df().set_index('session')
@@ -1745,4 +1739,37 @@ def autosync_behavior_and_video_with_houselight(session):
         return None
     fit_v2b = my.misc.invert_linear_poly(best_fitpoly)
     
+    # Store
+    if save_result:
+        if fit_v2b is not None:
+            set_manual_bv_sync(session, fit_v2b)
+        else:
+            print "cannot autosync", session
+
     return fit_v2b
+
+
+def autosync_behavior_and_video_with_houselight_from_day(date=None):
+    """Autosync all sessions using house light from specified date"""
+    # Load metadata
+    msdf = get_manual_sync_df()
+    sbvdf = get_synced_behavior_and_video_df()
+    sbvdf_dates = sbvdf['dt_end'].apply(lambda dt: dt.date())
+    
+    # Set to most recent date in database if None
+    if date is None:
+        date = sbvdf_dates.max()
+    
+    # Choose the ones to display
+    display_dates = sbvdf.ix[sbvdf_dates == date]
+    if len(display_dates) > 20:
+        raise ValueError("too many dates")
+    
+    for idx, row in display_dates.iterrows():
+        session = row['session']
+        if session in msdf.index:
+            print session, "already synced"
+        else:
+            print session
+            autosync_behavior_and_video_with_houselight(session, 
+                save_result=True)

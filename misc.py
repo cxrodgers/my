@@ -883,7 +883,7 @@ def frame_dump(filename, frametime, output_filename='out.png',
         if very_verbose:
             print syscall_result
 
-def process_chunks_of_video(filename, n_frames, func=None, verbose=True,
+def process_chunks_of_video(filename, n_frames, func=None, verbose=False,
     frame_chunk_sz=1000, bufsize=10**9,
     image_w=320, image_h=240, pix_fmt='gray'):
     """Read frames from video, apply function, return result
@@ -925,7 +925,8 @@ def process_chunks_of_video(filename, n_frames, func=None, verbose=True,
         # Read in chunks
         out_of_frames = False
         while frames_read < n_frames and not out_of_frames:
-            print frames_read
+            if verbose:
+                print frames_read
             # Figure out how much to acquire
             if frames_read + frame_chunk_sz > n_frames:
                 this_chunk = n_frames - frames_read
