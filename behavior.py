@@ -526,6 +526,9 @@ def plot_pivoted_performances(start_date=None, delta_days=15, piv=None):
     mouse_order = piv['perf_unforced'].mean(1)
     mouse_order.sort()
     mouse_order = mouse_order.index.values
+    
+    # Drop some mice
+    mouse_order = mouse_order[mouse_order != 'KF28']
 
     res_l = []
     for to_plot in to_plot_f_l:
