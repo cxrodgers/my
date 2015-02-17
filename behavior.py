@@ -51,6 +51,34 @@ else:
     raise ValueError("unknown locale %s" % LOCALE)
 
 
+def check_ardulines(logfile):
+    """Error check the log file.
+    
+    Here are the things that would be useful to check:
+    * File can be loaded with the loading function without error.
+    * Reported lick times match reported choice
+    * Reported choice and stimulus matches reported outcome
+    * All lines are (time, arg, XXX) where arg is known
+    * All state transitions are legal, though this is a lot of work
+    
+    Diagnostics to return
+    * Values of params over trials
+    * Various stats on time spent in each state
+    * Empirical state transition probabilities
+    
+    Descriptive metrics of each trial
+    * Lick times locked to response window opening
+    * State transition times locked to response window opening
+    """
+    # Make sure the loading functions work
+    lines = TrialSpeak.read_lines_from_file(logfile)
+    pldf = TrialSpeak.parse_lines_into_df(lines)
+    plst = TrialSpeak.parse_lines_into_df_split_by_trial(lines)
+    
+    
+    
+    
+
 def status_check():
     """Run the daily status check"""
     import matplotlib.pyplot as plt
@@ -502,6 +530,40 @@ def calculate_pivoted_performances(start_date=None, delta_days=15):
     
     return piv
 
+def calculate_pivoted_perf_by_rig(start_date=None, delta_days=15, 
+    drop_mice=None):
+    """Pivot performance by rig and day"""
+    # Choose start date
+    if start_date is None:
+        start_date = datetime.datetime.now() - \
+            datetime.timedelta(days=delta_days)    
+    
+    # Get behavior data
+    bdf = my.behavior.get_behavior_df()
+    
+    # Get perf columns of interest and join on rig and date
+    pmdf = my.behavior.get_perf_metrics()[[
+        'session', 'perf_unforced', 'n_trials', 'fev_side_unforced']]
+    pmdf = pmdf.join(bdf.set_index('session')[['rig', 'dt_start', 'mouse']], 
+        on='session')
+    pmdf = pmdf.ix[pmdf.dt_start >= start_date].drop('dt_start', 1)
+
+    # always sort on session
+    pmdf = pmdf.sort('session')
+
+    # add a "date_s" column which is just taken from the session for now
+    pmdf['date_s'] = pmdf['session'].str[2:8]
+    pmdf['date_s'] = pmdf['date_s'].apply(lambda s: s[:2]+'-'+s[2:4]+'-'+s[4:6])
+
+    # drop by mice
+    if drop_mice is not None:
+        pmdf = pmdf[~pmdf['mouse'].isin(drop_mice)]
+    pmdf = pmdf.drop('mouse', 1)
+
+    # pivot on all metrics, and mean over replicates
+    piv = pmdf.drop('session', 1).pivot_table(index='rig', columns='date_s')
+    
+    return piv
 
 def plot_pivoted_performances(start_date=None, delta_days=15, piv=None):
     """Plots figures of performances over times and returns list of figs"""
@@ -687,6 +749,89 @@ def display_perf_by_servo(session=None, tm=None, ax=None):
     ax.set_ylim((0, 1))    
     
     return ax
+
+def display_perf_by_rig(piv=None, drop_mice=('KF28', 'KM14', 'KF19')):
+    """Display performance by rig over days"""
+    import matplotlib.pyplot as plt
+    from my.plot import generate_colorbar
+
+    # Get pivoted unless provided
+    if piv is None:
+        piv = calculate_pivoted_perf_by_rig(drop_mice=drop_mice)
+    
+    # plot each
+    to_plot_f_l = [
+        ['perf_unforced', 'n_trials', 'fev_side_unforced',]
+        ]
+    
+    # The order of the traces, actually rig_order here not mouse_order
+    mouse_order = piv['perf_unforced'].mean(1)
+    mouse_order.sort()
+    mouse_order = mouse_order.index.values
+    
+    # Plot each
+    res_l = []
+    for to_plot in to_plot_f_l:
+        f, axa = plt.subplots(len(to_plot), 1, figsize=(7, 15))
+        f.subplots_adjust(top=.95, bottom=.075)
+        xlabels = piv.columns.levels[1].values
+        xlabels_num = np.arange(len(xlabels))
+        mice = mouse_order #piv.index.values
+        colors = generate_colorbar(len(mice), 'jet')
+        
+        # Iterate over metrics
+        for ax, metric in zip(axa, to_plot):
+            pm = piv[metric]
+            
+            # Plot the metric
+            for nmouse, mouse in enumerate(mice):
+                ax.plot(xlabels_num, pm.ix[mouse].values, color=colors[nmouse],
+                    ls='-', marker='s', mec='none', mfc=colors[nmouse])
+                ax.set_ylabel(metric)
+
+            # ylims and chance line
+            if metric != 'n_trials':            
+                ax.set_ylim((0, 1))
+                ax.set_yticks((0, .25, .5, .75, 1))
+            if metric.startswith('perf'):
+                ax.plot(xlabels_num, np.ones_like(xlabels_num) * .5, 'k-')
+
+            # Plot error X on missing sessions
+            if ax is axa[-1]:
+                for nmouse, mouse in enumerate(mice):
+                    null_dates = piv['n_trials'].isnull().ix[mouse].values
+                    pm_copy = np.ones_like(null_dates) * \
+                        (nmouse + 0.5) / float(len(mice))
+                    pm_copy[~null_dates] = np.nan
+                    ax.plot(xlabels_num, pm_copy, color=colors[nmouse], marker='x',
+                        ls='none', mew=1)
+
+            # xticks
+            ax.set_xlim((xlabels_num[0], xlabels_num[-1]))
+            if ax is axa[-1]:
+                ax.set_xticks(xlabels_num)
+                ax.set_xticklabels(xlabels, rotation=45, ha='right', size='small')
+            else:
+                ax.set_xticks(xlabels_num)
+                ax.set_xticklabels([''] * len(xlabels_num))
+        
+        # mouse names in the top
+        ax = axa[0]
+        xlims = ax.get_xlim()
+        for nmouse, (mouse, color) in enumerate(zip(mice, colors)):
+            xpos = xlims[0] + (nmouse + 0.5) / float(len(mice)) * \
+                (xlims[1] - xlims[0])
+            ax.text(xpos, 0.2, mouse, color=color, ha='center', va='center', 
+                rotation=90)
+        
+        # Store to return
+        res_l.append(f)
+    
+    return res_l
+
+
+
+    
 
 def display_session_plot(session, assumed_trial_types='trial_types_4srvpos'):
     """Display the real-time plot that was shown during the session.
