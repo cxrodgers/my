@@ -12,12 +12,8 @@ import my
 import datetime
 
 import sys
-tcv2_path = os.path.expanduser('~/dev/ArduFSM/TwoChoice_v2')
-if tcv2_path not in sys.path:
-    sys.path.append(tcv2_path)
-
 import TrialMatrix, TrialSpeak, mainloop
-import ArduFSM.plot2
+
 
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
@@ -48,7 +44,7 @@ elif LOCALE == 'marvin':
         }
 
 else:
-    raise ValueError("unknown locale %s" % LOCALE)
+    print "unknown locale %s" % LOCALE
 
 
 def check_ardulines(logfile):
@@ -850,7 +846,7 @@ def display_session_plot(session, assumed_trial_types='trial_types_4srvpos'):
 
     # Guess the trial types
     trial_types = mainloop.get_trial_types(assumed_trial_types)
-    plotter = ArduFSM.plot2.PlotterWithServoThrow(trial_types)
+    plotter = ArduFSM.plot.PlotterWithServoThrow(trial_types)
     plotter.init_handles()
     plotter.update(filename)     
     
