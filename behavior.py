@@ -843,7 +843,7 @@ def display_session_plot(session, assumed_trial_types='trial_types_4srvpos'):
     filename = rows.irow(0)['filename']
 
     # Guess the trial types
-    trial_types = mainloop.get_trial_types(assumed_trial_types)
+    trial_types = ArduFSM.mainloop.get_trial_types(assumed_trial_types)
     plotter = ArduFSM.plot.PlotterWithServoThrow(trial_types)
     plotter.init_handles()
     plotter.update(filename)     
