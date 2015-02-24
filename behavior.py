@@ -3,6 +3,11 @@
 These are mainly for dealing with the idiosyncracies of rigs L1,
 L2, and L3 in the bruno lab.
 """
+
+raise DeprecationWarning(
+    """my.behavior is deprecated; use "import BeWatch" instead""")
+
+
 import os, numpy as np, glob, re, pandas, datetime
 import misc
 import subprocess # for ffprobe

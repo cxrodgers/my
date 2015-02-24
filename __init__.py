@@ -2,16 +2,8 @@
 doesn't fit anywhere else."""
 
 import bootstrap
-reload(bootstrap)
-
 import misc
-reload(misc)
-
 import stats
-reload(stats)
-
-import behavior
-reload(behavior)
 
 # shortcuts
 from misc import rint, pick, pick_rows, printnow
