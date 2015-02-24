@@ -10,14 +10,8 @@ import ArduFSM
 import scipy.misc
 import my
 import datetime
-
 import sys
-tcv2_path = os.path.expanduser('~/dev/ArduFSM/TwoChoice_v2')
-if tcv2_path not in sys.path:
-    sys.path.append(tcv2_path)
 
-import TrialMatrix, TrialSpeak, mainloop
-import ArduFSM.plot2
 
 # Known mice
 mice = ['AM03', 'AM05', 'KF13', 'KM14', 'KF16', 'KF17', 'KF18', 'KF19', 
@@ -48,7 +42,7 @@ elif LOCALE == 'marvin':
         }
 
 else:
-    raise ValueError("unknown locale %s" % LOCALE)
+    print "unknown locale %s" % LOCALE
 
 
 def check_ardulines(logfile):
@@ -71,9 +65,9 @@ def check_ardulines(logfile):
     * State transition times locked to response window opening
     """
     # Make sure the loading functions work
-    lines = TrialSpeak.read_lines_from_file(logfile)
-    pldf = TrialSpeak.parse_lines_into_df(lines)
-    plst = TrialSpeak.parse_lines_into_df_split_by_trial(lines)
+    lines = ArduFSM.TrialSpeak.read_lines_from_file(logfile)
+    pldf = ArduFSM.TrialSpeak.parse_lines_into_df(lines)
+    plst = ArduFSM.TrialSpeak.parse_lines_into_df_split_by_trial(lines)
     
     
     
@@ -214,7 +208,7 @@ def daily_update_trial_matrix(start_date=None, verbose=False):
             print filename
 
         # Otherwise make it
-        trial_matrix = TrialMatrix.make_trial_matrix_from_file(row['filename'])
+        trial_matrix = ArduFSM.TrialMatrix.make_trial_matrix_from_file(row['filename'])
         
         # And store it
         trial_matrix.to_csv(filename)
@@ -309,7 +303,7 @@ def get_logfile_lines(session):
     filename = rows.irow(0)['filename']
     
     # Read lines
-    lines = TrialSpeak.read_lines_from_file(filename)
+    lines = ArduFSM.TrialSpeak.read_lines_from_file(filename)
     
     # Split by trial
     #~ splines = split_by_trial(lines)
@@ -850,7 +844,7 @@ def display_session_plot(session, assumed_trial_types='trial_types_4srvpos'):
 
     # Guess the trial types
     trial_types = mainloop.get_trial_types(assumed_trial_types)
-    plotter = ArduFSM.plot2.PlotterWithServoThrow(trial_types)
+    plotter = ArduFSM.plot.PlotterWithServoThrow(trial_types)
     plotter.init_handles()
     plotter.update(filename)     
     
@@ -887,7 +881,7 @@ def calculate_perf_metrics(trial_matrix):
     # Anova with and without remove bad
     for remove_bad in [True, False]:
         # Numericate and optionally remove non-random trials
-        numericated_trial_matrix = TrialMatrix.numericate_trial_matrix(
+        numericated_trial_matrix = ArduFSM.TrialMatrix.numericate_trial_matrix(
             trial_matrix)
         if remove_bad:
             suffix = '_unforced'
@@ -897,7 +891,7 @@ def calculate_perf_metrics(trial_matrix):
             suffix = '_all'
         
         # Run anova
-        aov_res = TrialMatrix._run_anova(numericated_trial_matrix)
+        aov_res = ArduFSM.TrialMatrix._run_anova(numericated_trial_matrix)
         
         # Parse FEV
         if aov_res is not None:
@@ -1232,14 +1226,14 @@ def dump_frames_at_retraction_time(metadata, session_dir):
     metadata : row containing behavior info, video info, and fit info    
     """
     # Load trials info
-    trials_info = TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
-    splines = TrialSpeak.load_splines_from_file(metadata['filename'])
+    trials_info = ArduFSM.TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
+    splines = ArduFSM.TrialSpeak.load_splines_from_file(metadata['filename'])
 
     # Insert servo retract time
-    lines = TrialSpeak.read_lines_from_file(metadata['filename'])
+    lines = ArduFSM.TrialSpeak.read_lines_from_file(metadata['filename'])
     parsed_df_split_by_trial = \
-        TrialSpeak.parse_lines_into_df_split_by_trial(lines)    
-    trials_info['time_retract'] = TrialSpeak.identify_servo_retract_times(
+        ArduFSM.TrialSpeak.parse_lines_into_df_split_by_trial(lines)    
+    trials_info['time_retract'] = ArduFSM.TrialSpeak.identify_servo_retract_times(
         parsed_df_split_by_trial)        
 
     # Fit to video times
@@ -1287,14 +1281,14 @@ def generate_mplayer_guesses_and_sync(metadata,
     initial_guess = np.asarray(guess)
     
     # Load trials info
-    trials_info = TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
-    splines = TrialSpeak.load_splines_from_file(metadata['filename'])
-    lines = TrialSpeak.read_lines_from_file(metadata['filename'])
+    trials_info = ArduFSM.TrialMatrix.make_trial_matrix_from_file(metadata['filename'])
+    splines = ArduFSM.TrialSpeak.load_splines_from_file(metadata['filename'])
+    lines = ArduFSM.TrialSpeak.read_lines_from_file(metadata['filename'])
     parsed_df_split_by_trial = \
-        TrialSpeak.parse_lines_into_df_split_by_trial(lines)
+        ArduFSM.TrialSpeak.parse_lines_into_df_split_by_trial(lines)
 
     # Insert servo retract time
-    trials_info['time_retract'] = TrialSpeak.identify_servo_retract_times(
+    trials_info['time_retract'] = ArduFSM.TrialSpeak.identify_servo_retract_times(
         parsed_df_split_by_trial)
 
     # Apply the delta-time guess to the retraction times
@@ -1719,10 +1713,10 @@ def get_light_times_from_behavior_file(session):
 
     # They turn on in ERROR (14), INTER_TRIAL_INTERVAL (13), 
     # and off in ROTATE_STEPPER1 (2)
-    parsed_df_by_trial = TrialSpeak.parse_lines_into_df_split_by_trial(lines)
-    light_on = TrialSpeak.identify_state_change_times(
+    parsed_df_by_trial = ArduFSM.TrialSpeak.parse_lines_into_df_split_by_trial(lines)
+    light_on = ArduFSM.TrialSpeak.identify_state_change_times(
         parsed_df_by_trial, state1=[13, 14])
-    light_off = TrialSpeak.identify_state_change_times(
+    light_off = ArduFSM.TrialSpeak.identify_state_change_times(
         parsed_df_by_trial, state0=2)
     
     return light_on, light_off
