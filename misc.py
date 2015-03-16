@@ -883,7 +883,7 @@ def frame_dump(filename, frametime, output_filename='out.png',
         if very_verbose:
             print syscall_result
 
-def process_chunks_of_video(filename, n_frames, func=None, verbose=False,
+def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     frame_chunk_sz=1000, bufsize=10**9,
     image_w=320, image_h=240, pix_fmt='gray'):
     """Read frames from video, apply function, return result
@@ -894,13 +894,30 @@ def process_chunks_of_video(filename, n_frames, func=None, verbose=False,
     If n_frames > # available, returns just the available frames with a
     warning.
     
+    filename : file to read
+    n_frames : number of frames to process
+    func : function to apply to each frame
+        If 'mean', then func = lambda frame: frame.mean()
+        If 'keep', then func = lambda frame: frame
+        'keep' will return every frame, which will obviously require a lot
+        of memory.
+    verbose : If True, prints out frame number for every chunk
+    frame_chunk_sz : number of frames to load at once from ffmpeg
+    bufsize : sent to subprocess.Popen
+    image_w, image_h : width and height of video in pxels
+    pix_fmt : Sent to ffmpeg
+    
     TODO: 
     if n_frames is None, set to max or inf
     get video params using ffprobe
     """
     # Default function is mean luminance
-    if func is None:
+    if func == 'mean':
         func = lambda frame: frame.mean()
+    elif func == 'keep':
+        func = lambda frame: frame
+    elif func is None:
+        raise ValueError("must specify frame function")
     
     # Create the command
     command = ['ffmpeg', 
