@@ -885,7 +885,8 @@ def frame_dump(filename, frametime, output_filename='out.png',
 
 def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     frame_chunk_sz=1000, bufsize=10**9,
-    image_w=320, image_h=240, pix_fmt='gray'):
+    image_w=None, image_h=None, pix_fmt='gray',
+    finalize='concatenate'):
     """Read frames from video, apply function, return result
     
     Uses a pipe to ffmpeg to load chunks of frame_chunk_sz frames, applies
@@ -918,6 +919,10 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
         func = lambda frame: frame
     elif func is None:
         raise ValueError("must specify frame function")
+    
+    # Get aspect
+    if image_w is None:
+        image_w, image_h = get_video_aspect(filename)
     
     # Create the command
     command = ['ffmpeg', 
@@ -963,7 +968,10 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
             # Process
             flattened_im = np.fromstring(raw_image, dtype='uint8')
             video = flattened_im.reshape((this_chunk, image_h, image_w))
-            chunk_res = np.asarray(map(func, video))
+            
+            # Store as list to avoid dtype and shape problems later
+            #chunk_res = np.asarray(map(func, video))
+            chunk_res = map(func, video)
             
             # Store
             res_l.append(chunk_res)
@@ -985,7 +993,47 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     if len(res_l) == 0:
         print "warning: no data found"
         res = np.array([])
-    else:
+    elif finalize == 'concatenate':
         res = np.concatenate(res_l)
+    elif finalize == 'listcomp':
+        res = np.array([item for sublist in res_l for item in sublist])
+    elif finalize == 'list':
+        res = res_l
+    else:
+        print "warning: unknown finalize %r" % finalize
+        res = res_l
         
     return res
+
+def get_video_aspect(video_filename):
+    """Returns width, height of video using ffprobe"""
+    # Video duration and hence start time
+    proc = subprocess.Popen(['ffprobe', video_filename],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    res = proc.communicate()[0]
+
+    # Check if ffprobe failed, probably on a bad file
+    if 'Invalid data found when processing input' in res:
+        raise ValueError("Invalid data found by ffprobe in %s" % video_filename)
+    
+    # Get everything after "Stream #0"
+    sidx = res.index("Stream #0")
+    if "Stream #0" in res[sidx + 1:]:
+        raise ValueError("Cannot parse ffprobe output: %s" % res)
+    res = res[sidx:]
+    
+    # Get the second group, which is usually aspect ratio
+    comma_split = res.split(',')
+    try:
+        aspect_group = comma_split[2]
+    except IndexError:
+        raise ValueError("Cannot parse ffprobe output: %s" % res)
+    
+    # Parse out aspect
+    aspect_match = re.search("(\d+)x(\d+)", aspect_group)
+    if aspect_match is None or len(aspect_match.groups()) != 2:
+        raise ValueError("Cannot parse ffprobe output: %s" % aspect_group)
+    
+    width = int(aspect_match.groups()[0])
+    height = int(aspect_match.groups()[1])
+    return width, height
