@@ -248,7 +248,7 @@ def fix_pandas_display_width(dw=0):
     import pandas
     pandas.set_option('display.width', dw)
 
-def UniquenessError(Exception):
+class UniquenessError(Exception):
     pass
 
 def only_one(l):
@@ -262,7 +262,7 @@ def only_one(l):
     
     # check length
     if len(l) != 1:
-        raise UniquenessError("must contain exactly one value")
+        raise UniquenessError("must contain exactly one value; instead: %r" % l)
     
     # return entry
     return l[0]
@@ -274,9 +274,9 @@ def unique_or_error(a):
     """    
     u = np.unique(np.asarray(a))
     if len(u) == 0:
-        raise UniquenessError("no values found")
+        raise UniquenessError("no unique values found, should be one")
     if len(u) > 1:
-        raise UniquenessError("%d values found, should be one" % len(u))
+        raise UniquenessError("%d unique values found, should be one" % len(u))
     else:
         return u[0]
 
@@ -1037,3 +1037,32 @@ def get_video_aspect(video_filename):
     width = int(aspect_match.groups()[0])
     height = int(aspect_match.groups()[1])
     return width, height
+
+
+def get_video_duration(video_filename, return_as_timedelta=False):
+    """Return duration of video using ffprobe"""
+    # Video duration and hence start time
+    proc = subprocess.Popen(['ffprobe', video_filename],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    res = proc.communicate()[0]
+
+    # Check if ffprobe failed, probably on a bad file
+    if 'Invalid data found when processing input' in res:
+        raise ValueError(
+            "Invalid data found by ffprobe in %s" % video_filename)
+
+    # Parse out start time
+    duration_match = re.search("Duration: (\S+),", res)
+    assert duration_match is not None and len(duration_match.groups()) == 1
+    video_duration_temp = datetime.datetime.strptime(
+        duration_match.groups()[0], '%H:%M:%S.%f')
+    video_duration = datetime.timedelta(
+        hours=video_duration_temp.hour, 
+        minutes=video_duration_temp.minute, 
+        seconds=video_duration_temp.second,
+        microseconds=video_duration_temp.microsecond)    
+    
+    if return_as_timedelta:
+        return video_duration
+    else:
+        return video_duration.total_seconds()
