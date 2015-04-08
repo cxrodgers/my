@@ -355,7 +355,13 @@ def regex_capture(pattern, list_of_strings, take_index=0):
     
 
 def rint(arr):
-    """Round with rint and cast to int"""
+    """Round with rint and cast to int
+    
+    If `arr` contains NaN, casting it to int causes a spuriously negative
+    number, because NaN cannot be an int. In this case we raise ValueError.
+    """
+    if np.any(np.isnan(np.asarray(arr))):
+        raise ValueError("cannot convert arrays containing NaN to int")
     return np.rint(arr).astype(np.int)
 
 def is_nonstring_iter(val):
