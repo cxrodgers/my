@@ -830,6 +830,55 @@ def sem(data, axis=None):
     return np.std(np.asarray(data), axis) / np.sqrt(N)
 
 
+class OutOfFrames(BaseException):
+    pass
+
+def frame_dump_pipe(filename, frametime, pix_fmt='gray'):
+    """Use an ffmpeg pipe to extract a single frame at `frametime`."""
+    v_width, v_height = get_video_aspect(filename)
+    
+    # Create the command
+    command = ['ffmpeg', 
+        '-ss', str(frametime),
+        '-i', filename,
+        '-vframes', '1',       
+        '-f', 'image2pipe',
+        '-pix_fmt', pix_fmt,
+        '-vcodec', 'rawvideo', '-']
+    
+    # To store result
+    res_l = []
+    frames_read = 0
+
+    # Init the pipe
+    # We set stderr to PIPE to keep it from writing to screen
+    # Do this outside the try, because errors here won't init the pipe anyway
+    pipe = subprocess.Popen(command, 
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+        bufsize=10**9)
+
+    try:
+        read_size = v_width*v_height
+        raw_image = pipe.stdout.read(read_size)    
+        if len(raw_image) < read_size:
+            raise OutOfFrames        
+        flattened_im = np.fromstring(raw_image, dtype='uint8')
+        frame = flattened_im.reshape((v_height, v_width))    
+    
+    except OutOfFrames:
+        print "warning: cannot get frame"
+        frame = None
+    
+    finally:
+        # Restore stdout
+        pipe.terminate()
+
+        # Keep the leftover data and the error signal (ffmpeg output)
+        stdout, stderr = pipe.communicate()    
+    
+    return frame, stdout, stderr
+
+
 def frame_dump(filename, frametime, output_filename='out.png', 
     meth='ffmpeg fast', subseek_cushion=20., verbose=False, dry_run=False,
     very_verbose=False):
