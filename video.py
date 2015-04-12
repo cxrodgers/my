@@ -3,6 +3,7 @@ import numpy as np
 import subprocess
 import re
 import datetime
+import os
 
 class OutOfFrames(BaseException):
     """Exception raised when more frames cannot be extracted from a video"""
@@ -417,3 +418,41 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
         finally:
             plt.ioff()
     return res    
+
+
+def crop(input_file, output_file, crop_x0, crop_x1, 
+    crop_y0, crop_y1, crop_stop_sec=None, vcodec='mpeg4', quality=2, 
+    overwrite=True, verbose=False, very_verbose=False):
+    """Crops the input file into the output file"""
+    # Overwrite avoid
+    if os.path.exists(output_file) and not overwrite:
+        raise ValueError("%s already exists" % output_file)
+    
+    # Set up width, height and origin of crop zone
+    if crop_x0 > crop_x1:
+        crop_x0, crop_x1 = crop_x1, crop_x0
+    if crop_y0 > crop_y1:
+        crop_y0, crop_y1 = crop_y1, crop_y0
+    width = crop_x1 - crop_x0
+    height = crop_y1 - crop_y0
+    
+    # Form the syscall
+    crop_string = '"crop=%d:%d:%d:%d"' % (width, height, crop_x0, crop_y0)
+    syscall_l = ['ffmpeg', '-i', input_file, '-y',
+        '-vcodec', vcodec,
+        '-q', str(quality),
+        '-vf', crop_string]
+    if crop_stop_sec is not None:
+        syscall_l += ['-t', str(crop_stop_sec)]
+    syscall_l.append(output_file)
+
+    # Call, redirecting to standard output so that we can catch it
+    if verbose:
+        print ' '.join(syscall_l)
+    
+    # I think when -t parameter is set, it raises CalledProcessError
+    #~ syscall_result = subprocess.check_output(syscall_l, 
+        #~ stderr=subprocess.STDOUT)
+    #~ if very_verbose:
+        #~ print syscall_result
+    os.system(' '.join(syscall_l))
