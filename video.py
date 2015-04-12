@@ -456,3 +456,7 @@ def crop(input_file, output_file, crop_x0, crop_x1,
     #~ if very_verbose:
         #~ print syscall_result
     os.system(' '.join(syscall_l))
+
+def split():
+    # ffmpeg -i 150401_CR1_cropped.mp4 -f segment -vcodec copy -reset_timestamps 1 -map 0 -segment_time 1000 OUTPUT%d.mp4
+    pass
