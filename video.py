@@ -327,3 +327,93 @@ def get_video_duration(video_filename, return_as_timedelta=False):
         return video_duration
     else:
         return video_duration.total_seconds()
+
+def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
+    """Displays a subset of frames from video so the user can specify an ROI.
+    
+    If interactive is False, the frames are simply displayed in a figure.
+    If interactive is True, a simple text-based UI allows the user to input
+    the x- and y- coordinates of the ROI. These are drawn and the user has
+    the opportunity to confirm them.
+    
+    If check is True, then the values are swapped as necessary such that
+    x0 < x1 and y0 < y1.
+    
+    Finally the results are returned as a dict with keys x0, x1, y0, y1.
+    """
+    import matplotlib.pyplot as plt
+    import my.plot
+    # Not sure why this doesn't work if it's lower down in the function
+    if interactive:
+        plt.ion()        
+
+    # Get frames
+    duration = get_video_duration(vfile)
+    frametimes = np.linspace(0, duration, n_frames)
+    frames = []
+    for frametime in frametimes:
+        frame, stdout, stderr = get_frame(vfile, frametime)
+        frames.append(frame)
+    
+    # Plot them
+    f, axa = plt.subplots(1, 4, figsize=(15, 4))
+    for frame, ax in zip(frames, axa.flatten()):
+        my.plot.imshow(frame, ax=ax, axis_call='image', cmap=plt.cm.gray)
+    my.plot.harmonize_clim_in_subplots(fig=f, clim=(0, 255))
+
+    # Get interactive results
+    res = {}
+    if interactive:
+        params_l = ['x0', 'x1', 'y0', 'y1']
+        lines = []
+        try:
+            while True:
+                for line in lines:
+                    line.set_visible(False)    
+                plt.draw()
+                
+                # Get entries for each params
+                for param in params_l:
+                    while True:
+                        try:
+                            val = raw_input("Enter %s: " % param)
+                            break
+                        except ValueError:
+                            print "invalid entry"
+                    res[param] = int(val)
+
+                # Check ordering
+                if check:
+                    if res['x0'] > res['x1']:
+                        res['x0'], res['x1'] = res['x1'], res['x0']
+                    if res['y0'] > res['y1']:
+                        res['y0'], res['y1'] = res['y1'], res['y0']
+
+                # Draw results
+                for ax in axa:
+                    lines.append(ax.plot(
+                        ax.get_xlim(), [res['y0'], res['y0']], 'r-')[0])
+                    lines.append(ax.plot(
+                        ax.get_xlim(), [res['y1'], res['y1']], 'r-')[0])
+                    lines.append(ax.plot(
+                        [res['x0'], res['x0']], ax.get_ylim(), 'r-')[0])            
+                    lines.append(ax.plot(
+                        [res['x1'], res['x1']], ax.get_ylim(), 'r-')[0])
+                plt.draw()
+
+                # Get confirmation
+                choice = raw_input("Confirm [y/n/q]: ")
+                if choice == 'q':
+                    res = {}
+                    print "cancelled"
+                    break
+                elif choice == 'y':
+                    break
+                else:
+                    pass
+        except KeyboardInterrupt:
+            res = {}
+            print "cancelled"
+        finally:
+            plt.ioff()
+    return res    

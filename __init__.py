@@ -4,6 +4,7 @@ doesn't fit anywhere else."""
 import bootstrap
 import misc
 import stats
+import video
 
 # shortcuts
 from misc import rint, pick, pick_rows, printnow
