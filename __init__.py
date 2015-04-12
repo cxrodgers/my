@@ -7,4 +7,4 @@ import stats
 import video
 
 # shortcuts
-from misc import rint, pick, pick_rows, printnow
+from misc import rint, pick, pick_rows, printnow, globjoin

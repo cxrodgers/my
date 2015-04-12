@@ -7,6 +7,7 @@ import matplotlib # for spectrogrammer
 import os
 import re
 import datetime
+import glob
 import my
 
 ## Deprecated stuff
@@ -33,6 +34,15 @@ def get_video_duration(*args, **kwargs):
     return my.video.get_video_duration(*args, **kwargs)
 ##
 
+def globjoin(dirname, pattern, normalize=True):
+    """Join dirname to pattern, and glob it
+    
+    If normalize: calls os.path.abspath on every result
+    """
+    res = glob.glob(os.path.join(dirname, pattern))
+    if normalize:
+        res = map(os.path.abspath, res)
+    return res
 
 def time_of_file(filename, fmt='%Y%m%d%H%M%S'):
     """Return the modification time of the file as a datetime.
