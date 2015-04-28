@@ -13,7 +13,12 @@ def get_frame(filename, frametime, pix_fmt='gray', bufsize=10**9):
     """Returns a single frame from a video as an array.
     
     This creates an ffmpeg process and extracts data from it with a pipe.
-    Not tested on pix_fmt other than 'gray'
+
+    filename : video filename
+    frametime : time of frame
+    pix_fmt : the "output" format of ffmpeg.
+        currently only gray and rgb24 are accepted, because I need to 
+        know how to reshape the result.
     
     This syntax is used to seek with ffmpeg:
         ffmpeg -ss %frametime% -i %filename% -vframes 1 ...
@@ -28,6 +33,15 @@ def get_frame(filename, frametime, pix_fmt='gray', bufsize=10**9):
         stderr : ffmpeg's text output
     """
     v_width, v_height = get_video_aspect(filename)
+    
+    if pix_fmt == 'gray':
+        bytes_per_pixel = 1
+        reshape_size = (v_height, v_width)
+    elif pix_fmt == 'rgb24':
+        bytes_per_pixel = 3
+        reshape_size = (v_height, v_width, 3)
+    else:
+        raise ValueError("can't handle pix_fmt:", pix_fmt)
     
     # Create the command
     command = ['ffmpeg', 
@@ -50,12 +64,12 @@ def get_frame(filename, frametime, pix_fmt='gray', bufsize=10**9):
         bufsize=bufsize)
 
     try:
-        read_size = v_width*v_height
+        read_size = bytes_per_pixel * v_width * v_height
         raw_image = pipe.stdout.read(read_size)    
         if len(raw_image) < read_size:
             raise OutOfFrames        
         flattened_im = np.fromstring(raw_image, dtype='uint8')
-        frame = flattened_im.reshape((v_height, v_width))    
+        frame = flattened_im.reshape(reshape_size)    
     
     except OutOfFrames:
         print "warning: cannot get frame"
@@ -173,6 +187,17 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     if image_w is None:
         image_w, image_h = get_video_aspect(filename)
     
+    # Set up pix_fmt
+    if pix_fmt == 'gray':
+        bytes_per_pixel = 1
+        reshape_size = (image_h, image_w)
+    elif pix_fmt == 'rgb24':
+        bytes_per_pixel = 3
+        reshape_size = (image_h, image_w, 3)
+    else:
+        raise ValueError("can't handle pix_fmt:", pix_fmt)
+    read_size_per_frame = bytes_per_pixel * image_w * image_h
+    
     # Create the command
     command = ['ffmpeg', 
         '-i', filename,
@@ -205,18 +230,23 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
                 this_chunk = frame_chunk_sz
             
             # Read this_chunk, or as much as we can
-            raw_image = pipe.stdout.read(image_w*image_h*this_chunk)
+            raw_image = pipe.stdout.read(read_size_per_frame * this_chunk)
             
             # check if we ran out of frames
-            if len(raw_image) < image_w * image_h * this_chunk:
+            if len(raw_image) < read_size_per_frame * this_chunk:
                 print "warning: ran out of frames"
                 out_of_frames = True
-                this_chunk = len(raw_image) / image_w / image_h
-                assert this_chunk * image_w * image_h == len(raw_image)
+                this_chunk = len(raw_image) / read_size_per_frame
+                assert this_chunk * read_size_per_frame == len(raw_image)
             
             # Process
             flattened_im = np.fromstring(raw_image, dtype='uint8')
-            video = flattened_im.reshape((this_chunk, image_h, image_w))
+            if bytes_per_pixel == 1:
+                video = flattened_im.reshape(
+                    (this_chunk, image_h, image_w))
+            else:
+                video = flattened_im.reshape(
+                    (this_chunk, image_h, image_w, bytes_per_pixel))
             
             # Store as list to avoid dtype and shape problems later
             #chunk_res = np.asarray(map(func, video))
