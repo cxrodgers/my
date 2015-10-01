@@ -8,13 +8,26 @@ except ImportError:
     # it's all good
     pass
     
-def binom_confint(x=None, n=None, data=None, alpha=.95, meth='exact'):
+def binom_confint(x=None, n=None, data=None, alpha=.95, meth='beta'):
+    """Calculates the confidence interval for binomial data.
+    
+    Previously I used R's binom.confint with the 'exact' method.
+    statsmodels' proportion_confint with the 'beta' method seems to be the
+    same.
+    """
     if data is not None:
         x = np.sum(data)
         n = len(data)
-    r("library(binom)")
-    res = r("binom.confint(%d, %d, %f, methods='%s')" % (x, n, alpha, meth))
-    return res[res.names.index('lower')][0], res[res.names.index('upper')][0]
+    
+    if meth == 'R_exact':
+        r("library(binom)")
+        res = r("binom.confint(%d, %d, %f, methods='%s')" % (
+            x, n, alpha, 'exact'))
+        return res[res.names.index('lower')][0], res[res.names.index('upper')][0]
+    else:
+        import statsmodels.stats.proportion
+        return statsmodels.stats.proportion.proportion_confint(
+            x, n, method=meth)
 
 def bootstrap_regress(x, y, n_boot=1000):
     from matplotlib import mlab
