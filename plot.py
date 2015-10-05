@@ -467,7 +467,7 @@ def auto_subplot(n, return_fig=True, squeeze=False, **kwargs):
 def imshow(C, x=None, y=None, ax=None, 
     extent=None, xd_range=None, yd_range=None,
     cmap=plt.cm.RdBu_r, origin='upper', interpolation='nearest', aspect='auto', 
-    axis_call='tight', clim=None, center_clim=False):
+    axis_call='tight', clim=None, center_clim=False, **kwargs):
     """Wrapper around imshow with better defaults.
     
     Plots "right-side up" with the first pixel C[0, 0] in the upper left,
@@ -561,7 +561,7 @@ def imshow(C, x=None, y=None, ax=None,
     
     # Actual call to imshow
     im = ax.imshow(C, interpolation='nearest', origin=origin,
-        extent=extent, aspect=aspect, cmap=cmap)
+        extent=extent, aspect=aspect, cmap=cmap, **kwargs)
     
     # Fix up the axes
     ax.axis(axis_call)
