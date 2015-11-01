@@ -9,13 +9,30 @@ class OutOfFrames(BaseException):
     """Exception raised when more frames cannot be extracted from a video"""
     pass
 
-def get_frame(filename, frametime, pix_fmt='gray', bufsize=10**9):
+def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
+    pix_fmt='gray', bufsize=10**9):
     """Returns a single frame from a video as an array.
     
     This creates an ffmpeg process and extracts data from it with a pipe.
 
     filename : video filename
-    frametime : time of frame
+    frametime, frame_number : which frame to get
+        if you request time T, ffmpeg gives you frame N, where N is 
+        ceil(time * frame_rate). So -.001 gives you the first frame, and
+        .001 gives you the second frame. It's hard to predict what will
+        happen with one ms of the exact frame time due to rounding errors.
+        
+        So, if frame_number is not None:
+            This passes ((frame_number / frame_rate) - 1 ms) rounded down
+            to the nearest millisecond. This should give accurate results
+            as long as frame rate is not >500 fps or so.
+        else if frame_number is not None:
+            Then this subtracts half a frame time from the frame time you
+            requested, rounds to the nearest millisecond, and passes to ffmpeg.
+            This will tend to give an unbiased estimate of the closest frame.
+        else if frame_string is not None:
+            The string is passed directly to ffmpeg
+        
     pix_fmt : the "output" format of ffmpeg.
         currently only gray and rgb24 are accepted, because I need to 
         know how to reshape the result.
@@ -43,9 +60,24 @@ def get_frame(filename, frametime, pix_fmt='gray', bufsize=10**9):
     else:
         raise ValueError("can't handle pix_fmt:", pix_fmt)
     
+    # Choose the frame time string
+    if frame_number is not None:
+        frame_rate = get_video_params(filename)[2]
+        use_frame_time = (frame_number / float(frame_rate)) - .001
+        use_frame_time = np.floor(use_frame_time * 1000) / 1000.
+        use_frame_string = '%0.3f' % use_frame_time
+    elif frametime is not None:
+        frame_rate = get_video_params(filename)[2]
+        use_frame_time = frametime - (1. / (2 * frame_rate))
+        use_frame_string = '%0.3f' % use_frame_time
+    else:
+        if frame_string is None:
+            raise ValueError("must specify frame by time, number, or string")
+        use_frame_string = frame_string
+    
     # Create the command
     command = ['ffmpeg', 
-        '-ss', str(frametime),
+        '-ss', use_frame_string,
         '-i', filename,
         '-vframes', '1',       
         '-f', 'image2pipe',
@@ -490,3 +522,57 @@ def crop(input_file, output_file, crop_x0, crop_x1,
 def split():
     # ffmpeg -i 150401_CR1_cropped.mp4 -f segment -vcodec copy -reset_timestamps 1 -map 0 -segment_time 1000 OUTPUT%d.mp4
     pass
+
+
+def get_video_params(video_filename):
+    """Returns width, height, frame_rate of video using ffprobe"""
+    # Video duration and hence start time
+    proc = subprocess.Popen(['ffprobe', video_filename],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    res = proc.communicate()[0]
+
+    # Check if ffprobe failed, probably on a bad file
+    if 'Invalid data found when processing input' in res:
+        raise ValueError("Invalid data found by ffprobe in %s" % video_filename)
+    
+    # Find the video stream
+    width_height_l = []
+    frame_rate_l = []
+    for line in res.split("\n"):
+        # Skip lines that aren't stream info
+        if not line.strip().startswith("Stream #"):
+            continue
+        
+        # Check that this is a video stream
+        comma_split = line.split(',')
+        if " Video: " not in comma_split[0]:
+            continue
+        
+        # The third group should contain the size and aspect ratio
+        if len(comma_split) < 3:
+            raise ValueError("malform video stream string:", line)
+        
+        # The third group should contain the size and aspect, separated
+        # by spaces
+        size_and_aspect = comma_split[2].split()        
+        if len(size_and_aspect) == 0:
+            raise ValueError("malformed size/aspect:", comma_split[2])
+        size_string = size_and_aspect[0]
+        
+        # The size should be two numbers separated by x
+        width_height = size_string.split('x')
+        if len(width_height) != 2:
+            raise ValueError("malformed size string:", size_string)
+        
+        # Cast to int
+        width_height_l.append(map(int, width_height))
+    
+        # The fourth group in comma_split should be %f fps
+        frame_rate_fps = comma_split[4].split()
+        if frame_rate_fps[1] != 'fps':
+            raise ValueError("malformed frame rate:", frame_rate_fps)
+        frame_rate_l.append(float(frame_rate_fps[0]))
+    
+    if len(width_height_l) > 1:
+        print "warning: multiple video streams found, returning first"
+    return width_height_l[0][0], width_height_l[0][1], frame_rate_l[0]
