@@ -576,3 +576,125 @@ def get_video_params(video_filename):
     if len(width_height_l) > 1:
         print "warning: multiple video streams found, returning first"
     return width_height_l[0][0], width_height_l[0][1], frame_rate_l[0]
+
+
+class WebcamController:
+    def __init__(self, device='/dev/video0', output_filename='/dev/null',
+        width=320, height=240, framerate=30,
+        window_title='webcam', 
+        ):
+        """Init a new webcam controller for a certain webcam."""
+        # Store params
+        self.device = device
+        self.output_filename = output_filename
+        self.width = width
+        self.height = height
+        self.framerate = framerate
+        self.window_title = window_title
+        
+        # Image controls
+        self.image_controls = {
+            'gain': 3,
+            'exposure': 40,
+            'brightness': 13,
+            'contrast': 16,
+            'saturation': 69,
+            'hue': 0,
+            'white_balance_automatic': 0,
+            'gain_automatic': 0,
+            'auto_exposure': 1, # flipped
+            }
+        
+        self.read_stderr = None
+        self.ffplay_stderr = None
+        self.ffplay_stdout = None
+    
+    def start(self):
+        """Start displaying and encoding
+        
+        To stop, call the stop method, or close the ffplay window.
+        In the latter case, it will keep reading from the webcam until
+        you call cleanup or delete the object.
+        """
+        # Set the image controls
+        self.set_controls()
+        
+        #~ self.ffmpeg_proc = subprocess.Popen(['ffmpeg',
+            #~ '-f', 'video4linux2',
+            #~ '-i', self.device,
+            #~ '-vcodec', 'mpeg4',
+            #~ '-q', '2',
+            #~ '-f', 'rawvideo', '-',
+            
+        
+        # Create a process to read from the webcam
+        self.read_proc = subprocess.Popen(['ffmpeg',
+            '-f', 'video4linux2',
+            '-i', self.device,
+            '-vcodec', 'mpeg4',
+            '-q', '2',
+            '-f', 'rawvideo', '-',
+            ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Tee the compressed output to a file
+        self.tee_proc = subprocess.Popen(['tee', self.output_filename], 
+            stdin=self.read_proc.stdout,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Play the output
+        self.ffplay_proc = subprocess.Popen([
+            'ffplay', 
+            '-fflags', 'nobuffer',
+            '-window_title', self.window_title,
+            '-vf', 'fps=10',
+            '-',
+            ], 
+            stdin=self.tee_proc.stdout,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # This is supposed to allow SIGPIPE
+        # https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
+        self.read_proc.stdout.close()
+        self.tee_proc.stdout.close()        
+    
+    def set_controls(self):
+        """Use v4l2-ctl to set the controls"""
+        # Form the param list
+        cmd_list = ['v4l2-ctl',
+            '-d', self.device,
+            '--set-fmt-video=width=%d,height=%d' % (self.width, self.height),
+            '--set-parm=%d' % self.framerate,    
+            ]
+        for k, v in self.image_controls.items():
+            cmd_list += ['-c', '%s=%d' % (k, v)]
+
+        # Create a process to set the parameters and run it
+        self.set_proc = subprocess.Popen(cmd_list,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.set_stdout, self.set_stderr = self.set_proc.communicate()
+
+        if self.set_proc.returncode != 0:
+            print "failed to set parameters"
+            print self.set_stdout
+            print self.set_stderr
+            raise IOError("failed to set parameters")
+    
+    def stop(self):
+        self.ffplay_proc.terminate()
+        self.cleanup()
+    
+    def cleanup(self):
+        self.__del__()
+    
+    def __del__(self):
+        if self.ffplay_proc.returncode is None:
+            self.ffplay_stdout, self.ffplay_stderr = self.ffplay_proc.communicate()
+        if self.read_proc.returncode is None:
+            self.read_proc.terminate()
+            self.read_proc.wait()
+            self.read_stderr = self.read_proc.stderr.read()        
+        self.tee_proc.wait()
+
+
+
+
