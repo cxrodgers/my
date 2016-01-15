@@ -634,7 +634,7 @@ class WebcamController:
             '-vcodec', 'mpeg4',
             '-q', '2',
             '-f', 'rawvideo', '-',
-            ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            ], stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'))
 
         # Tee the compressed output to a file
         self.tee_proc = subprocess.Popen(['tee', self.output_filename], 
@@ -646,11 +646,10 @@ class WebcamController:
             'ffplay', 
             '-fflags', 'nobuffer',
             '-window_title', self.window_title,
-            '-vf', 'fps=10',
             '-',
             ], 
             stdin=self.tee_proc.stdout,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'))
 
         # This is supposed to allow SIGPIPE
         # https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
@@ -683,6 +682,9 @@ class WebcamController:
         self.ffplay_proc.terminate()
         self.cleanup()
     
+    def update(self):
+        pass
+    
     def cleanup(self):
         self.__del__()
     
@@ -696,5 +698,42 @@ class WebcamController:
         self.tee_proc.wait()
 
 
+class WebcamControllerFFplay(WebcamController):
+    """Simpler version that just plays with ffplay"""
+    def start(self):
+        self.set_controls()
+        self.ffplay_proc = subprocess.Popen([
+            'ffplay',
+            '-f', 'video4linux2',
+            '-window_title', self.window_title,
+            '-i', self.device,
+            ], 
+            stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'),
+            bufsize=1000000)
+        self.stdout_l = []
+        self.stderr_l = []
 
-
+    def stop(self):
+        self.ffplay_proc.terminate()
+        self.cleanup()
+    
+    def update(self):
+        """This is supposed to read the stuff on stderr but I can't
+        get it to not block"""
+        return
+        #~ self.stdout_l.append(self.ffplay_proc.stdout.read())
+        print "update"
+        data = self.ffplay_proc.stderr.read(1000000)
+        print "got data"
+        print len(data)
+        while len(data) == 1000000:
+            self.stderr_l.append(data)
+            data = self.ffplay_proc.stderr.read(1000000)
+        print "done"
+    
+    def __del__(self):
+        try:
+            if self.ffplay_proc.returncode is None:
+                self.ffplay_stdout, self.ffplay_stderr = self.ffplay_proc.communicate()        
+        except AttributeError:
+            pass
