@@ -694,7 +694,6 @@ class WebcamController:
         if self.read_proc.returncode is None:
             self.read_proc.terminate()
             self.read_proc.wait()
-            self.read_stderr = self.read_proc.stderr.read()        
         self.tee_proc.wait()
 
 
