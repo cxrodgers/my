@@ -244,8 +244,10 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     # Init the pipe
     # We set stderr to PIPE to keep it from writing to screen
     # Do this outside the try, because errors here won't init the pipe anyway
+    # Actually, stderr will fill up and the process will hang
+    # http://stackoverflow.com/questions/375427/non-blocking-read-on-a-subprocess-pipe-in-python/4896288#4896288
     pipe = subprocess.Popen(command, 
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+        stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'), 
         bufsize=bufsize)
 
     # Catch any IO errors and restore stdout
