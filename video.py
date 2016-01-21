@@ -594,7 +594,7 @@ class WebcamController:
         
         # Image controls
         self.image_controls = {
-            'gain': 1,
+            'gain': 2,
             'exposure': 8,
             'brightness': 13,
             'contrast': 25,
