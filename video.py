@@ -630,13 +630,17 @@ class WebcamController:
             
         
         # Create a process to read from the webcam
+        # stdin should be pipe so it doesn't suck up keypresses (??)
+        # stderr should be null, so pipe doesn't fill up and block
+        # stdout will go to downstream process
         self.read_proc = subprocess.Popen(['ffmpeg',
             '-f', 'video4linux2',
             '-i', self.device,
             '-vcodec', 'mpeg4',
             '-q', '2',
             '-f', 'rawvideo', '-',
-            ], stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'))
+            ], stdin=subprocess.PIPE, 
+            stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'))
 
         # Tee the compressed output to a file
         self.tee_proc = subprocess.Popen(['tee', self.output_filename], 
