@@ -9,6 +9,61 @@ class OutOfFrames(BaseException):
     """Exception raised when more frames cannot be extracted from a video"""
     pass
 
+def ffmpeg_frame_string(filename, frame_time=None, frame_number=None):
+    """Given a frame time or number, create a string for ffmpeg -ss.
+    
+    This attempts to reverse engineer the way that ffmpeg converts frame
+    times to frame numbers, so that we can specify an exact frame number
+    and get that exact frame.
+    
+    As far as I can tell, if you request time T, 
+    ffmpeg rounds T to the nearest millisecond, 
+    and then gives you frame N, 
+    where N is ceil(T * frame_rate).
+    
+    So -.001 gives you the first frame, and .001 gives you the second frame.
+    
+    It's hard to predict what will happen within one millisecond of a
+    frame time, so try to avoid that if exactness is important.
+    
+    
+    filename : video file. Used to get frame rate.
+    
+    frame_time : This one takes precedence if both are provided.
+        We simply subtract half of the frame interval, and then round to
+        the nearest millisecond to account for ffmpeg's rounding up.
+    
+    frame_number : This one is used if frame_time is not specified.
+        We convert to a frame time using
+            ((frame_number / frame_rate) - 1 ms) 
+            rounded down to the nearest millisecond.
+        This should give accurate results as long as frame rate is not
+        >500 fps or so.
+    
+    frametime, frame_number : which frame to get
+        if you request time T, ffmpeg gives you frame N, where N is 
+        ceil(time * frame_rate). So -.001 gives you the first frame, and
+        .001 gives you the second frame. It's hard to predict what will
+        happen with one ms of the exact frame time due to rounding errors.
+    
+    Returns : string, suitable for -ss
+    """
+    if frame_number is not None:
+        # If specified by number, convert to time
+        frame_rate = get_video_params(filename)[2]
+        use_frame_time = (frame_number / float(frame_rate)) - .001
+        use_frame_time = np.floor(use_frame_time * 1000) / 1000.
+    
+    elif frametime is not None:
+        frame_rate = get_video_params(filename)[2]
+        use_frame_time = frametime - (1. / (2 * frame_rate))
+    
+    else:
+        raise ValueError("must specify frame by time or number")
+    
+    use_frame_string = '%0.3f' % use_frame_time
+    return use_frame_string
+
 def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
     pix_fmt='gray', bufsize=10**9):
     """Returns a single frame from a video as an array.
@@ -16,22 +71,10 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
     This creates an ffmpeg process and extracts data from it with a pipe.
 
     filename : video filename
-    frametime, frame_number : which frame to get
-        if you request time T, ffmpeg gives you frame N, where N is 
-        ceil(time * frame_rate). So -.001 gives you the first frame, and
-        .001 gives you the second frame. It's hard to predict what will
-        happen with one ms of the exact frame time due to rounding errors.
-        
-        So, if frame_number is not None:
-            This passes ((frame_number / frame_rate) - 1 ms) rounded down
-            to the nearest millisecond. This should give accurate results
-            as long as frame rate is not >500 fps or so.
-        else if frame_number is not None:
-            Then this subtracts half a frame time from the frame time you
-            requested, rounds to the nearest millisecond, and passes to ffmpeg.
-            This will tend to give an unbiased estimate of the closest frame.
-        else if frame_string is not None:
-            The string is passed directly to ffmpeg
+    frame_string : to pass to -ss
+    frametime, frame_number:
+        If frame_string is None, then these are passed to 
+        ffmpeg_frame_string to generate a frame string.
         
     pix_fmt : the "output" format of ffmpeg.
         currently only gray and rgb24 are accepted, because I need to 
@@ -60,24 +103,14 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
     else:
         raise ValueError("can't handle pix_fmt:", pix_fmt)
     
-    # Choose the frame time string
-    if frame_number is not None:
-        frame_rate = get_video_params(filename)[2]
-        use_frame_time = (frame_number / float(frame_rate)) - .001
-        use_frame_time = np.floor(use_frame_time * 1000) / 1000.
-        use_frame_string = '%0.3f' % use_frame_time
-    elif frametime is not None:
-        frame_rate = get_video_params(filename)[2]
-        use_frame_time = frametime - (1. / (2 * frame_rate))
-        use_frame_string = '%0.3f' % use_frame_time
-    else:
-        if frame_string is None:
-            raise ValueError("must specify frame by time, number, or string")
-        use_frame_string = frame_string
+    # Generate a frame string if we need it
+    if frame_string is None:
+        frame_string = ffmpeg_frame_string(filename, 
+            frame_time=frametime, frame_number=frame_numebr)
     
     # Create the command
     command = ['ffmpeg', 
-        '-ss', use_frame_string,
+        '-ss', frame_string,
         '-i', filename,
         '-vframes', '1',       
         '-f', 'image2pipe',
