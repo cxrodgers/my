@@ -169,6 +169,7 @@ def poster_defaults():
     matplotlib.rcParams['axes.titlesize'] = 16
     matplotlib.rcParams['xtick.labelsize'] = 16
     matplotlib.rcParams['ytick.labelsize'] = 16
+    matplotlib.rcParams['font.size'] = 16 # ax.text objects
 
 def rescue_tick(ax=None, f=None, x=3, y=3):
     # Determine what axes to process
