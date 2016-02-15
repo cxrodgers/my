@@ -644,36 +644,43 @@ class WebcamController:
         self.ffplay_stderr = None
         self.ffplay_stdout = None
     
-    def start(self):
+    def start(self, print_ffplay_proc_stderr=False, print_read_proc_stderr=False):
         """Start displaying and encoding
         
         To stop, call the stop method, or close the ffplay window.
         In the latter case, it will keep reading from the webcam until
         you call cleanup or delete the object.
+        
+        print_ffplay_proc_stderr : If True, prints the status messages to
+            the terminal from the the process that plays video to the screen.
+            If False, writes to /dev/null.
+        print_read_proc_stderr : Same, but for the process that reads from
+            the webcam.
         """
         # Set the image controls
         self.set_controls()
-        
-        #~ self.ffmpeg_proc = subprocess.Popen(['ffmpeg',
-            #~ '-f', 'video4linux2',
-            #~ '-i', self.device,
-            #~ '-vcodec', 'mpeg4',
-            #~ '-q', '2',
-            #~ '-f', 'rawvideo', '-',
-            
         
         # Create a process to read from the webcam
         # stdin should be pipe so it doesn't suck up keypresses (??)
         # stderr should be null, so pipe doesn't fill up and block
         # stdout will go to downstream process
-        self.read_proc = subprocess.Popen(['ffmpeg',
+        if print_read_proc_stderr:
+            read_proc_stderr = None
+        else:
+            read_proc_stderr = open(os.devnull, 'w')
+        read_proc_cmd_l = ['ffmpeg',
             '-f', 'video4linux2',
             '-i', self.device,
             '-vcodec', 'mpeg4',
             '-q', '2',
             '-f', 'rawvideo', '-',
-            ], stdin=subprocess.PIPE, 
-            stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'))
+            ] 
+        self.read_proc = subprocess.Popen(read_proc_cmd_l, stdin=subprocess.PIPE, 
+            stdout=subprocess.PIPE, stderr=read_proc_stderr)
+        
+        # Sometimes the read_proc fails because the device is busy or "Input/ouput error"
+        # but the returncode isn't set or anything so I don't know how to
+        # detect this.
 
         # Tee the compressed output to a file
         self.tee_proc = subprocess.Popen(['tee', self.output_filename], 
@@ -681,6 +688,10 @@ class WebcamController:
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Play the output
+        if print_ffplay_proc_stderr:
+            ffplay_proc_stderr = None
+        else:
+            ffplay_proc_stderr = open(os.devnull, 'w')        
         self.ffplay_proc = subprocess.Popen([
             'ffplay', 
             '-fflags', 'nobuffer',
@@ -688,7 +699,7 @@ class WebcamController:
             '-',
             ], 
             stdin=self.tee_proc.stdout,
-            stdout=subprocess.PIPE, stderr=open(os.devnull, 'w'))
+            stdout=subprocess.PIPE, stderr=ffplay_proc_stderr)
 
         # This is supposed to allow SIGPIPE
         # https://docs.python.org/2/library/subprocess.html#replacing-shell-pipeline
