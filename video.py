@@ -106,7 +106,7 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
     # Generate a frame string if we need it
     if frame_string is None:
         frame_string = ffmpeg_frame_string(filename, 
-            frame_time=frametime, frame_number=frame_numebr)
+            frame_time=frametime, frame_number=frame_number)
     
     # Create the command
     command = ['ffmpeg', 
