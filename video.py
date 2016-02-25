@@ -54,9 +54,9 @@ def ffmpeg_frame_string(filename, frame_time=None, frame_number=None):
         use_frame_time = (frame_number / float(frame_rate)) - .001
         use_frame_time = np.floor(use_frame_time * 1000) / 1000.
     
-    elif frametime is not None:
+    elif frame_time is not None:
         frame_rate = get_video_params(filename)[2]
-        use_frame_time = frametime - (1. / (2 * frame_rate))
+        use_frame_time = frame_time - (1. / (2 * frame_rate))
     
     else:
         raise ValueError("must specify frame by time or number")
