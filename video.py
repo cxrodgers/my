@@ -401,8 +401,11 @@ def get_video_aspect(video_filename):
 def get_video_duration(video_filename, return_as_timedelta=False):
     """Return duration of video using ffprobe"""
     # Video duration and hence start time
-    proc = subprocess.Popen(['ffprobe', video_filename],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        proc = subprocess.Popen(['ffprobe', video_filename],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except TypeError:
+        raise ValueError("bad video filename: %r" % video_filename)
     res = proc.communicate()[0]
 
     # Check if ffprobe failed, probably on a bad file
@@ -443,7 +446,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
     import my.plot
     # Not sure why this doesn't work if it's lower down in the function
     if interactive:
-        plt.ion()        
+        plt.ion() 
 
     # Get frames
     duration = get_video_duration(vfile)
