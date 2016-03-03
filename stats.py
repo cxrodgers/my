@@ -7,6 +7,15 @@ try:
 except ImportError:
     # it's all good
     pass
+
+def mad_1d(arr1d):
+    """My implementation of MAD.
+    
+    I think there is a bug in statsmodels.robust.mad because the
+    median is not subtracted from the data
+    """
+    deviations = arr1d - np.median(arr1d)
+    return np.median(np.abs(deviations)) / .6745
     
 def binom_confint(x=None, n=None, data=None, alpha=.95, meth='beta'):
     """Calculates the confidence interval for binomial data.
