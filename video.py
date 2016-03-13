@@ -429,6 +429,47 @@ def get_video_duration(video_filename, return_as_timedelta=False):
     else:
         return video_duration.total_seconds()
 
+def get_video_duration2(video_filename, return_as_timedelta=False):
+    """A version that relies on mediainfo instead of ffprobe
+    
+    mediainfo --Inform="General;%Duration/String3%" \
+        /home/mouse/compressed_eye/B4-20160311155612.mkv
+    00:38:20.200
+    """
+    try:
+        # Don't use quotation marks in arguments to Popen
+        proc = subprocess.Popen([
+            'mediainfo', 
+            '--Inform=General;%Duration/String3%',
+            video_filename],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except TypeError:
+        # This also catches video_filename is None or np.nan
+        raise ValueError("bad video filename: %r" % video_filename)
+    except OSError:
+        raise OSError("can't run mediainfo, is it installed?")
+    
+    # Answer should be in stdout
+    stdout, stderr = proc.communicate()
+
+    # Convert to timedelta
+    try:
+        video_duration_temp = datetime.datetime.strptime(
+            stdout.strip(), '%H:%M:%S.%f')
+    except ValueError:
+        raise ValueError("cannot strptime this: " + stdout)
+    video_duration = datetime.timedelta(
+        hours=video_duration_temp.hour, 
+        minutes=video_duration_temp.minute, 
+        seconds=video_duration_temp.second,
+        microseconds=video_duration_temp.microsecond)    
+    
+    if return_as_timedelta:
+        return video_duration
+    else:
+        return video_duration.total_seconds()    
+    
+
 def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
     """Displays a subset of frames from video so the user can specify an ROI.
     
