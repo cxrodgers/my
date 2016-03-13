@@ -467,8 +467,7 @@ def get_video_duration2(video_filename, return_as_timedelta=False):
     if return_as_timedelta:
         return video_duration
     else:
-        return video_duration.total_seconds()    
-    
+        return video_duration.total_seconds()
 
 def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
     """Displays a subset of frames from video so the user can specify an ROI.
@@ -649,7 +648,10 @@ def get_video_params(video_filename):
         # The fourth group in comma_split should be %f fps
         frame_rate_fps = comma_split[4].split()
         if frame_rate_fps[1] != 'fps':
-            raise ValueError("malformed frame rate:", frame_rate_fps)
+            # Sometimes this is a bitrate, with MKV/MPEG4 files
+            frame_rate_fps = comma_split[3].split()
+            if frame_rate_fps[1] != 'tbr':
+                raise ValueError("malformed frame rate:", frame_rate_fps)
         frame_rate_l.append(float(frame_rate_fps[0]))
     
     if len(width_height_l) > 1:
