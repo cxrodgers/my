@@ -494,7 +494,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
         plt.ion() 
 
     # Get frames
-    duration = get_video_duration(vfile)
+    duration = get_video_duration2(vfile)
     frametimes = np.linspace(duration * .1, duration * .9, n_frames)
     frames = []
     for frametime in frametimes:
