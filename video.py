@@ -675,8 +675,8 @@ class WebcamController:
         
         # Image controls
         self.image_controls = {
-            'gain': 6,
-            'exposure': 8,
+            'gain': 3,
+            'exposure': 20,
             'brightness': 40,
             'contrast': 50,
             'saturation': 69,
@@ -717,8 +717,9 @@ class WebcamController:
         read_proc_cmd_l = ['ffmpeg',
             '-f', 'video4linux2',
             '-i', self.device,
-            '-vcodec', 'mpeg4',
-            '-q', '2',
+            '-vcodec', 'libx264',
+            '-qp', '0',
+            '-preset', 'ultrafast',
             '-f', 'rawvideo', '-',
             ] 
         self.read_proc = subprocess.Popen(read_proc_cmd_l, stdin=subprocess.PIPE, 
@@ -740,7 +741,8 @@ class WebcamController:
             ffplay_proc_stderr = open(os.devnull, 'w')        
         self.ffplay_proc = subprocess.Popen([
             'ffplay', 
-            '-fflags', 'nobuffer',
+            #~ '-fflags', 'nobuffer', # not compatible with analyzeduration or probesize?
+            '-analyzeduration', '500000', # 500 ms delay in starting
             '-window_title', self.window_title,
             '-',
             ], 
