@@ -335,6 +335,11 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
         # Keep the leftover data and the error signal (ffmpeg output)
         stdout, stderr = pipe.communicate()
 
+    if frames_read != n_frames:
+        # This usually happens when there's some rounding error in the frame
+        # times
+        raise ValueError("did not read the correct number of frames")
+
     # Stick chunks together
     if len(res_l) == 0:
         print "warning: no data found"
@@ -489,7 +494,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
         plt.ion() 
 
     # Get frames
-    duration = get_video_duration(vfile)
+    duration = get_video_duration2(vfile)
     frametimes = np.linspace(duration * .1, duration * .9, n_frames)
     frames = []
     for frametime in frametimes:
