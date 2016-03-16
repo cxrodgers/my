@@ -678,6 +678,9 @@ class WebcamController:
         self.framerate = framerate
         self.window_title = window_title
         
+        if self.output_filename is None:
+            self.output_filename = '/dev/null'
+        
         # Image controls
         self.image_controls = {
             'gain': 3,
@@ -723,7 +726,7 @@ class WebcamController:
             '-f', 'video4linux2',
             '-i', self.device,
             '-vcodec', 'libx264',
-            '-qp', '0',
+            '-qp', '2',
             '-preset', 'ultrafast',
             '-f', 'rawvideo', '-',
             ] 
