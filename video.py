@@ -335,7 +335,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
         # Keep the leftover data and the error signal (ffmpeg output)
         stdout, stderr = pipe.communicate()
 
-    if frames_read != n_frames:
+    if not np.isinf(n_frames) and frames_read != n_frames:
         # This usually happens when there's some rounding error in the frame
         # times
         raise ValueError("did not read the correct number of frames")
@@ -726,7 +726,8 @@ class WebcamController:
             '-f', 'video4linux2',
             '-i', self.device,
             '-vcodec', 'libx264',
-            '-qp', '2',
+            '-qp', '0',
+            '-vf', 'format=gray',
             '-preset', 'ultrafast',
             '-f', 'rawvideo', '-',
             ] 
