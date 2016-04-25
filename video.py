@@ -358,6 +358,9 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
 
 def get_video_aspect(video_filename):
     """Returns width, height of video using ffprobe"""
+    if not os.path.exists(video_filename):
+        raise ValueError("%s does not exist" % video_filename)
+    
     # Video duration and hence start time
     proc = subprocess.Popen(['ffprobe', video_filename],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
