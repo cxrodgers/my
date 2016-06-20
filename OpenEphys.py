@@ -449,7 +449,7 @@ def writeChannelMapFile(mapping, filename='mapping.prb'):
                       indent = 4, separators = (',', ': ') \
                  ) 
 
-def chunked_pack(folderpath, filename='openephys.dat', dref=None,
+def pack(folderpath, filename='openephys.dat', dref=None,
     chunk_size=4000, start_record=None, stop_record=None, verbose=True,
     **kwargs):
     """Read OpenEphys formatted data in chunks and write to a flat binary file.
