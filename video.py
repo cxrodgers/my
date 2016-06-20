@@ -335,7 +335,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
         # Keep the leftover data and the error signal (ffmpeg output)
         stdout, stderr = pipe.communicate()
 
-    if frames_read != n_frames:
+    if not np.isinf(n_frames) and frames_read != n_frames:
         # This usually happens when there's some rounding error in the frame
         # times
         raise ValueError("did not read the correct number of frames")
@@ -358,6 +358,9 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
 
 def get_video_aspect(video_filename):
     """Returns width, height of video using ffprobe"""
+    if not os.path.exists(video_filename):
+        raise ValueError("%s does not exist" % video_filename)
+    
     # Video duration and hence start time
     proc = subprocess.Popen(['ffprobe', video_filename],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -667,9 +670,13 @@ def get_video_params(video_filename):
 class WebcamController:
     def __init__(self, device='/dev/video0', output_filename='/dev/null',
         width=320, height=240, framerate=30,
-        window_title='webcam', 
+        window_title='webcam', image_controls=None,
         ):
-        """Init a new webcam controller for a certain webcam."""
+        """Init a new webcam controller for a certain webcam.
+        
+        image_controls : dict containing controls like gain, exposure
+            They will be set to reasonable defaults if not specified.
+        """
         # Store params
         self.device = device
         self.output_filename = output_filename
@@ -693,6 +700,8 @@ class WebcamController:
             'gain_automatic': 0,
             'auto_exposure': 1, # flipped
             }
+        if image_controls is not None:
+            self.image_controls.update(image_controls)
         
         self.read_stderr = None
         self.ffplay_stderr = None
@@ -726,7 +735,8 @@ class WebcamController:
             '-f', 'video4linux2',
             '-i', self.device,
             '-vcodec', 'libx264',
-            '-qp', '2',
+            '-qp', '0',
+            '-vf', 'format=gray',
             '-preset', 'ultrafast',
             '-f', 'rawvideo', '-',
             ] 
