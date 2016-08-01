@@ -664,6 +664,8 @@ def get_video_params(video_filename):
     
     if len(width_height_l) > 1:
         print "warning: multiple video streams found, returning first"
+    elif len(width_height_l) == 0:
+        raise ValueError("no video streams found in %s" % video_filename)
     return width_height_l[0][0], width_height_l[0][1], frame_rate_l[0]
 
 
