@@ -708,6 +708,10 @@ class WebcamController:
         self.read_stderr = None
         self.ffplay_stderr = None
         self.ffplay_stdout = None
+        
+        self.ffplay_proc = None
+        self.read_proc = None
+        self.tee_proc = None
     
     def start(self, print_ffplay_proc_stderr=False, print_read_proc_stderr=False):
         """Start displaying and encoding
@@ -797,7 +801,8 @@ class WebcamController:
             raise IOError("failed to set parameters")
     
     def stop(self):
-        self.ffplay_proc.terminate()
+        if self.ffplay_proc is not None:
+            self.ffplay_proc.terminate()
         self.cleanup()
     
     def update(self):
@@ -807,12 +812,18 @@ class WebcamController:
         self.__del__()
     
     def __del__(self):
-        if self.ffplay_proc.returncode is None:
-            self.ffplay_stdout, self.ffplay_stderr = self.ffplay_proc.communicate()
-        if self.read_proc.returncode is None:
-            self.read_proc.terminate()
-            self.read_proc.wait()
-        self.tee_proc.wait()
+        if self.ffplay_proc is not None:
+            if self.ffplay_proc.returncode is None:
+                self.ffplay_stdout, self.ffplay_stderr = \
+                    self.ffplay_proc.communicate()
+        
+        if self.read_proc is not None:
+            if self.read_proc.returncode is None:
+                self.read_proc.terminate()
+                self.read_proc.wait()
+        
+        if self.tee_proc is not None:
+            self.tee_proc.wait()
 
 
 class WebcamControllerFFplay(WebcamController):
