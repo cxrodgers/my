@@ -6,6 +6,7 @@ import scipy.signal
 import my.OpenEphys
 import BeWatch
 import ArduFSM
+import tables
 
 probename2ch_list = {
     'edge': [24, 26, 25, 29, 27, 31, 28, 1, 30, 5, 3, 0, 2, 4, 9, 11, 13, 
@@ -222,3 +223,51 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
 
     b2n_fit = BeWatch.syncing.longest_unique_fit(n_onsets, backlight_times)
     return b2n_fit
+
+def load_all_spikes_and_clusters(kwik_path):
+    """Load all spikes and clusters from session.
+    
+    Returns: dict, with these items:
+        'spike_times' : a sorted array of all spike times, in seconds
+        'clusters' : the cluster identity of each spike time
+        'group2cluster' : dict, with these items:
+            'noise': array of clusters belong to noise
+            'mua': array of clusters belong to mua
+            'good': array of clusters belong to good
+            'unsorted': array of clusters belong to unsorted
+    
+    The MUA and MSUA can easily be extracted:
+        mua = spike_times[np.in1d(clusters, group2cluster['mua'])]
+        msua = spike_times[np.in1d(clusters, group2cluster['good'])]
+    """
+    ## Load spikes
+    # 0=Noise, 1=MUA, 2=Good, 3=Unsorted
+    with tables.open_file(kwik_path, 'r') as h5file:
+        # Get all the unique cluster numbers
+        clusters = h5file.get_node('/channel_groups/0/spikes/clusters/main')[:]
+        unique_clusters = np.unique(clusters)
+        
+        # Arrange the cluster numbers by the type of cluster (noise, etc)
+        group2key = {0: 'noise', 1: 'mua', 2: 'good', 3: 'unsorted'}
+        group2cluster = {'noise': [], 'mua': [], 'good': [], 'unsorted': []}
+        for cluster in unique_clusters:
+            cg = h5file.get_node_attr(
+                '/channel_groups/0/clusters/main/%d' % cluster,
+                'cluster_group')
+            key = group2key[cg]
+            group2cluster[key].append(cluster)
+        
+        # Get all of the spike times
+        spike_times = h5file.get_node(
+            '/channel_groups/0/spikes/time_samples')[:] / 30e3
+
+    # Sort spike times
+    sortmask = np.argsort(spike_times)
+    spike_times = spike_times[sortmask]
+    clusters = clusters[sortmask]
+
+    return {
+        'spike_times': spike_times,
+        'clusters': clusters,
+        'group2cluster': group2cluster,
+    }
