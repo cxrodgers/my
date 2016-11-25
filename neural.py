@@ -3,6 +3,9 @@ import OpenEphys
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal
+import my.OpenEphys
+import BeWatch
+import ArduFSM
 
 probename2ch_list = {
     'edge': [24, 26, 25, 29, 27, 31, 28, 1, 30, 5, 3, 0, 2, 4, 9, 11, 13, 
@@ -144,3 +147,78 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
         ax.set_ylim((ax.get_ylim()[0], legend_y_offset + 200))
     
     return got_data
+
+def extract_onsets_from_analog_signal(h5_node, h5_col=35, quick_stride=15000,
+    thresh_on=2**14):
+    """Find the times that the analog signal went high
+    
+    First searches coarsely by subsampling by quick_stride
+    Then searches more finely around each hit
+    """
+    # Coarse search
+    coarse = h5_node[::quick_stride, h5_col]
+    coarse_onsets = np.where(np.diff((coarse > thresh_on).astype(np.int)) == 1)[0]
+    # For each coarse_onset, we know that coarse[coarse_onset+1] is >thresh,
+    # and coarse[coarse_onset] is <= thresh.
+
+    # Now find the exact onset in the range around coarse onset
+    onsets = []
+    for coarse_onset in coarse_onsets:
+        # Slice around the coarse hit
+        # We know it has to be somewhere in
+        # [coarse_onset*quick_stride:(coarse_onset+1)*quick_stride], but
+        # inclusive of the right limit.
+        slc = h5_node[
+            coarse_onset*quick_stride:(coarse_onset+1)*quick_stride + 1, 
+            h5_col]
+        fine_onsets = np.where(np.diff((slc > thresh_on).astype(np.int)) == 1)[0]
+        
+        if len(fine_onsets) == 0:
+            raise ValueError("no onset found, but supposed to be")
+        elif len(fine_onsets) > 1:
+            raise ValueError("too many onsets in slice")
+        
+        final_onset = fine_onsets[0] + coarse_onset * quick_stride
+        onsets.append(final_onset)
+    
+    return np.asarray(onsets)
+
+def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
+    """Sync neural and behavior
+    
+    neural_syncing_signal_filename : filename of channel with house light signal
+        This should be LOW during the sync pulse
+    
+    behavior_filename : logfile of session
+        Will use BeWatch.syncing.get_light_times_from_behavior_file
+        to get the light times
+    
+    Returns: b2n_fit
+    """
+    # Extract the ain36 signal
+    chdata = my.OpenEphys.loadContinuous(neural_syncing_signal_filename,
+        dtype=np.int16)
+    rawdata = np.transpose([chdata['data']])
+
+    # Convert HIGH to LOW
+    rawdata = 2**15 - rawdata
+
+    # The light should always be on for at least 0.5s, prob more
+    # So first threshold by striding over 0.5s intervals, then refine
+    hlight_col = 0
+    n_onsets = extract_onsets_from_analog_signal(rawdata, hlight_col, 
+        quick_stride=100) / 30e3
+
+    # Extract light on times from behavior file
+    b_light_on, b_light_off = BeWatch.syncing.get_light_times_from_behavior_file(
+        logfile=behavior_filename)
+    lines = ArduFSM.TrialSpeak.read_lines_from_file(behavior_filename)
+    parsed_df_by_trial = \
+        ArduFSM.TrialSpeak.parse_lines_into_df_split_by_trial(lines)
+
+    # Find the time of transition into inter_trial_interval (13)
+    backlight_times = ArduFSM.TrialSpeak.identify_state_change_times(
+        parsed_df_by_trial, state1=1, show_warnings=True)
+
+    b2n_fit = BeWatch.syncing.longest_unique_fit(n_onsets, backlight_times)
+    return b2n_fit
