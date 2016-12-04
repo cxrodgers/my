@@ -477,7 +477,8 @@ def get_video_duration2(video_filename, return_as_timedelta=False):
     else:
         return video_duration.total_seconds()
 
-def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
+def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
+    hints=None):
     """Displays a subset of frames from video so the user can specify an ROI.
     
     If interactive is False, the frames are simply displayed in a figure.
@@ -489,6 +490,10 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
     x0 < x1 and y0 < y1.
     
     Finally the results are returned as a dict with keys x0, x1, y0, y1.
+    
+    hints : dict, or None
+        If it has key x0, x1, y0, or y1, the corresponding values will
+        be displayed as a hint to the user while selecting.
     """
     import matplotlib.pyplot as plt
     import my.plot
@@ -523,9 +528,19 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True):
                 
                 # Get entries for each params
                 for param in params_l:
+                    # Form request string, using hint if available
+                    hint = None
+                    if hints is not None and param in hints:
+                        hint = hints[param]
+                    if hint is None:
+                        request_s = 'Enter %s: ' % param
+                    else:
+                        request_s = 'Enter %s [hint = %d]: ' % (param, hint)
+                    
+                    # Keep getting input till it is valid
                     while True:
                         try:
-                            val = raw_input("Enter %s: " % param)
+                            val = raw_input(request_s)
                             break
                         except ValueError:
                             print "invalid entry"
