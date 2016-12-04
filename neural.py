@@ -7,6 +7,8 @@ import my.OpenEphys
 import BeWatch
 import ArduFSM
 import tables
+import kkpandas
+import Adapters
 
 probename2ch_list = {
     'edge': [24, 26, 25, 29, 27, 31, 28, 1, 30, 5, 3, 0, 2, 4, 9, 11, 13, 
@@ -271,3 +273,87 @@ def load_all_spikes_and_clusters(kwik_path):
         'clusters': clusters,
         'group2cluster': group2cluster,
     }
+
+def load_features(kwx_path):
+    """Loads features from kwx file
+    
+    Returns: features
+        array with shape (n_spikes, n_features)
+        n_features = n_channels * 3
+    """
+    # Load features masks
+    # this is n_spikes x n_features x 2
+    with tables.open_file(kwx_path, 'r') as h5file:
+        features_masks = h5file.get_node('/channel_groups/0/features_masks')
+        features = features_masks[:, :, 0]
+    return features
+
+def load_masks(kwx_path):
+    """Loads masks from kwx file
+    
+    We subsample the masks by 3 since they are redundant over features
+    
+    Returns: masks
+        array with shape (n_spikes, n_channels)
+    """    
+    # Load features masks
+    # this is n_spikes x n_features x 2
+    with tables.open_file(kwx_path, 'r') as h5file:
+        features_masks = h5file.get_node('/channel_groups/0/features_masks')
+        masks = features_masks[:, ::3, 1]
+    return masks
+
+
+def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
+    spike_range_t, event_range_t):
+    """Lock spike times to event times and return Folded
+    
+    spike_times : spike times
+    event_times : event times
+    dstart, dstop : intervals to pass to Folded
+    spike_range_t : earliest and latest possible time of spikes
+    event_times_t : earliest and latest possible event times
+    
+    Only spikes and events in the overlap of the spike and event intervals
+    are included. For convenience dstart is added to the start and dstop
+    is added to the stop of the overlap interval.
+    """
+    t_start = np.max([spike_range_t[0], event_range_t[0]]) + dstart
+    t_stop = np.min([spike_range_t[1], event_range_t[1]]) + dstop
+    spike_times = spike_times[
+        (spike_times >= t_start) &
+        (spike_times < t_stop)
+    ]
+    event_times = event_times[
+        (event_times >= t_start) &
+        (event_times < t_stop)
+    ]    
+    
+    folded = kkpandas.Folded.from_flat(spike_times, centers=event_times,
+        dstart=dstart, dstop=dstop)
+    
+    return folded
+
+def get_channel_mapping(sorted_channels_to_remove):
+    """Returns dataflow channel mapping, leaving out certain channels.
+    
+    sorted_channels_to_remove : list of channels to remove, using the GUI sorted
+        numbering. (Same as in probe file naming.)
+    
+    Returns : dataflow df with channels removed
+        Also adds a 'kwx_order' column which is the index into the kwx file,
+        which is Intan numbering accounting for missing channels
+    """
+    # Main adapter dataflow
+    dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON2_df
+
+    # Ensure it is sorted by Srt
+    dataflow = dataflow.sort_values(by='Srt')
+
+    # Drop the broken channels
+    dataflow_minus = dataflow.ix[~dataflow.Srt.isin(
+        sorted_channels_to_remove)].copy()
+    
+    dataflow_minus['kwx_order'] = dataflow_minus['Int'].rank().astype(np.int) - 1
+    
+    return dataflow_minus
