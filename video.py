@@ -461,6 +461,9 @@ def get_video_duration2(video_filename, return_as_timedelta=False):
     stdout, stderr = proc.communicate()
 
     # Convert to timedelta
+    if stdout.strip() == '':
+        raise ValueError("cannot extra duration info from %s" % video_filename)
+    
     try:
         video_duration_temp = datetime.datetime.strptime(
             stdout.strip(), '%H:%M:%S.%f')
