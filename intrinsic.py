@@ -16,40 +16,41 @@ def parse_tiffs_into_array(session_root_path):
     session_dirs = sorted(glob.glob(os.path.join(session_root_path, '*/')))
 
     for session_dir in session_dirs:
-        session_name = os.path.split(os.path.normpath(session_dir))[1]
+        _parse_tiffs_into_array(session_dir, session_root_path)
 
-        file_list = sorted(os.listdir(session_dir))
+def _parse_tiffs_into_array(session_dir, session_root_path):
+    session_name = os.path.split(os.path.normpath(session_dir))[1]
 
-        pat = 'trial(\d+) frame(\d+)\.tif'
-        file_list = my.misc.regex_filter(pat, file_list)
-        trial_nums = my.misc.regex_capture(pat, file_list, 0)
-        frame_nums = my.misc.regex_capture(pat, file_list, 1)
-        file_df = pandas.DataFrame(
-            {'filename': file_list, 'trial': map(int, trial_nums),
-                'frame': map(int, frame_nums)})
+    file_list = sorted(os.listdir(session_dir))
 
-        trial_list = []
-        for trial in file_df.trial.unique():
-            print "loading trial", trial
-            frame_list = []
-            for frame in file_df.frame.unique():
-                filename_rows = file_df[
-                    (file_df.trial == trial) & (file_df.frame == frame)]
-                assert len(filename_rows) == 1
-                filename = filename_rows.iloc[0]['filename']
-                
-                img = plt.imread(os.path.join(session_dir, filename))
-                frame_list.append(img)
-            trial_list.append(frame_list)
+    pat = 'trial(\d+) frame(\d+)\.tif'
+    file_list = my.misc.regex_filter(pat, file_list)
+    trial_nums = my.misc.regex_capture(pat, file_list, 0)
+    frame_nums = my.misc.regex_capture(pat, file_list, 1)
+    file_df = pandas.DataFrame(
+        {'filename': file_list, 'trial': map(int, trial_nums),
+            'frame': map(int, frame_nums)})
 
-        # ntrials, nframes, nrows (?), ncols
-        print "saving session", session_name
-        arr = np.asarray(trial_list)
-        np.save(
-            os.path.join(session_root_path, 'image_data_%s' % session_name), 
-            arr)
-        del arr
+    trial_list = []
+    for trial in file_df.trial.unique():
+        print "loading trial", trial
+        frame_list = []
+        for frame in file_df.frame.unique():
+            filename_rows = file_df[
+                (file_df.trial == trial) & (file_df.frame == frame)]
+            assert len(filename_rows) == 1
+            filename = filename_rows.iloc[0]['filename']
+            
+            img = plt.imread(os.path.join(session_dir, filename))
+            frame_list.append(img)
+        trial_list.append(frame_list)
 
+    # ntrials, nframes, nrows (?), ncols
+    print "saving session", session_name
+    arr = np.asarray(trial_list)
+    np.save(
+        os.path.join(session_root_path, 'image_data_%s' % session_name), 
+        arr)
 
 ## various plotting functions
 def make_slideshow(image3d, c_panels=10, r_panels=None):
