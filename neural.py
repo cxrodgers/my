@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal
 import my.OpenEphys
-import BeWatch
+import MCwatch.behavior
 import ArduFSM
 import tables
 import kkpandas
@@ -193,7 +193,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
         This should be LOW during the sync pulse
     
     behavior_filename : logfile of session
-        Will use BeWatch.syncing.get_light_times_from_behavior_file
+        Will use MCwatch.behavior.syncing.get_light_times_from_behavior_file
         to get the light times
     
     Returns: b2n_fit
@@ -213,7 +213,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
         quick_stride=100) / 30e3
 
     # Extract light on times from behavior file
-    b_light_on, b_light_off = BeWatch.syncing.get_light_times_from_behavior_file(
+    b_light_on, b_light_off = MCwatch.behavior.syncing.get_light_times_from_behavior_file(
         logfile=behavior_filename)
     lines = ArduFSM.TrialSpeak.read_lines_from_file(behavior_filename)
     parsed_df_by_trial = \
@@ -223,7 +223,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     backlight_times = ArduFSM.TrialSpeak.identify_state_change_times(
         parsed_df_by_trial, state1=1, show_warnings=True)
 
-    b2n_fit = BeWatch.syncing.longest_unique_fit(n_onsets, backlight_times)
+    b2n_fit = MCwatch.behavior.syncing.longest_unique_fit(n_onsets, backlight_times)
     return b2n_fit
 
 def load_all_spikes_and_clusters(kwik_path):
