@@ -475,7 +475,8 @@ def auto_subplot(n, return_fig=True, squeeze=False, **kwargs):
 def imshow(C, x=None, y=None, ax=None, 
     extent=None, xd_range=None, yd_range=None,
     cmap=plt.cm.RdBu_r, origin='upper', interpolation='nearest', aspect='auto', 
-    axis_call='tight', clim=None, center_clim=False, **kwargs):
+    axis_call='tight', clim=None, center_clim=False, 
+    skip_coerce=False, **kwargs):
     """Wrapper around imshow with better defaults.
     
     Plots "right-side up" with the first pixel C[0, 0] in the upper left,
@@ -524,7 +525,8 @@ def imshow(C, x=None, y=None, ax=None,
     Returns: Image object
     """
     # Coerce data to array
-    C = np.asarray(C)
+    if not skip_coerce:
+        C = np.asarray(C)
     
     # Set up axis if necessary
     if ax is None:
