@@ -570,7 +570,7 @@ def imshow(C, x=None, y=None, ax=None,
             extent = extent[0], extent[1], extent[3], extent[2]
     
     # Actual call to imshow
-    im = ax.imshow(C, interpolation='nearest', origin=origin,
+    im = ax.imshow(C, interpolation=interpolation, origin=origin,
         extent=extent, aspect=aspect, cmap=cmap, **kwargs)
     
     # Fix up the axes
