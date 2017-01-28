@@ -35,8 +35,20 @@ def binom_confint(x=None, n=None, data=None, alpha=.95, meth='beta'):
         return res[res.names.index('lower')][0], res[res.names.index('upper')][0]
     else:
         import statsmodels.stats.proportion
-        return statsmodels.stats.proportion.proportion_confint(
-            x, n, method=meth)
+        
+        # Call statsmodels
+        res = list(statsmodels.stats.proportion.proportion_confint(
+            x, n, method=meth))
+        
+        # Bug where nan is sometimes returned
+        # https://github.com/statsmodels/statsmodels/pull/2789
+        if x == n:
+            res[1] = 1
+        if x == 0:
+            res[0] = 0
+        
+        return tuple(res)
+        
 
 def bootstrap_regress(x, y, n_boot=1000):
     from matplotlib import mlab
