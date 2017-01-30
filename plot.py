@@ -163,6 +163,15 @@ def publication_defaults():
     matplotlib.rcParams['font.sans-serif'] = 'Arial'
     #matplotlib.rcParams['figure.facecolor'] = ''
 
+def manuscript_defaults():
+    matplotlib.rcParams['font.sans-serif'] = 'Arial'
+    matplotlib.rcParams['axes.labelsize'] = 16
+    matplotlib.rcParams['axes.titlesize'] = 16
+    matplotlib.rcParams['xtick.labelsize'] = 16
+    matplotlib.rcParams['ytick.labelsize'] = 16
+    matplotlib.rcParams['font.size'] = 16 # ax.text objects
+    matplotlib.rcParams['legend.fontsize'] = 16
+
 def poster_defaults():
     matplotlib.rcParams['font.sans-serif'] = 'Arial'
     matplotlib.rcParams['axes.labelsize'] = 16
@@ -171,6 +180,24 @@ def poster_defaults():
     matplotlib.rcParams['ytick.labelsize'] = 16
     matplotlib.rcParams['font.size'] = 16 # ax.text objects
     matplotlib.rcParams['legend.fontsize'] = 16
+
+def figure_1x1_square():
+    """Standard size f, ax for single panel with a square axis
+    
+    Room for xlabel, ylabel, and title in 16pt font
+    """
+    f, ax = plt.subplots(figsize=(3, 3))
+    f.subplots_adjust(bottom=.23, left=.26, right=.9, top=.87)
+    return f, ax
+
+def figure_1x1_standard():
+    """Standard size f, ax for single panel with a slightly rectangular axis
+    
+    Room for xlabel, ylabel, and title in 16pt font
+    """
+    f, ax = plt.subplots(figsize=(3, 2.5))
+    f.subplots_adjust(bottom=.24, left=.26, right=.93, top=.89)
+    return f, ax
 
 def rescue_tick(ax=None, f=None, x=3, y=3):
     # Determine what axes to process
