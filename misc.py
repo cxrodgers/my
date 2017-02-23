@@ -878,3 +878,72 @@ def take_equally_spaced(arr, n):
         first_element_relative, 1 - first_element_relative, n)
     absolute_pos = my.rint((len(arr) - 1) * relative_pos)
     return arr[absolute_pos]
+
+def define_integer_bin_edges(start, stop, n_bins=None, binwidth=None,
+    error_on_uneven_bins=True):
+    """Return integer bin edges from start to stop
+    
+    start : start of first bin
+    stop : stop of last bin
+    
+    Either n_bins or binwidth should be provided, but not both.
+    
+    If n_bins is provided but the bin edges do not fall on integers, they
+    will be rounded off, which will result in uneven bins. 
+    An exception is raised if error_on_uneven_bins.
+    
+    If binwidth is provided but the range does not divide evenly, an
+    exception is raised.
+    
+    Returns: bin edges
+        The first will be start and the last will be stop.
+        Each value will be an integer.
+    """
+    # Error check
+    if stop < start:
+        raise ValueError("stop must be greater than start")
+    
+    # Convert start and stop to integers
+    if start != int(start):
+        raise ValueError("start is not an integer")
+    if stop != int(stop):
+        raise ValueError("start is not an integer")
+    start = int(start)
+    stop = int(stop)
+    
+    # Operation depends on which parameter was provided
+    if n_bins is not None and binwidth is None:
+        # number of bins was provided
+        if n_bins <= 0:
+            raise ValueError("n_bins must be non-negative")
+        if int(n_bins) != n_bins:
+            raise ValueError("n_bins must be integer")
+
+        if np.mod(stop - start, n_bins) != 0:
+            # Does not divide evenly
+            if error_on_uneven_bins:
+                raise ValueError("specified n_bins does not divide evenly")
+            
+            # Do float and then round off
+            fres = np.linspace(start, stop, n_bins)
+            res = np.round(fres).astype(np.int)
+        else:
+            # Divides evenly so use arange
+            binwidth = (stop - start) // n_bins
+            res = np.arange(start, stop + 1, binwidth, dtype=np.int)
+        
+    elif binwidth is not None and n_bins is None:
+        # bin width was provided
+        if binwidth <= 0:
+            raise ValueError("binwidth must be non-negative")
+        if int(binwidth) != binwidth:
+            raise ValueError("binwidth must be integer")
+        
+        res = np.arange(start, stop + 1, binwidth, dtype=np.int)
+        if res[-1] != stop:
+            raise ValueError("specified bin width does not divide evenly")
+    
+    else:
+        raise ValueError("specify n_bins or binwidth but not both")
+
+    return res
