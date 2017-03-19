@@ -947,3 +947,60 @@ def define_integer_bin_edges(start, stop, n_bins=None, binwidth=None,
         raise ValueError("specify n_bins or binwidth but not both")
 
     return res
+
+def times_near_times(x, y, dstart, dstop, sort_x=True):
+    """Identify times in 'y' that are within [dstart, dstop) of times in x
+    
+    The algorithm is: does adding dstop to y, versus adding dstart to y,
+    change the way it is sorted within x? If so, then it must be close enough
+    to some value in x that it jumps over it.
+    
+    x : times to compare to, e.g., times of "bad events"
+    y : probe times, e.g., data
+        We want to filter y and include only values in y that are far from
+        bad events.
+    dstart, dstop : times relatives to the times in x.
+        These should be integers. Ideally they would be variable size
+        intervals, but this messes up searchsorted.
+    
+    Returns: boolean array, same shape as y
+        res[n] is True if 
+            there is some value x' in x such that 
+            y[n] is in the range [x' + dstart, x' + dstop]
+    
+    Example:
+    bad_times = np.array([0, 5, 15])
+    probe_times = np.array([1, 6, 11, 16])
+    
+    # All except the 3rd are within [-2, 2)
+    In [152]: times_near_times(bad_times, probe_times, -2, 2)
+    Out[152]: array([ True,  True, False,  True], dtype=bool)
+    
+    # This interval is impossible
+    In [153]: times_near_times(bad_times, probe_times, 2, -2)
+    Out[153]: array([False, False, False, False], dtype=bool)    
+    
+    # Because it's half-open, none are within this interval
+    In [165]: times_near_times(bad_times, probe_times, 0, 1)
+    Out[165]: array([False, False, False, False], dtype=bool)
+    
+    # Because it's half-open, it will trigger on the interval start
+    In [188]: times_near_times(bad_times + 1, probe_times, 0, 1)
+    Out[188]: array([ True,  True, False,  True], dtype=bool)
+    """
+    # Convert to array
+    x = np.asarray(x)
+    y = np.asarray(y)
+    
+    # Sort x if necessary
+    if sort_x:
+        x = np.sort(x)
+    
+    # Use 'right' to make the half-open interval work out correctly
+    v0 = np.searchsorted(x + dstart, y, side='right')
+    v1 = np.searchsorted(x + dstop, y, side='right')
+    
+    # Compare v0 and v1 to get the "sign" correct (e.g., if dstop < dstart,
+    # nothing will ever trigger)
+    return v0 > v1
+
