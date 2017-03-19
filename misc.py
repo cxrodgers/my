@@ -1004,3 +1004,25 @@ def times_near_times(x, y, dstart, dstop, sort_x=True):
     # nothing will ever trigger)
     return v0 > v1
 
+
+def cut_dataframe(df, column, edges, new_column='bin', dropna=True):
+    """Bin dataframe by values in specified column
+    
+    column : name of column to bin
+    edges : edges of bins
+    new_columns : name of new column to add with integer bin labels
+    
+    TODO: allow adding an extra bin edge at the end
+    
+    pandas.cut does the binning, so the number of bins is len(edges) - 1.
+    rows outside the edges are given NaN and dropped if dropna is True.
+    """
+    # Insert column
+    df[new_column] = pandas.cut(df[column], bins=edges, labels=False)
+    
+    # Drop outside range
+    if dropna:
+        df = df[~df[new_column].isnull()]
+        df[new_column] = df[new_column].astype(np.int)
+    
+    return df
