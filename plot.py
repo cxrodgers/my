@@ -164,6 +164,11 @@ def publication_defaults():
     #matplotlib.rcParams['figure.facecolor'] = ''
 
 def manuscript_defaults():
+    """For putting into a word document.
+    
+    Typical figure is approx 3"x3" panels. Apply a 50% scaling.
+    I think these defaults should be 14pt, actually.
+    """
     matplotlib.rcParams['font.sans-serif'] = 'Arial'
     matplotlib.rcParams['axes.labelsize'] = 16
     matplotlib.rcParams['axes.titlesize'] = 16
@@ -180,6 +185,21 @@ def poster_defaults():
     matplotlib.rcParams['ytick.labelsize'] = 16
     matplotlib.rcParams['font.size'] = 16 # ax.text objects
     matplotlib.rcParams['legend.fontsize'] = 16
+
+def presentation_defaults():
+    """For importing into presentation.
+    
+    Typical figure is 8" wide and 10" tall. No scaling should be necessary.
+    Typically presentation figures have more whitespace and fewer panels
+    than manuscript figures.
+    """
+    matplotlib.rcParams['font.sans-serif'] = 'Arial'
+    matplotlib.rcParams['axes.labelsize'] = 14
+    matplotlib.rcParams['axes.titlesize'] = 14
+    matplotlib.rcParams['xtick.labelsize'] = 14
+    matplotlib.rcParams['ytick.labelsize'] = 14
+    matplotlib.rcParams['font.size'] = 14 # ax.text objects
+    matplotlib.rcParams['legend.fontsize'] = 14
 
 def figure_1x1_square():
     """Standard size f, ax for single panel with a square axis
