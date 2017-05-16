@@ -9,6 +9,7 @@ import re
 import datetime
 import glob
 import my
+import pandas
 
 ## Deprecated stuff
 from my.video import OutOfFrames
@@ -1026,3 +1027,13 @@ def cut_dataframe(df, column, edges, new_column='bin', dropna=True):
         df[new_column] = df[new_column].astype(np.int)
     
     return df
+
+def interpolate_dataframe(df, axis=0):
+    """Proper interpolation without extrapolation of dataframe
+    
+    http://stackoverflow.com/questions/25255496/dataframe-interpolate-extrapolates-over-trailing-missing-data
+    """
+    df_mask = df.fillna(method='backfill', axis=axis).isnull()
+    res = df.interpolate(axis=axis)
+    res[df_mask] = np.nan    
+    return res
