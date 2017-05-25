@@ -189,17 +189,20 @@ def poster_defaults():
 def presentation_defaults():
     """For importing into presentation.
     
-    Typical figure is 8" wide and 10" tall. No scaling should be necessary.
+    Typical figure is 11" wide and 7" tall. No scaling should be necessary.
     Typically presentation figures have more whitespace and fewer panels
     than manuscript figures.
+    
+    Actually I think the font size should not be below 18, unless really
+    necessary.
     """
     matplotlib.rcParams['font.sans-serif'] = 'Arial'
-    matplotlib.rcParams['axes.labelsize'] = 14
-    matplotlib.rcParams['axes.titlesize'] = 14
-    matplotlib.rcParams['xtick.labelsize'] = 14
-    matplotlib.rcParams['ytick.labelsize'] = 14
-    matplotlib.rcParams['font.size'] = 14 # ax.text objects
-    matplotlib.rcParams['legend.fontsize'] = 14
+    matplotlib.rcParams['axes.labelsize'] = 18
+    matplotlib.rcParams['axes.titlesize'] = 18
+    matplotlib.rcParams['xtick.labelsize'] = 18
+    matplotlib.rcParams['ytick.labelsize'] = 18
+    matplotlib.rcParams['font.size'] = 18 # ax.text objects
+    matplotlib.rcParams['legend.fontsize'] = 18
 
 def figure_1x1_square():
     """Standard size f, ax for single panel with a square axis
