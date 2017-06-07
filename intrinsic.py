@@ -3,6 +3,7 @@ import my
 import glob
 import pandas
 import scipy.ndimage
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import my.plot
@@ -80,8 +81,10 @@ def plot_panels(image3d):
 
 
 def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
-    baseline_start=8, baseline_stop=13,
-    stim_start=16, stim_stop=25,
+    baseline_start=0, baseline_stop=10,
+    stim_start=16, stim_stop=36,
+    session2include_trials=None,
+    plot_timecourse=False,
     ):
     """Go through saved numpy arrays, process, save 'effect'
     
@@ -95,6 +98,11 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
     The start and stop frames are Pythonic (half-open)
     
     
+    session2include_trials : if not None, should be a dict from
+        session to a list of trials to include
+    
+    plot_timecourse: plot time course over average trial
+    
     Notes:
     The dominating effect is a decrease in luminance over the session.
     Within each trial, there is sometimes a large blood vessel artefact in 
@@ -106,6 +114,12 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
  
     In choosing the baseline and stim periods, balance longer periods for
     more signal, vs shorter periods for less likelihood of vessel shift
+    
+    The time course of the evoked effect seems highly variable across sessions,
+    sometimes early, sometimes late, sometimes broadening with time but not
+    always. In general, it's probably best to use large baseline windows
+    (first ten frames or so) and large evoked windows (frames 16-36 or even
+    longer)
     
     
     Returns: session2effect
@@ -131,6 +145,14 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
         image_data = np.load(session_filename)
         n_trials, n_frames, n_rows, n_cols = image_data.shape
         
+        # Slice out trials
+        if session2include_trials is not None:
+            if session_name in session2include_trials:
+                include_trials = session2include_trials[session_name]
+                image_data = image_data[include_trials, :, :]
+                assert len(include_trials) == image_data.shape[0]
+                n_trials = image_data.shape[0]
+        
         # Rebin and convert to float
         print "rebinning"
         rebinned_image_data = image_data.reshape(
@@ -138,23 +160,20 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
                 n_rows / REBIN_FACTOR, REBIN_FACTOR,
                 n_cols / REBIN_FACTOR, REBIN_FACTOR)).mean(axis=(-3, -1))
 
-        #~ # Smooth spatially and temporally, but not over trials
-        #~ st_smoothed_arr = np.asarray([
-            #~ scipy.ndimage.gaussian_filter(arrv.astype(np.float), 
-                #~ sigma=(1, 2, 2), truncate=2.)
-            #~ for arrv in arr])
-        
+        if plot_timecourse:
+            # Display the trial average normalized to the mean of the first ten
+            trial_average = rebinned_image_data.mean(axis=0)
+            baseline_trial_average = trial_average[5:10].mean(0)
+            trial_average_wrt_baseline = trial_average - baseline_trial_average
+            
+            # this looks ugly for some reason
+            #~ ax = my.plot.imshow(make_slideshow(trial_average_wrt_baseline), cmap=plt.cm.hot)
+
+            f = plot_panels(trial_average_wrt_baseline)
+            f.suptitle('trial average')
+
         # Compute average over all trials
         print "baselining"
-        #~ trial_average = rebinned_image_data.mean(axis=0)
-        
-        # Display the trial average normalized to the mean of the first ten
-        #~ baseline_trial_average = trial_average[5:10].mean(0)
-        #~ trial_average_wrt_baseline = trial_average - baseline_trial_average
-        #~ ax = my.plot.imshow(make_slideshow(trial_average_wrt_baseline), cmap=plt.cm.hot)
-        
-        #~ f = plot_panels(trial_average_wrt_baseline)
-        #~ f.suptitle('trial average')
         
         # Compute the mean baseline and mean stim for each trial separately
         baseline_period_by_trial = rebinned_image_data[:, 
@@ -226,20 +245,26 @@ def plot_rotated_and_scaled_image(image, ax, scale_um_per_px=3.28,
         cval=cval)
     
     # Determine the "data range" in microns
-    xd_range = (0, rot_image.shape[1] * scale_um_per_px * rebin_factor)
-    yd_range = (0, rot_image.shape[0] * scale_um_per_px * rebin_factor)
+    xd_range = (0, rot_image.shape[1] * scale_um_per_px * rebin_factor / 1000.)
+    yd_range = (0, rot_image.shape[0] * scale_um_per_px * rebin_factor / 1000.)
 
     # Plot
     my.plot.imshow(rot_image, ax=ax, 
         cmap=cmap, axis_call='image',
         xd_range=xd_range, yd_range=yd_range,
     )
+    
+    # Grid every 500um
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(.500))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(.500))
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
 
     if put_scale_bars:
         put_scale_bars_on_axis(ax)
     
     if cmap == plt.cm.gray:
-        ax.grid(color='r', ls='-')    
+        ax.grid(color='r', ls='-', which='both')    
     else:
-        ax.grid(color='w', ls='-')    
+        ax.grid(color='w', ls='-', which='both')    
 
