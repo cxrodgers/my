@@ -122,10 +122,14 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
     longer)
     
     
-    Returns: session2effect
-        dict with sessions as keys, and effects as values
+    Returns: 
+        session2effect
+            dict with sessions as keys, and effects as values
+        session2effect_by_trial
+            dict with sessions as keys, and 3d effects as values
     """
     session2effect = {}
+    session2effect_by_trial = {}
 
     # Find all image_data* filenames and extract session names
     session_filenames = sorted(glob.glob(
@@ -201,8 +205,9 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
         effect = effect_by_trial.mean(0)
 
         session2effect[session_name] = effect
+        session2effect_by_trial[session_name] = effect_by_trial
 
-    return session2effect
+    return session2effect, session2effect_by_trial
 
 def put_scale_bars_on_axis(ax, scbar_center=(150, 150), scbar_length_um=100):
     """Puts P-L scale bars on. 
