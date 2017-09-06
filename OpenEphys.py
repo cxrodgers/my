@@ -94,7 +94,7 @@ def loadFolderToArray(folderpath, channels='all', dtype=float,
     Returns: numpy array of shape (n_samples, n_channels)
     """
     # Get list of files
-    filelist = get_filelist(folderpath, source, channels, recording=None)
+    filelist = get_filelist(folderpath, source, channels, recording=recording)
 
     # Keep track of the time taken
     t0 = time.time()
@@ -556,7 +556,7 @@ def regex_capture(pattern, list_of_strings, take_index=0):
     
     return res_l
 
-def _get_sorted_channels(folderpath, recording=None):
+def _get_sorted_channels(folderpath, recording=1):
     """Return a sorted list of the continuous channels in folderpath.
     
     folderpath : string, path to location of continuous files on disk
@@ -564,25 +564,21 @@ def _get_sorted_channels(folderpath, recording=None):
         If there is only one recording in the folder, leave as None.
         Otherwise, specify the number of the recording as an integer.
     """
-    if recording is None:
-        return sorted([int(f.split('_CH')[1].split('.')[0]) for f in os.listdir(folderpath) 
-                    if '.continuous' in f and '_CH' in f]) 
+    # Form a string from the recording number
+    if recording is None or recording == 1:
+        # The first recording has no suffix
+        recording_s = ''
     else:
-        # Form a string from the recording number
-        if recording == 1:
-            # The first recording has no suffix
-            recording_s = ''
-        else:
-            recording_s = '_%d' % recording
-        
-        # Form a regex pattern to be applied to each filename
-        # We will capture the channel number: (\d+)
-        regex_pattern = '%s_CH(\d+)%s.continuous' % ('100', recording_s)
-        
-        # Apply the pattern to each filename and return the captured channels
-        channel_numbers_s = regex_capture(regex_pattern, os.listdir(folderpath))
-        channel_numbers_int = map(int, channel_numbers_s)
-        return sorted(channel_numbers_int)
+        recording_s = '_%d' % recording
+    
+    # Form a regex pattern to be applied to each filename
+    # We will capture the channel number: (\d+)
+    regex_pattern = '%s_CH(\d+)%s.continuous' % ('100', recording_s)
+    
+    # Apply the pattern to each filename and return the captured channels
+    channel_numbers_s = regex_capture(regex_pattern, os.listdir(folderpath))
+    channel_numbers_int = map(int, channel_numbers_s)
+    return sorted(channel_numbers_int)
 
 def get_number_of_records(filepath):
     # Open the file
@@ -638,6 +634,8 @@ def get_header_from_folder(folderpath, filelist=None, **kwargs):
         ['bitVolts', 'blockLength', 'bufferSize', 'date_created',
         'description', 'format', 'header_bytes', 'sampleRate', 'version']
     They are checked for consistency and returned in a single dict.    
+    Exeception: it is okay if bitVolts differs between channels, because
+    this is usually the case for analog and neural channels.
     
     Finally the number of records is also checked for each file, checked
     for consistency, and returned as the key 'n_records'.
@@ -683,6 +681,10 @@ def get_header_from_folder(folderpath, filelist=None, **kwargs):
         
         # Check the floating point keys
         for key in included_float_keys:
+            # Skip check on bitVolts, because this will be different for
+            # analog and neural channels.
+            if key == 'bitVolts':
+                continue
             if not np.isclose(unique_header[key], header[key]):
                 raise ValueError("inconsistent header info in key %s" % key)
             
