@@ -23,16 +23,46 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     inter_ch_spacing=234, legend_t_offset=0.0, legend_y_offset=200,
     max_data_size=1e6, highpass=False, probename=None,
     spike_times=None, clusters=None, cluster_list=None, features_masks=None,
-    cluster2color=None, legend_t_width=.010, apply_offset=None):
+    cluster2color=None, legend_t_width=.010, apply_offset=None,
+    plot_kwargs=None):
     """Plot a vertical stack of channels in the same ax.
     
     The given time range and channel range is extracted. Optionally it
     can be filtered at this point. 
+    
+    data : array, shape (N_timepoints, N_channels)
+    
+    ax : axis to plot into. 
+        If None, a new figure and axis will be created
+    
+    n_range : tuple (n_start, n_stop)
+        The index of the samples to include in the plot
+        Default is (0, len(data))
+    
+    ch_list : a list of the channels to include, expressed as indices into
+        the columns of `data`. This also determines the order in which they
+        will be plotted (from top to bottom of the figure)
+    
+    exclude_ch_list : remove these channels from `ch_list`
+    
+    downsample : downsample by this factor
+    
+    scaling_factor : multiple by this
+    
+    inter_ch_spacing : channel centers are offset by this amount, in the
+        same units as the data (after multiplication by scaling_factor)
+    
+    legend_t_offset, legend_y_offset, legend_t_width : where to plot legend
+    
+    max_data_size : sanity check, raise error rather than try to plot
+        more than this amount of data
+    
+    plot_kwargs : a dict to pass to `plot`, containing e.g. linewidth
     """
     # Set up the channels to include
     if ch_list is None:
         if probename is None:
-            ch_list = list(range(32))
+            ch_list = list(range(data.shape[1]))
         else:
             ch_list = probename2ch_list[probename]
     if exclude_ch_list is not None:
@@ -42,6 +72,12 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     # Set up data_range
     if n_range is None:
         n_range = (0, len(data))
+    else:
+        # Ensure int
+        assert len(n_range) == 2
+        n_range = tuple(map(int, n_range))
+    
+    # data range in seconds
     t = np.arange(n_range[0], n_range[1]) / 30000.
     t_ds = t[::downsample]
 
@@ -124,6 +160,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
                             t_ds[idx0:idx1],
                             col[idx0:idx1] + y_offset,
                             color=color,
+                            **plot_kwargs
                             )
 
     # lims
