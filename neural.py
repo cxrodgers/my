@@ -525,7 +525,24 @@ def get_cluster_channels(sort_dir, cluster_group, spike_cluster,
     return cluster_channels
 
 def extract_peak_and_width(waveform):
-    """Return properties of the waveform peak"""
+    """Return properties of the waveform peak
+    
+    Typically this is used to identify narrow-spiking cells. I find that
+    a good criterion is the width from the peak to the subsequent zero crossing.
+    When this value is < 8 samples (0.2667ms), call it narrow-spiking.
+    
+    waveform : array
+    
+    Returns : dict of properties
+        idx : index of peak (where waveform reaches its greatest absolute value)
+        negative : True if that peak is negative
+        height : height of the peak (may be negative)
+        stop : index where peak crosses zero again after peak
+            If it never crosses zero, this will be len(waveform)
+        width : difference between `stop` and `idx`
+            This is minimal when the waveform crosses zero on the first
+            sample after the peak, in which case the `width` is 1
+    """
     # Identify polarity and peak
     peak_loc = np.argmax(np.abs(waveform))
     peak_ampl = waveform[peak_loc]
@@ -537,31 +554,22 @@ def extract_peak_and_width(waveform):
     else:
         pos_waveform = waveform.copy()
     
-    # First point that is <=50% of the peak_ampl and after the peak
+    # First point that crosses zero after the peak
     mask = (
-        (pos_waveform <= np.abs(peak_ampl) * .5) &
+        (pos_waveform <= 0) &
         (range(len(pos_waveform)) > peak_loc))
     if np.all(~mask):
         after_loc = len(pos_waveform)
     else:
         after_loc = np.where(mask)[0][0]
     
-    # Last point that is <=50% of the peak_ampl and before the peak
-    mask = (
-        (pos_waveform <= np.abs(peak_ampl) * .5) &
-        (range(len(pos_waveform)) < peak_loc))
-    if np.all(~mask):
-        before_loc = -1
-    else:
-        before_loc = np.where(mask)[0][-1]
-    
-    # The width is the range from before to after
-    # Minimum possible value is 2
-    peak_width = after_loc - before_loc
+    # The width is the range from peak to zero crossing
+    # Minimum possible value is 1
+    peak_width = after_loc - peak_loc
 
     return {
         'idx': peak_loc, 'height': peak_ampl, 'negative': peak_is_negative,
-        'start': before_loc, 'stop': after_loc, 'width': peak_width
+        'stop': after_loc, 'width': peak_width
     }
 
 def calculate_peak_properties(spike_cluster, spike_template, templates):
@@ -593,9 +601,11 @@ def calculate_peak_properties(spike_cluster, spike_template, templates):
         
         # Identify peak
         peak_properties = extract_peak_and_width(big_waveform)
+        peak_properties['waveform'] = big_waveform
         
         # Store width
         peak_properties_l.append(peak_properties)
-    peak_properties_df = pandas.DataFrame.from_records(peak_properties_l)
+    peak_properties_df = pandas.DataFrame.from_records(peak_properties_l,
+        index=n_spikes_by_cluster_and_template.index.levels[0])
     
     return peak_properties_df
