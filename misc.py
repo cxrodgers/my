@@ -1018,6 +1018,8 @@ def cut_dataframe(df, column, edges, new_column='bin', dropna=True):
     pandas.cut does the binning, so the number of bins is len(edges) - 1.
     rows outside the edges are given NaN and dropped if dropna is True.
     """
+    df = df.copy()
+    
     # Insert column
     df[new_column] = pandas.cut(df[column], bins=edges, labels=False)
     
