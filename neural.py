@@ -465,6 +465,22 @@ def load_cluster_groups(sort_dir):
     
     return cluster_group
 
+def get_n_spikes_by_cluster_and_template(spike_cluster, spike_template):
+    """Return counts of how many of each template occur in each cluster"""
+    # Identify which templates belong to which clusters
+    unique_clusters = np.unique(spike_cluster)
+    rec_l = []
+    for cluster in unique_clusters:
+        msk = spike_cluster == cluster
+        cluster_spike_template = spike_template[msk]
+        spikes_per_matching_template = pandas.value_counts(cluster_spike_template,
+            sort=True)
+        rec_l.append(spikes_per_matching_template)
+    n_spikes_by_cluster_and_template = pandas.concat(rec_l, keys=unique_clusters)
+    n_spikes_by_cluster_and_template.index.names = ('cluster', 'template')
+    
+    return n_spikes_by_cluster_and_template
+
 def get_cluster_channels(sort_dir, cluster_group, spike_cluster, 
     spike_template, templates):
     """Identify the channel of max power for each cluster's template
@@ -488,18 +504,9 @@ def get_cluster_channels(sort_dir, cluster_group, spike_cluster,
         Series indexed by cluster id with values corresponding to channel
         The values can be float because they are averages over templates.
     """
-    # Identify which templates belong to which clusters
-    unique_clusters = np.unique(spike_cluster)
-    rec_l = []
-    for cluster in unique_clusters:
-        msk = spike_cluster == cluster
-        cluster_spike_template = spike_template[msk]
-        spikes_per_matching_template = pandas.value_counts(cluster_spike_template,
-            sort=True)
-        rec_l.append(spikes_per_matching_template)
-    n_spikes_by_cluster_and_template = pandas.concat(rec_l, keys=unique_clusters)
-    n_spikes_by_cluster_and_template.index.names = ('cluster', 'template')
-
+    n_spikes_by_cluster_and_template = get_n_spikes_by_cluster_and_template(
+        spike_cluster, spike_template)
+    
     # Identify channel with max power for each template
     template_channel = templates.std(axis=1).argmax(axis=1)
     cluster_channel_l = []
@@ -516,3 +523,79 @@ def get_cluster_channels(sort_dir, cluster_group, spike_cluster,
         index=n_spikes_by_cluster_and_template.index.levels[0])
     
     return cluster_channels
+
+def extract_peak_and_width(waveform):
+    """Return properties of the waveform peak"""
+    # Identify polarity and peak
+    peak_loc = np.argmax(np.abs(waveform))
+    peak_ampl = waveform[peak_loc]
+    peak_is_negative = peak_ampl < 0
+    
+    # Make it always positive polarity for this purpose
+    if peak_is_negative:
+        pos_waveform = -waveform.copy()
+    else:
+        pos_waveform = waveform.copy()
+    
+    # First point that is <=50% of the peak_ampl and after the peak
+    mask = (
+        (pos_waveform <= np.abs(peak_ampl) * .5) &
+        (range(len(pos_waveform)) > peak_loc))
+    if np.all(~mask):
+        after_loc = len(pos_waveform)
+    else:
+        after_loc = np.where(mask)[0][0]
+    
+    # Last point that is <=50% of the peak_ampl and before the peak
+    mask = (
+        (pos_waveform <= np.abs(peak_ampl) * .5) &
+        (range(len(pos_waveform)) < peak_loc))
+    if np.all(~mask):
+        before_loc = -1
+    else:
+        before_loc = np.where(mask)[0][-1]
+    
+    # The width is the range from before to after
+    # Minimum possible value is 2
+    peak_width = after_loc - before_loc
+
+    return {
+        'idx': peak_loc, 'height': peak_ampl, 'negative': peak_is_negative,
+        'start': before_loc, 'stop': after_loc, 'width': peak_width
+    }
+
+def calculate_peak_properties(spike_cluster, spike_template, templates):
+    """Calculate properties of peak for all clusters
+    
+    Extracts the average template for each cluster, weighted by the
+    occurrence of each template. Then calculates various properties
+    of the peak such as width.
+    """
+    n_spikes_by_cluster_and_template = get_n_spikes_by_cluster_and_template(
+        spike_cluster, spike_template)    
+    
+    # Average the templates by cluster, weighted by number of spikes
+    peak_properties_l = []
+    for cluster in n_spikes_by_cluster_and_template.index.levels[0]:
+        # Templates and number of spikes for this cluster
+        n_spikes_by_template = n_spikes_by_cluster_and_template.loc[cluster]
+        
+        # Extract relevant templates
+        cluster_templates = templates[n_spikes_by_template.index, :, :]
+        
+        # Mean the templates
+        mean_cluster_templates = cluster_templates.mean(axis=0)
+        
+        # Identify channel with max std
+        std_mct = mean_cluster_templates.std(axis=0)
+        big_ichannel = std_mct.argmax()
+        big_waveform = mean_cluster_templates[:, big_ichannel]
+        
+        # Identify peak
+        peak_properties = extract_peak_and_width(big_waveform)
+        
+        # Store width
+        peak_properties_l.append(peak_properties)
+    peak_properties_df = pandas.DataFrame.from_records(peak_properties_l)
+    
+    return peak_properties_df
