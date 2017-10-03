@@ -9,6 +9,8 @@ import ArduFSM
 import tables
 import kkpandas
 import Adapters
+import os
+import pandas
 
 probename2ch_list = {
     'edge': [24, 26, 25, 29, 27, 31, 28, 1, 30, 5, 3, 0, 2, 4, 9, 11, 13, 
@@ -394,3 +396,123 @@ def get_channel_mapping(sorted_channels_to_remove):
     dataflow_minus['kwx_order'] = dataflow_minus['Int'].rank().astype(np.int) - 1
     
     return dataflow_minus
+
+
+## For loading from kilosort
+def load_spike_clusters(sort_dir):
+    """Load the cluster of each spike from kilosort data
+    
+    This includes any reclustering that was done in phy
+    """
+    spike_cluster = np.load(os.path.join(sort_dir, 'spike_clusters.npy'))
+    return spike_cluster
+
+def load_spikes(sort_dir):
+    """Load spike times from kilosort
+    
+    Returns: 
+        spike_time_samples, spike_time_sec
+    """
+    spike_time_samples = np.load(
+        os.path.join(sort_dir, 'spike_times.npy')).flatten()
+    spike_time_sec = spike_time_samples / 30e3
+    
+    return spike_time_samples, spike_time_sec
+
+def load_spike_templates1(sort_dir):
+    """Return spike templates from kilosort
+
+    These are the actual templates that were used, not the templates
+    for each spike. For that, use load_spike_templates2
+    
+    Returns: templates
+        array with shape (n_templates, n_timepoints, n_channels)
+    """
+    templates = np.load(os.path.join(sort_dir, 'templates.npy'))
+    return templates
+
+def load_spike_amplitudes(sort_dir):
+    """Return spike amplitudes from kilosort
+    
+    """
+    # Amplitude of every spike
+    spike_amplitude = np.load(os.path.join(sort_dir, 'amplitudes.npy'))
+    
+    return spike_amplitude.flatten()
+
+def load_spike_templates2(sort_dir):
+    """Return template of each spike from kilosort
+
+    They are returned in 0-based indices into `templates`, which can be
+    read from load_spike_templates1
+    """
+    # This is 4 x n_spikes
+    # The rows are: spike time, spike template, amplitude, ?? (maybe batch)
+    with tables.open_file(os.path.join(sort_dir, 'rez.mat')) as h5_file:
+        st3 = np.asarray(h5_file.get_node('/rez/st3'))
+    # These are 1-based, so subtract 1
+    spike_template = st3[1].astype(np.int) - 1
+    #~ assert (st3[0].astype(np.int) == spike_time_samples).all()
+    #~ assert (st3[2] == spike_amplitude).all()
+    
+    return spike_template
+
+def load_cluster_groups(sort_dir):
+    """Returns type (good, MUA, noise) of each cluster from kilosort"""
+    # This has n_manual_clusters rows, with the group for each
+    cluster_group = pandas.read_table(os.path.join(sort_dir, 
+        'cluster_group.tsv'))
+    
+    return cluster_group
+
+def get_cluster_channels(sort_dir, cluster_group, spike_cluster, 
+    spike_template, templates):
+    """Identify the channel of max power for each cluster's template
+    
+    sort_dir : path to data
+    spike_cluster : cluster of each spike
+    spike_template : template of each spike
+    templates : the templates
+    
+    First, for every template, the channel with maximum standard deviation
+    is identified. Then, for each cluster (unique value in spike_cluster),
+    all matching templates are found. This accounts for any reclustering 
+    that was done manually. Finally, for each cluster, a weighted average
+    of the channel corresponding to each template (weighted by the prevalence
+    of that template in that cluster) is taken.
+    
+    Channels are just 0-based indices into the templates, so any broken 
+    channels have been ignored already.
+    
+    Returns : cluster_channels
+        Series indexed by cluster id with values corresponding to channel
+        The values can be float because they are averages over templates.
+    """
+    # Identify which templates belong to which clusters
+    unique_clusters = np.unique(spike_cluster)
+    rec_l = []
+    for cluster in unique_clusters:
+        msk = spike_cluster == cluster
+        cluster_spike_template = spike_template[msk]
+        spikes_per_matching_template = pandas.value_counts(cluster_spike_template,
+            sort=True)
+        rec_l.append(spikes_per_matching_template)
+    n_spikes_by_cluster_and_template = pandas.concat(rec_l, keys=unique_clusters)
+    n_spikes_by_cluster_and_template.index.names = ('cluster', 'template')
+
+    # Identify channel with max power for each template
+    template_channel = templates.std(axis=1).argmax(axis=1)
+    cluster_channel_l = []
+    for cluster in n_spikes_by_cluster_and_template.index.levels[0]:
+        n_spikes_by_template = n_spikes_by_cluster_and_template.loc[cluster]
+        
+        # Weighted average of template_channel by n_spikes_by_template
+        cluster_channel = (
+            (n_spikes_by_template / n_spikes_by_template.sum()) *
+            template_channel[n_spikes_by_template.index.values]
+        ).sum()
+        cluster_channel_l.append(cluster_channel)
+    cluster_channels = pandas.Series(cluster_channel_l, 
+        index=n_spikes_by_cluster_and_template.index.levels[0])
+    
+    return cluster_channels
