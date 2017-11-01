@@ -178,6 +178,17 @@ def manuscript_defaults():
     matplotlib.rcParams['legend.fontsize'] = 16
 
 def poster_defaults():
+    """For a poster
+    
+    Title: 80pt
+    Section headers: 60pt
+    Body text: 40pt
+    Axis labels, tick marks, subplot titles: 32pt
+    
+    Typical panel size: 6"
+    So it's easiest to just use manuscript_defaults() and double
+    the size.
+    """
     matplotlib.rcParams['font.sans-serif'] = 'Arial'
     matplotlib.rcParams['axes.labelsize'] = 16
     matplotlib.rcParams['axes.titlesize'] = 16
