@@ -451,7 +451,7 @@ def writeChannelMapFile(mapping, filename='mapping.prb'):
 
 def pack(folderpath, filename='openephys.dat', dref=None,
     chunk_size=4000, start_record=None, stop_record=None, verbose=True,
-    **kwargs):
+    if_exists='append', dref_use_median=False, **kwargs):
     """Read OpenEphys formatted data in chunks and write to a flat binary file.
     
     The data will be written in a fairly standard binary format:
@@ -470,6 +470,10 @@ def pack(folderpath, filename='openephys.dat', dref=None,
             If this file exists, it will be overwritten
         dref:  Digital referencing - either supply a channel number or 
             'ave' to reference to the average of packed channels.
+            It can also be a list of channel numbers to include in the 
+            reference.
+        dref_use_median : True or False
+            If True, use median; otherwise use mean
         chunk_size : the number of records (not bytes or samples!) to read at
             once. 4000 records of 64-channel data requires ~500 MB of memory.
             The record size is usually 1024 samples.
@@ -477,6 +481,9 @@ def pack(folderpath, filename='openephys.dat', dref=None,
             last record to process. If start_record is None, start at the
             beginning; if stop_record is None, go until the end.
         verbose : print out status info
+        if_exists : string
+            If 'append': appends data to existing file
+            If 'overwrite': overwrites existing file
         **kwargs : This is passed to loadFolderToArray for each chunk.
             See documentation there for the keywords `source`, `channels`,
             `recording`, and `ignore_last_record`.
@@ -490,9 +497,15 @@ def pack(folderpath, filename='openephys.dat', dref=None,
     
     # Manually remove the output file if it exists (later we append)
     if os.path.exists(filename):
-        if verbose:
-            print "overwriting %s" % filename
-        os.remove(filename)
+        if if_exists == 'overwrite':
+            if verbose:
+                print "overwriting %s" % filename
+            os.remove(filename)
+        elif if_exists == 'append':
+            if verbose:
+                print "appending to %s" % filename
+        else:
+            raise ValueError("'if_exists' must be 'append' or 'overwrite'")
     
     # Iterate over chunks
     for chunk_start in range(start_record, stop_record, chunk_size):
@@ -512,11 +525,39 @@ def pack(folderpath, filename='openephys.dat', dref=None,
             break
 
         # Digital referencing
-        if dref: 
+        if dref is not None: 
+            # See if it is a string and/or list of channel numbers
+            haslen = True
+            try:
+                len(dref)
+            except TypeError:
+                haslen = False
+            
             # Choose a reference
-            if dref == 'ave':
-                reference = np.mean(data_array, 1)
+            if dref is 'ave':
+                # Mean or median
+                if dref_use_median:
+                    reference = np.median(data_array[:, dref_idxs], axis=1)
+                else:
+                    reference = data_array[:, dref_idxs].mean(axis=1)
+            elif haslen:
+                # 'dref' is a list of channels
+                # Figure out which channels are included
+                if 'channels' in kwargs and kwargs['channels'] != 'all':
+                    channels = kwargs['channels']
+                else:
+                    channels = _get_sorted_channels(folderpath)
+                
+                # Find the reference channels
+                dref_idxs = [channels.index(ch) for ch in dref]
+                
+                # Mean or median
+                if dref_use_median:
+                    reference = np.median(data_array[:, dref_idxs], axis=1)
+                else:
+                    reference = data_array[:, dref_idxs].mean(axis=1)
             else:
+                # 'dref' is a single channel
                 # Figure out which channels are included
                 if 'channels' in kwargs and kwargs['channels'] != 'all':
                     channels = kwargs['channels']
@@ -527,9 +568,8 @@ def pack(folderpath, filename='openephys.dat', dref=None,
                 dref_idx = channels.index(dref)
                 reference = data_array[:, dref_idx].copy()
             
-            # Subtract the reference
-            for i in range(data_array.shape[1]):
-                data_array[:,i] = data_array[:,i] - reference
+            # Subtract the reference, after converting it to int
+            data_array -= np.rint(reference[:, None]).astype(np.int16)
         
         # Explicity open in append mode so we don't just overwrite
         with file(os.path.join(folderpath, filename), 'ab') as fi:
