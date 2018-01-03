@@ -11,6 +11,7 @@ import kkpandas
 import Adapters
 import os
 import pandas
+import scipy.io
 
 probename2ch_list = {
     'edge': [24, 26, 25, 29, 27, 31, 28, 1, 30, 5, 3, 0, 2, 4, 9, 11, 13, 
@@ -609,3 +610,102 @@ def calculate_peak_properties(spike_cluster, spike_template, templates):
         index=n_spikes_by_cluster_and_template.index.levels[0])
     
     return peak_properties_df
+
+def generate_kilosort_channel_map_file(dataflow, 
+    output_filename='chmap.mat', exclude_channels=None):
+    """Generate the channel map .mat file expected by KiloSort
+    
+    dataflow : eg Adapters.dataflow.dataflow_janelia_64ch_ON4_df
+    output_filename : filename
+    exclude_channels : the 1-based GUI numbers of channels to exclude
+    """
+    # Normally included channels
+    gui_channels = dataflow['GUI'].values
+
+    # Specify the channels to exclude, in GUI numbers
+    if exclude_channels is None:
+        exclude_channels_zerobased = np.asarray([], dtype=np.int)
+    else:
+        exclude_channels_zerobased = np.asarray(exclude_channels).astype(
+            np.int) - 1
+
+    # Mask
+    # To exclude Sorted27, make the 27th entry false
+    # Not the location of 27 in the GUI numbers
+    n_channels = len(dataflow)
+    connected_mask = np.ones(n_channels).astype(np.bool)
+    connected_mask[exclude_channels_zerobased] = False
+
+    data = {
+        'chanMap': gui_channels,
+        'chanMap0ind': gui_channels - 1,
+        'connected': connected_mask,
+        'xcoords': np.ones(n_channels),
+        'ycoords': np.arange(n_channels, dtype=np.float)[::-1] + 1,
+        'kcoords': np.ones(n_channels),
+        'fs': 30000.0,
+    }
+
+    scipy.io.savemat('chmap.mat', data, oned_as='column')
+
+def infer_epochs_and_identify_munged_records(timestamps, error_thresh=30e3,
+    mung_mask_size=10):
+    """Use timestamps jumps to identify epochs and errors
+    
+    timestamps : the timestamps from any OpenEphys channel
+        I think this should be the same for all channels?
+    
+    Normally, each timestamp should be separated by 1024 samples. Starting 
+    and stopping the recording causes a jump. Occasional errors also cause 
+    jumps. Jumps less than `error_thresh` samples are assumed to be an error.
+    
+    Disregarding error jumps, the "epoch" begins at 0 and increments at
+    every jump.
+    
+    `munged_mask` is a boolean array of the same shape as `timestamps` and
+    is True whenever that timestamp is within `mung_mask_size` records of
+    an erroneous jump.
+    
+    To identify epochs of neural data to discard, it's probably best to 
+    convert `error_jump_record_indices` to samples by multiplying by 1024,
+    and using `times_near_times` logic similar to here.
+    
+    To "fix" spike times by accounting for jumps, convert them to records
+    by dividing by 1024 and flooring, then index into timestamps, then add
+    that to the original spike time mod 1024.
+    
+    Returns: dict
+        'error_jump_record_indices': indices of the records following
+            erroneous jumps
+        'munged_mask': see above
+        'epoch_by_record': integer array, same shape as timestamps, the
+            inferred epoch of each timestamp
+    """
+    ## Infer epochs and identify munged periods
+    # Each timestamp *should* be 1024 samples apart
+    diff_timestamps = np.diff(timestamps)
+    
+    # Failures manifest as jumps that are >1024 but <30e3 (1 sec)
+    putative_failure_mask = (diff_timestamps > 1024) & (
+        diff_timestamps < error_thresh)
+    error_jump_record_indices = np.where(putative_failure_mask)[0]
+    
+    # Mask out records within 10 records of a failure
+    munged_mask = my.misc.times_near_times(error_jump_record_indices,
+        np.arange(len(timestamps), dtype=np.int), 
+        dstart=-mung_mask_size, dstop=mung_mask_size)
+    
+    # Account for the diff
+    munged_mask = np.concatenate([[munged_mask[0]], munged_mask])
+    
+    # Identify epochs as jumps that are >30e3 (1sec)
+    epoch_by_record = ((diff_timestamps > 1024) & (~putative_failure_mask)).cumsum()
+    
+    # Account for the diff. We always start with epoch 0
+    epoch_by_record = np.concatenate([[0], epoch_by_record])
+
+    return {
+        'error_jump_record_indices': error_jump_record_indices,
+        'munged_mask': munged_mask,
+        'epoch_by_record': epoch_by_record,
+    }
