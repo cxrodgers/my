@@ -678,8 +678,38 @@ def infer_epochs_and_identify_munged_records(timestamps, error_thresh=30e3,
         'error_jump_record_indices': indices of the records following
             erroneous jumps
         'munged_mask': see above
-        'epoch_by_record': integer array, same shape as timestamps, the
-            inferred epoch of each timestamp
+        'epoch_of_each_record': integer array, same shape as timestamps, the
+            inferred epoch of each timestamp. This always begins with 0.
+        'epoch_start_record': integer array of the start of each record.
+            This always begins with 0.
+    
+    For instance, if there is a real jump between the first and second
+    timestamps, 'epoch_of_each_record' will be [0, 1, ...] and
+    'epoch_start_record' will be [0, 1, ...]
+
+    Example with a real jump
+    ---
+    In [38]: timestamps = np.array([0, 1024, 2048, 100000, 101024])
+
+    In [39]: my.neural.infer_epochs_and_identify_munged_records(timestamps)
+    Out[39]: 
+    {'epoch_of_each_record': array([0, 0, 0, 1, 1]),
+     'epoch_start_record': array([0, 3]),
+     'error_jump_record_indices': array([], dtype=int64),
+     'munged_mask': array([False, False, False, False, False, False], dtype=bool)}
+
+
+    Example with an erroneous jump
+    ---
+    In [40]: timestamps = np.array([0, 1024, 2048, 10000, 11024])
+
+    In [42]: my.neural.infer_epochs_and_identify_munged_records(timestamps, 
+                mung_mask_size=1)
+    Out[42]: 
+    {'epoch_of_each_record': array([0, 0, 0, 0, 0]),
+     'epoch_start_record': array([0]),
+     'error_jump_record_indices': array([2]),
+     'munged_mask': array([False, False,  True,  True, False, False], dtype=bool)}
     """
     ## Infer epochs and identify munged periods
     # Each timestamp *should* be 1024 samples apart
@@ -699,13 +729,20 @@ def infer_epochs_and_identify_munged_records(timestamps, error_thresh=30e3,
     munged_mask = np.concatenate([[munged_mask[0]], munged_mask])
     
     # Identify epochs as jumps that are >30e3 (1sec)
-    epoch_by_record = ((diff_timestamps > 1024) & (~putative_failure_mask)).cumsum()
+    epoch_start_record_mask = ((diff_timestamps > 1024) & 
+        (~putative_failure_mask))
+    epoch_start_record = np.where(epoch_start_record_mask)[0]
+    epoch_of_each_record = epoch_start_record_mask.cumsum()
     
     # Account for the diff. We always start with epoch 0
-    epoch_by_record = np.concatenate([[0], epoch_by_record])
+    epoch_start_record = np.concatenate([[0], epoch_start_record + 1]).astype(
+        np.int)
+    epoch_of_each_record = np.concatenate([[0], epoch_of_each_record]).astype(
+        np.int)
 
     return {
         'error_jump_record_indices': error_jump_record_indices,
         'munged_mask': munged_mask,
-        'epoch_by_record': epoch_by_record,
+        'epoch_of_each_record': epoch_of_each_record,
+        'epoch_start_record': epoch_start_record,
     }
