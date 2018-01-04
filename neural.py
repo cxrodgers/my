@@ -191,16 +191,26 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     
     return got_data
 
-def extract_onsets_from_analog_signal(h5_node, h5_col=35, quick_stride=15000,
-    thresh_on=2**14):
+def extract_onsets_from_analog_signal(sync_signal, quick_stride=15000,
+    thresh_on=2**14, invert=True):
     """Find the times that the analog signal went high
     
     First searches coarsely by subsampling by quick_stride
     Then searches more finely around each hit
+    
+    sync_signal : 1d array
+    quick_stride : how to coarsely subsample
+    thresh_on : threshold crossing
+    invert : if True, identify when signal goes low    
+        This is done by (2**15 - 1) - signal so assumes integer!
     """
+    if invert:
+        sync_signal = 2 ** 15 - 1 - sync_signal
+    
     # Coarse search
-    coarse = h5_node[::quick_stride, h5_col]
-    coarse_onsets = np.where(np.diff((coarse > thresh_on).astype(np.int)) == 1)[0]
+    coarse = sync_signal[::quick_stride]
+    coarse_onsets = np.where(
+        np.diff((coarse > thresh_on).astype(np.int)) == 1)[0]
     # For each coarse_onset, we know that coarse[coarse_onset+1] is >thresh,
     # and coarse[coarse_onset] is <= thresh.
 
@@ -211,10 +221,10 @@ def extract_onsets_from_analog_signal(h5_node, h5_col=35, quick_stride=15000,
         # We know it has to be somewhere in
         # [coarse_onset*quick_stride:(coarse_onset+1)*quick_stride], but
         # inclusive of the right limit.
-        slc = h5_node[
-            coarse_onset*quick_stride:(coarse_onset+1)*quick_stride + 1, 
-            h5_col]
-        fine_onsets = np.where(np.diff((slc > thresh_on).astype(np.int)) == 1)[0]
+        slc = sync_signal[
+            coarse_onset*quick_stride:(coarse_onset+1)*quick_stride + 1]
+        fine_onsets = np.where(
+            np.diff((slc > thresh_on).astype(np.int)) == 1)[0]
         
         if len(fine_onsets) == 0:
             raise ValueError("no onset found, but supposed to be")
@@ -345,7 +355,7 @@ def load_masks(kwx_path):
 
 
 def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
-    spike_range_t, event_range_t):
+    spike_range_t, event_range_t, event_labels=None):
     """Lock spike times to event times and return Folded
     
     spike_times : spike times
@@ -353,24 +363,35 @@ def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
     dstart, dstop : intervals to pass to Folded
     spike_range_t : earliest and latest possible time of spikes
     event_times_t : earliest and latest possible event times
+    event_labels : label of each event
+        These will be assigned to folded.labels, after masking them
+        in the same way as event_times
     
     Only spikes and events in the overlap of the spike and event intervals
     are included. For convenience dstart is added to the start and dstop
     is added to the stop of the overlap interval.
     """
+    spike_times = np.asarray(spike_times)
+    event_times = np.asarray(event_times)
+    event_labels = np.asarray(event_labels)
+    
     t_start = np.max([spike_range_t[0], event_range_t[0]]) + dstart
     t_stop = np.min([spike_range_t[1], event_range_t[1]]) + dstop
     spike_times = spike_times[
         (spike_times >= t_start) &
         (spike_times < t_stop)
     ]
-    event_times = event_times[
+    event_mask = (
         (event_times >= t_start) &
         (event_times < t_stop)
-    ]    
+    )
+    event_times = event_times[event_mask]
+    if event_labels is not None:
+        event_labels = event_labels[event_mask]
     
     folded = kkpandas.Folded.from_flat(spike_times, centers=event_times,
         dstart=dstart, dstop=dstop)
+    folded.labels = event_labels
     
     return folded
 
@@ -654,6 +675,9 @@ def infer_epochs_and_identify_munged_records(timestamps, error_thresh=30e3,
     
     timestamps : the timestamps from any OpenEphys channel
         I think this should be the same for all channels?
+    
+    Note: seems like the epoch number is already encoded as "recordingNumber",
+    though need to divide by 256.
     
     Normally, each timestamp should be separated by 1024 samples. Starting 
     and stopping the recording causes a jump. Occasional errors also cause 
