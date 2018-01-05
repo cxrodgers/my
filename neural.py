@@ -395,18 +395,30 @@ def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
     
     return folded
 
-def get_channel_mapping(sorted_channels_to_remove):
+def get_dataflow_accounting_for_missing(sorted_channels_to_remove, 
+    probe, adapter='ON4'):
     """Returns dataflow channel mapping, leaving out certain channels.
     
-    sorted_channels_to_remove : list of channels to remove, using the GUI sorted
-        numbering. (Same as in probe file naming.)
+    sorted_channels_to_remove : list of channels to remove, using the GUI 
+        sorted numbering.
+    probe : 'janelia' or 'H3'
+    adapter : 'ON4'
     
     Returns : dataflow df with channels removed
-        Also adds a 'kwx_order' column which is the index into the kwx file,
-        which is Intan numbering accounting for missing channels
+        Also adds a 'Srt_wo_broken' column which is just the channels
+        in sorted order not including the broken ones. This is the way
+        they are indexed by `cluster_channels`.
     """
     # Main adapter dataflow
-    dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON2_df
+    if adapter == 'ON4':
+        if probe == 'janelia':
+            dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON4_df
+        elif probe == 'H3':
+            dataflow = Adapters.dataflow.dataflow_h3_ON4_df
+        else:
+            raise ValueError("probe %s not supported" % probe)
+    else:
+        raise ValueError("adapter %s not supported" % adapter)
 
     # Ensure it is sorted by Srt
     dataflow = dataflow.sort_values(by='Srt')
@@ -415,7 +427,8 @@ def get_channel_mapping(sorted_channels_to_remove):
     dataflow_minus = dataflow.ix[~dataflow.Srt.isin(
         sorted_channels_to_remove)].copy()
     
-    dataflow_minus['kwx_order'] = dataflow_minus['Int'].rank().astype(np.int) - 1
+    # Add Srt_wo_broken
+    dataflow_minus['Srt_wo_broken'] = list(range(len(dataflow_minus)))
     
     return dataflow_minus
 
