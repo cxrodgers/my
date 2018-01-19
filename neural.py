@@ -401,7 +401,7 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
     
     sorted_channels_to_remove : list of channels to remove, using the GUI 
         sorted numbering.
-    probe : 'janelia' or 'H3'
+    probe : 'janelia' or 'H3' (case-insensitive)
     adapter : 'ON4'
     
     Returns : dataflow df with channels removed
@@ -411,9 +411,9 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
     """
     # Main adapter dataflow
     if adapter == 'ON4':
-        if probe == 'janelia':
+        if probe.lower() == 'janelia':
             dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON4_df
-        elif probe == 'H3':
+        elif probe.lower() == 'h3':
             dataflow = Adapters.dataflow.dataflow_h3_ON4_df
         else:
             raise ValueError("probe %s not supported" % probe)
