@@ -716,8 +716,13 @@ def get_header_from_folder(folderpath, filelist=None, **kwargs):
     for header in header_l:
         # Check the regular keys
         for key in included_keys:
+            # This one regularly varies between headers, for some reason
+            if key == 'date_created':
+                continue
+            
+            # Check that it is unique
             if unique_header[key] != header[key]:
-                print "warning: inconsistent header info in key %s" % key
+                raise ValueError("inconsistent header info in key %s" % key)
         
         # Check the floating point keys
         for key in included_float_keys:
