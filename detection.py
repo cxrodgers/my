@@ -1,6 +1,7 @@
 """Stuff for Detection task"""
 import numpy as np
 import pandas
+import my
 
 def parse_trial_matrix(bfile):
     """
