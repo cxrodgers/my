@@ -90,7 +90,8 @@ def parse_trial_matrix(bfile):
             rec['warmup'] = True
 
         # Parse each command
-        for command, time in zip(trial_df['command'].values, trial_df['time'].values):
+        zobj = zip(trial_df['command'].values, trial_df['time'].values)
+        for command, time in zobj:
             if command == 'Trial started at:':
                 assert 'start' not in rec
                 rec['start'] = time / 1000.0
@@ -106,10 +107,12 @@ def parse_trial_matrix(bfile):
                 # This is only for FA
                 assert 'outcome' not in rec
                 rec['outcome'] = 'FA'
+                rec['response_time'] = time / 1000.0
             elif command == 'REWARD!!!':
                 # This is only for HIT
                 assert 'outcome' not in rec
                 rec['outcome'] = 'hit'
+                rec['response_time'] = time / 1000.0
             elif command == 'dark':
                 assert 'opto' not in rec
                 rec['opto'] = False
@@ -119,9 +122,11 @@ def parse_trial_matrix(bfile):
             else:
                 1/0
         
+        # Specify opto explicitly if not yet done (warmup?)
         if 'opto' not in rec:
             rec['opto'] = False
         
+        # Specify outcome explicitly on miss and CR
         if 'outcome' not in rec:
             if rec['typ'] == 'go':
                 # Was not a HIT, must have been a MISS
@@ -129,16 +134,24 @@ def parse_trial_matrix(bfile):
             if rec['typ'] == 'nogo':
                 # Was not a FA, must have been a CR
                 rec['outcome'] = 'CR'
+
+        # Specify response_time as np.nan unless already set
+        if 'response_time' not in rec:
+            # Must be a miss or a CR
+            assert rec['outcome'] in ['miss', 'CR']
+            rec['response_time'] = np.nan
         
         rec_l.append(rec)
 
-    # DataFrame and error check
+    # DataFrame
     trial_matrix = pandas.DataFrame.from_records(rec_l)
-    assert not trial_matrix.isnull().any().any()
-
+    
     # Assign correct
     trial_matrix['correct'] = False
     trial_matrix.loc[trial_matrix.outcome.isin(['hit', 'CR']), 'correct'] = True
+
+    # Error check: only response time can be null
+    assert not trial_matrix.drop('response_time', 1).isnull().any().any()
     
     return trial_matrix
 
