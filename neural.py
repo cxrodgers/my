@@ -371,12 +371,17 @@ def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
     are included. For convenience dstart is added to the start and dstop
     is added to the stop of the overlap interval.
     """
+    # Arrayify
     spike_times = np.asarray(spike_times)
     event_times = np.asarray(event_times)
-    event_labels = np.asarray(event_labels)
+    if event_labels is not None:
+        event_labels = np.asarray(event_labels)
     
+    # Identify temporal range
     t_start = np.max([spike_range_t[0], event_range_t[0]]) + dstart
     t_stop = np.min([spike_range_t[1], event_range_t[1]]) + dstop
+    
+    # Mask spike times and events
     spike_times = spike_times[
         (spike_times >= t_start) &
         (spike_times < t_stop)
@@ -386,9 +391,12 @@ def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
         (event_times < t_stop)
     )
     event_times = event_times[event_mask]
+    
+    # Mask event labels
     if event_labels is not None:
         event_labels = event_labels[event_mask]
     
+    # Fold and assign labels
     folded = kkpandas.Folded.from_flat(spike_times, centers=event_times,
         dstart=dstart, dstop=dstop)
     folded.labels = event_labels
