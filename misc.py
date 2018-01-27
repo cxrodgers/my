@@ -1039,3 +1039,69 @@ def interpolate_dataframe(df, axis=0):
     res = df.interpolate(axis=axis)
     res[df_mask] = np.nan    
     return res
+
+def load_matlab_csv(filename):
+    """Read CSV written by matlab tablewrite into DataFrames
+    
+    Each entry in the table can be a scalar or a variable length array.
+    If it is a variable length array, then Matlab generates a set of
+    columns, long enough to hold the longest array. These columns have
+    the variable name with an index appended.
+    
+    This function infers which entries are scalars and which are arrays.
+    Arrays are grouped together and sorted by their index.
+    
+    Returns: scalar_df, array_df
+        scalar_df : DataFrame of scalar values from the table
+        array_df : DataFrame with MultiIndex on columns
+            The first level is the array name
+            The second level is the index within that array
+    """
+    # Read the CSV file
+    tdf = pandas.read_table(filename, sep=',')
+    cols = list(tdf.columns)
+
+    # Figure out which columns correspond to scalars and which to arrays
+    scalar_cols = [] # scalar column names
+    arr_cols = [] # array column names, without index
+    arrname2idxs = {} # dict of array column name to list of integer indices
+    arrname2colnames = {} # dict of array column name to list of full names
+    
+    # Iterate over columns
+    for col in cols:
+        # If the name ends in "_" plus space plus digits, it's probably
+        # from an array
+        if col[-1] in '0123456789' and '_' in col:
+            # Array col
+            # Infer the array name and index
+            colsplit = col.split('_')
+            arr_idx = int(colsplit[-1])
+            arr_name = '_'.join(colsplit[:-1])
+            
+            # Store
+            if arr_name in arrname2idxs:
+                arrname2idxs[arr_name].append(arr_idx)
+                arrname2colnames[arr_name].append(col)
+            else:
+                arrname2idxs[arr_name] = [arr_idx]
+                arrname2colnames[arr_name] = [col]
+                arr_cols.append(arr_name)
+        
+        else:
+            # Scalar col
+            scalar_cols.append(col)
+
+    # Extract all scalar columns
+    scalar_df = tdf[scalar_cols]
+
+    # Extract each set of array columns into its own dataframe
+    array_df_d = {}
+    for arrname in arr_cols:
+        adf = tdf[arrname2colnames[arrname]].copy()
+        adf.columns = arrname2idxs[arrname]
+        array_df_d[arrname] = adf
+    
+    # Concatenate array dataframes
+    array_df = pandas.concat(array_df_d, axis=1)
+
+    return scalar_df, array_df
