@@ -34,6 +34,10 @@ def parse_trial_matrix(bfile):
         b.  The rest is the same as in #3, except that lifts trigger punish()
             which prints "unrewarded punishment" and delays.
     5.  Delay by ITI
+    
+    Sync signals:
+    Looks like sync is normally high, and goes low for 765 samples (25ms)
+    Laser turns on 3780 samples (125ms) after onset of sync pulse
     """
     # Read all the lines
     with file(bfile) as fi:
