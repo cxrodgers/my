@@ -377,6 +377,12 @@ def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
     if event_labels is not None:
         event_labels = np.asarray(event_labels)
     
+    # Error check
+    if event_times.ndim != 1:
+        raise ValueError("event times must be 1d")
+    if spike_times.ndim != 1:
+        raise ValueError("spike times must be 1d")    
+    
     # Identify temporal range
     t_start = np.max([spike_range_t[0], event_range_t[0]]) + dstart
     t_stop = np.min([spike_range_t[1], event_range_t[1]]) + dstop
@@ -387,7 +393,7 @@ def lock_spikes_to_events(spike_times, event_times, dstart, dstop,
         (spike_times < t_stop)
     ]
     event_mask = (
-        (event_times >= t_start) &
+        (event_times >= t_start) & 
         (event_times < t_stop)
     )
     event_times = event_times[event_mask]
