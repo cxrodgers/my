@@ -480,6 +480,18 @@ def load_spike_templates1(sort_dir):
     templates = np.load(os.path.join(sort_dir, 'templates.npy'))
     return templates
 
+def load_unwhitened_and_scaled_spike_templates(sort_dir):
+    """Return the unwhitened spike templates scaled by their amplitudes.
+    
+    This is the `Wraw` variable in `rez.mat`.
+    It has shape (n_templates, n_samples, n_channels)
+    https://github.com/cortex-lab/KiloSort/issues/35
+    """
+    with tables.open_file(os.path.join(sort_dir, 'rez.mat')) as h5_file:
+        Wraw = np.asarray(h5_file.get_node('/rez/Wraw'))[:]
+    
+    return Wraw
+
 def load_spike_amplitudes(sort_dir):
     """Return spike amplitudes from kilosort
     
