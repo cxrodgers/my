@@ -251,7 +251,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     # Extract the ain36 signal
     chdata = my.OpenEphys.loadContinuous(neural_syncing_signal_filename,
         dtype=np.int16)
-    rawdata = np.transpose([chdata['data']])
+    rawdata = chdata['data']
 
     # Convert HIGH to LOW
     rawdata = 2**15 - rawdata
@@ -259,7 +259,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     # The light should always be on for at least 0.5s, prob more
     # So first threshold by striding over 0.5s intervals, then refine
     hlight_col = 0
-    n_onsets = extract_onsets_from_analog_signal(rawdata, hlight_col, 
+    n_onsets = extract_onsets_from_analog_signal(rawdata,
         quick_stride=100) / 30e3
 
     # Extract light on times from behavior file
