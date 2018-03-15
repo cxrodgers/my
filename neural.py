@@ -236,7 +236,7 @@ def extract_onsets_from_analog_signal(sync_signal, quick_stride=15000,
     
     return np.asarray(onsets)
 
-def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
+def sync_behavior_and_neural(neural_syncing_signal_filename, trial_matrix):
     """Sync neural and behavior
     
     This now syncs to the times in "timestamps", rather than using samples
@@ -244,10 +244,6 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     
     neural_syncing_signal_filename : filename of channel with house light signal
         This should be LOW during the sync pulse
-    
-    behavior_filename : logfile of session
-        Will use MCwatch.behavior.syncing.get_light_times_from_behavior_file
-        to get the light times
     
     Returns: b2n_fit
     """
@@ -266,10 +262,8 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     n_onsets_modsamps = np.mod(n_onsets_samples, 1024)
     n_onsets_seconds = (timestamps[n_onsets_records] + n_onsets_modsamps) / 30e3
 
-    # Get backlight times from logfile
-    backlight_times = (
-        MCwatch.behavior.syncing.get_light_times_from_behavior_file(
-        logfile=behavior_filename))
+    # Backlight times are just the start time
+    backlight_times = trial_matrix['start_time']
 
     # Fit (N is X and B is Y)
     fitdata = MCwatch.behavior.syncing.longest_unique_fit(
