@@ -266,23 +266,19 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     n_onsets_modsamps = np.mod(n_onsets_samples, 1024)
     n_onsets_seconds = (timestamps[n_onsets_records] + n_onsets_modsamps) / 30e3
 
-    # Extract light on times from behavior file
-    b_light_on, b_light_off = (
+    # Get backlight times from logfile
+    backlight_times = (
         MCwatch.behavior.syncing.get_light_times_from_behavior_file(
-        logfile=behavior_filename))
-    lines = ArduFSM.TrialSpeak.read_lines_from_file(behavior_filename)
-    parsed_df_by_trial = \
-        ArduFSM.TrialSpeak.parse_lines_into_df_split_by_trial(lines)
-
-    # Find the time of transition into inter_trial_interval (13)
-    backlight_times = ArduFSM.TrialSpeak.identify_state_change_times(
-        parsed_df_by_trial, state1=1, show_warnings=True)
+        logfile=bfile))
 
     # Fit (N is X and B is Y)
     fitdata = MCwatch.behavior.syncing.longest_unique_fit(
         n_onsets_seconds, backlight_times,
         verbose=True, return_all_data=True, refit_data=True,
     )    
+    
+    # Append the raw sample indices
+    fitdata['n_onsets_samples'] = n_onsets_samples
 
     return fitdata
 
@@ -846,3 +842,36 @@ def load_timestamps_of_syncing_signal(data_folder, recording_number,
     assert n_records == my.OpenEphys.get_number_of_records(full_sync_filename)
 
     return timestamps
+
+def load_continous_from_channel_number(folder, rec=1, channel=1,
+    ignore_last_record=True, dtype=np.int16):
+    """Load analog signal from folder by channel number
+    
+    """
+    # Generate short filename
+    if rec == 1:
+        filename = '100_ADC2.continuous'
+    else:
+        filename = '100_ADC2_%d.continuous' % rec
+    
+    # Attach to folder
+    full_filename = os.path.join(folder, filename)
+
+    # Load
+    chdata = my.OpenEphys.loadContinuous(full_filename, dtype=dtype,
+        ignore_last_record=ignore_last_record)
+    
+    return chdata
+
+def convert_samples_to_timestamps(samples, timestamps):
+    """Convert samples in OpenEphys file to times in timestamps.
+    
+    """
+    # Convert samples to records
+    records = samples // 1024
+    modsamps = np.mod(samples, 1024)
+    
+    # Index into timestamps
+    res = (timestamps[records] + modsamps) / 30e3   
+    
+    return res
