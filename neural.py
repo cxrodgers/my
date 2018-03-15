@@ -819,3 +819,30 @@ def infer_epochs_and_identify_munged_records(timestamps, error_thresh=30e3,
         'epoch_of_each_record': epoch_of_each_record,
         'epoch_start_record': epoch_start_record,
     }
+
+def load_timestamps_of_syncing_signal(data_folder, recording_number, 
+    ignore_last_record=False):
+    """Load syncing signal for recording in folder
+    
+    If ignore_last_record is False, then the last record which is in
+    the file which is usually zero-padded will be returned.
+    
+    Returns: timestamps of each record
+    """
+    # Get name of first ADC channel
+    if recording_number == 1:
+        sync_filename = '100_ADC1.continuous'
+    else:
+        sync_filename = '100_ADC1_%d.continuous' % recording_number
+    full_sync_filename = os.path.join(data_folder, sync_filename)
+
+    # Load
+    chdata = my.OpenEphys.loadContinuous(full_sync_filename, dtype=np.int16,
+        ignore_last_record=ignore_last_record, verbose=False)
+    timestamps = chdata['timestamps']
+
+    # Error check
+    n_records = len(timestamps)
+    assert n_records == my.OpenEphys.get_number_of_records(full_sync_filename)
+
+    return timestamps
