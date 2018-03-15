@@ -269,7 +269,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     # Get backlight times from logfile
     backlight_times = (
         MCwatch.behavior.syncing.get_light_times_from_behavior_file(
-        logfile=bfile))
+        logfile=behavior_filename))
 
     # Fit (N is X and B is Y)
     fitdata = MCwatch.behavior.syncing.longest_unique_fit(
