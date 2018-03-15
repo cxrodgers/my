@@ -239,6 +239,9 @@ def extract_onsets_from_analog_signal(sync_signal, quick_stride=15000,
 def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     """Sync neural and behavior
     
+    This now syncs to the times in "timestamps", rather than using samples
+    within the neural file. Also, refit_all_data is now True.
+    
     neural_syncing_signal_filename : filename of channel with house light signal
         This should be LOW during the sync pulse
     
@@ -248,23 +251,25 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     
     Returns: b2n_fit
     """
-    # Extract the ain36 signal
-    chdata = my.OpenEphys.loadContinuous(neural_syncing_signal_filename,
+    # Load syncing signal, with timestamps
+    chdata = my.OpenEphys.loadContinuous(neural_syncing_signal_filename, 
         dtype=np.int16)
-    rawdata = chdata['data']
+    timestamps = chdata['timestamps']
+    sync_signal = chdata['data']
 
-    # Convert HIGH to LOW
-    rawdata = 2**15 - rawdata
+    # Identify neural onsets
+    n_onsets_samples = extract_onsets_from_analog_signal(sync_signal,
+        quick_stride=100)
 
-    # The light should always be on for at least 0.5s, prob more
-    # So first threshold by striding over 0.5s intervals, then refine
-    hlight_col = 0
-    n_onsets = extract_onsets_from_analog_signal(rawdata,
-        quick_stride=100) / 30e3
+    # Use timestamps to convert to seconds
+    n_onsets_records = n_onsets_samples // 1024
+    n_onsets_modsamps = np.mod(n_onsets_samples, 1024)
+    n_onsets_seconds = (timestamps[n_onsets_records] + n_onsets_modsamps) / 30e3
 
     # Extract light on times from behavior file
-    b_light_on, b_light_off = MCwatch.behavior.syncing.get_light_times_from_behavior_file(
-        logfile=behavior_filename)
+    b_light_on, b_light_off = (
+        MCwatch.behavior.syncing.get_light_times_from_behavior_file(
+        logfile=behavior_filename))
     lines = ArduFSM.TrialSpeak.read_lines_from_file(behavior_filename)
     parsed_df_by_trial = \
         ArduFSM.TrialSpeak.parse_lines_into_df_split_by_trial(lines)
@@ -273,8 +278,13 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, behavior_filename):
     backlight_times = ArduFSM.TrialSpeak.identify_state_change_times(
         parsed_df_by_trial, state1=1, show_warnings=True)
 
-    b2n_fit = MCwatch.behavior.syncing.longest_unique_fit(n_onsets, backlight_times)
-    return b2n_fit
+    # Fit (N is X and B is Y)
+    fitdata = MCwatch.behavior.syncing.longest_unique_fit(
+        n_onsets_seconds, backlight_times,
+        verbose=True, return_all_data=True, refit_data=True,
+    )    
+
+    return fitdata
 
 def load_all_spikes_and_clusters(kwik_path):
     """Load all spikes and clusters from session.
