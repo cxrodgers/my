@@ -671,14 +671,22 @@ def get_video_params(video_filename):
         # Cast to int
         width_height_l.append(map(int, width_height))
     
-        # The fourth group in comma_split should be %f fps
-        frame_rate_fps = comma_split[4].split()
-        if frame_rate_fps[1] != 'fps':
-            # Sometimes this is a bitrate, with MKV/MPEG4 files
-            frame_rate_fps = comma_split[3].split()
-            if frame_rate_fps[1] != 'tbr':
-                raise ValueError("malformed frame rate:", frame_rate_fps)
-        frame_rate_l.append(float(frame_rate_fps[0]))
+        # Either comma_split[4] is "%f fps"
+        # or comma_split[3] is "%f fps"
+        # or comma_split[3] is "%f tbr"
+        cs4spl = comma_split[4].split()
+        cs3spl = comma_split[3].split()
+        if len(cs4spl) == 2 and cs4spl[1] == 'fps':
+            frame_rate_float = float(cs4spl[0])
+        elif len(cs3spl) == 2 and cs3spl[1] == 'fps':
+            frame_rate_float = float(cs3spl[0])
+        elif len(cs3spl) == 2 and cs3spl[1] == 'tbr':
+            frame_rate_float = float(cs3spl[0])
+        else:
+            raise ValueError("cannot interpret frame rate from %r" %
+                comma_split)
+
+        frame_rate_l.append(frame_rate_float)
     
     if len(width_height_l) > 1:
         print "warning: multiple video streams found, returning first"
