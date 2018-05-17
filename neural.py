@@ -236,7 +236,8 @@ def extract_onsets_from_analog_signal(sync_signal, quick_stride=15000,
     
     return np.asarray(onsets)
 
-def sync_behavior_and_neural(neural_syncing_signal_filename, trial_matrix):
+def sync_behavior_and_neural(neural_syncing_signal_filename, trial_matrix,
+    verbose=True):
     """Sync neural and behavior
     
     This now syncs to the times in "timestamps", rather than using samples
@@ -268,7 +269,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, trial_matrix):
     # Fit (N is X and B is Y)
     fitdata = MCwatch.behavior.syncing.longest_unique_fit(
         n_onsets_seconds, backlight_times,
-        verbose=True, return_all_data=True, refit_data=True,
+        verbose=verbose, return_all_data=True, refit_data=True,
     )    
     
     # Append the raw sample indices
