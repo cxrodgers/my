@@ -432,6 +432,12 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
             dataflow = Adapters.dataflow.dataflow_h3_ON4_df
         else:
             raise ValueError("probe %s not supported" % probe)
+    elif adapter == 'ON2A':
+        if probe.lower() == 'janelia':
+            # I think this is right
+            dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON2_df
+        else:
+            raise ValueError("probe %s not supported" % probe)            
     else:
         raise ValueError("adapter %s not supported" % adapter)
 
@@ -446,6 +452,46 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
     dataflow_minus['Srt_wo_broken'] = list(range(len(dataflow_minus)))
     
     return dataflow_minus
+
+def correct_z_in_dataflow(gs, chmap_filename):
+    """Load dataflow and correct Z
+    
+    This uses information from the grandsession and is a wrapper around
+    get_dataflow_accounting_for_missing
+    """
+    ## Get info about missing channels and channel ordering
+    # get probe and adapter
+    assert gs.neuralsession.adapter == 'ON4'
+    probe = gs.neuralsession.electrode
+    
+    # Get missing channels
+    chmap_dict = scipy.io.loadmat(chmap_filename)
+    connected_mask = chmap_dict['connected'].flatten().astype(np.bool)
+    missing_channels = np.where(~connected_mask)[0] + 1
+
+    # Get sorted order of channels after dropping broken
+    # This is the way they are indexed by cluster_channels
+    dataflow = my.neural.get_dataflow_accounting_for_missing(
+        missing_channels, probe=probe)
+
+    # correct depth for manipulator
+    if gs.neuralsession.z_withdraw is None:
+        z_surface = gs.neuralsession.z_touch
+    else:
+        z_surface = np.mean(
+            [gs.neuralsession.z_touch, gs.neuralsession.z_withdraw])
+    z_record = gs.neuralsession.z_final
+    
+    # the deepest site is the difference of the two measurements,
+    # -37.5 to account for distance between deepest site and tip
+    deepest_actual = 1000 * (z_surface - z_record) - 37.5
+    
+    # the correction factor is the actual minus 1260 (the nominal depth
+    # of the deepest site)
+    z_correction = deepest_actual - 1260
+    dataflow['Z_corrected'] = dataflow['Z'] + z_correction    
+
+    return dataflow
 
 
 ## For loading from kilosort
