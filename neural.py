@@ -453,7 +453,7 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
     
     return dataflow_minus
 
-def correct_z_in_dataflow(gs, chmap_filename):
+def correct_z_in_dataflow(gs, chmap_filename, dura_correction=50):
     """Load dataflow and correct Z
     
     This uses information from the grandsession and is a wrapper around
@@ -490,6 +490,10 @@ def correct_z_in_dataflow(gs, chmap_filename):
     # of the deepest site)
     z_correction = deepest_actual - 1260
     dataflow['Z_corrected'] = dataflow['Z'] + z_correction    
+
+    # optionally apply dura correction
+    # this makes everything more superficial
+    dataflow['Z_corrected'] = dataflow['Z_corrected'] - dura_correction
 
     return dataflow
 
