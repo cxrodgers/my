@@ -237,7 +237,7 @@ def put_scale_bars_on_axis(ax, scbar_center=(150, 150), scbar_length_um=100):
 
 
 def plot_rotated_and_scaled_image(image, ax, scale_um_per_px=3.28,
-    rotation_angle_deg=-120.8, rebin_factor=1,
+    rotation_angle_deg=-209.2, rebin_factor=1,
     cmap=plt.cm.hot, put_scale_bars=True, cval=None):
     """Rotate and scale image according to intrinsic imaging params.
     
