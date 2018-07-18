@@ -1006,12 +1006,15 @@ def times_near_times(x, y, dstart, dstop, sort_x=True):
     return v0 > v1
 
 
-def cut_dataframe(df, column, edges, new_column='bin', dropna=True):
+def cut_dataframe(df, column, edges, new_column='bin', dropna=True, **kwargs):
     """Bin dataframe by values in specified column
     
     column : name of column to bin
     edges : edges of bins
     new_columns : name of new column to add with integer bin labels
+    kwargs : passed to pandas.cut
+        Suggestion: right=False to make the bins include the left edge
+        instead of the right edge
     
     TODO: allow adding an extra bin edge at the end
     
@@ -1021,7 +1024,7 @@ def cut_dataframe(df, column, edges, new_column='bin', dropna=True):
     df = df.copy()
     
     # Insert column
-    df[new_column] = pandas.cut(df[column], bins=edges, labels=False)
+    df[new_column] = pandas.cut(df[column], bins=edges, labels=False, **kwargs)
     
     # Drop outside range
     if dropna:
