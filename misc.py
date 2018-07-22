@@ -1108,3 +1108,56 @@ def load_matlab_csv(filename):
     array_df = pandas.concat(array_df_d, axis=1)
 
     return scalar_df, array_df
+
+def sort_whisker_names(curated_whiskers_as_dict):
+    """Sort whisker names in anatomical order.
+    
+    curated_whiskers_as_dict : dict from object label to whisker name
+    
+    Iterates through all values of `curated_whiskers_as_dict`. Sorts them
+    into junk (anything containing "junk"), unk (anything containing "unk"),
+    greeks (lowercase names), and real whiskers (the rest).
+    
+    Returns: dict
+        'greek', 'real', 'junk', 'unk' : as above
+        'sorted_order' : greek + real + junk + unk
+    """
+    # Order: real, then junk, then unk
+    junk_whiskers, unk_whiskers, greek_whiskers, real_whiskers = [], [], [], []
+    for whisker_name in curated_whiskers_as_dict.values():
+        if 'junk' in whisker_name:
+            junk_whiskers.append(whisker_name)
+        elif 'unk' in whisker_name:
+            unk_whiskers.append(whisker_name)
+        elif str.islower(whisker_name):
+            greek_whiskers.append(whisker_name)
+        else:
+            real_whiskers.append(whisker_name)
+    sorted_whisker_names = (sorted(greek_whiskers) + sorted(real_whiskers) + 
+        sorted(junk_whiskers) + sorted(unk_whiskers))
+    
+    return {
+        'greek': greek_whiskers,
+        'junk': junk_whiskers,
+        'unk': unk_whiskers,
+        'real': real_whiskers,
+        'sorted_order': sorted_whisker_names,
+    }
+    
+def simple_sort_whisker_names(whisker_names):
+    # Order: real, then junk, then unk
+    junk_whiskers, unk_whiskers, greek_whiskers, real_whiskers = [], [], [], []
+    
+    for whisker_name in whisker_names:
+        if 'junk' in whisker_name:
+            junk_whiskers.append(whisker_name)
+        elif 'unk' in whisker_name:
+            unk_whiskers.append(whisker_name)
+        elif str.islower(whisker_name):
+            greek_whiskers.append(whisker_name)
+        else:
+            real_whiskers.append(whisker_name)
+    sorted_whisker_names = (sorted(greek_whiskers) + sorted(real_whiskers) + 
+        sorted(junk_whiskers) + sorted(unk_whiskers))
+    
+    return sorted_whisker_names
