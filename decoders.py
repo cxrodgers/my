@@ -4,85 +4,25 @@ import matplotlib as mpl
 from scipy.stats import sem
 import scipy.io
 import os
-from sklearn.cross_validation import KFold
-from sklearn.cross_validation import StratifiedKFold
-from sklearn.cross_validation import ShuffleSplit
+from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import ShuffleSplit
 from sklearn.linear_model import LogisticRegression
 from sklearn import svm
-from sklearn.cross_validation import StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit
 from numpy.random import permutation
 from numpy.random import choice
 from sklearn.linear_model import LinearRegression
-import imbalanced_data
+#~ import imbalanced_data
 from sklearn.linear_model import ElasticNet
 from sklearn.linear_model import Lasso
 import scipy.stats
-import ipdb
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
-import nn_pytorch
 from sklearn import preprocessing
 
-class nn_pytorch_logregress:
-    def __init__(self,type_class,feat,clase,regularization):
-        self.type_class=type_class
-        self.feat=feat
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        self.cv=5
-        self.regularization=regularization
-
-    def logregress(self):
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        skf=StratifiedKFold(self.clase,self.cv)
-        g=0
-        for train,test in skf:
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            supp=nn_pytorch.nn_convolutional(type_class=self.type_class,feat=X_train,clase=y_train,regularization=self.regularization)
-            trainning=supp.fit()
-            perf[g]=supp.score(X_test,y_test)
-            perf_train[g]=supp.score(X_train,y_train)
-            g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        output={'performance':performance,'performance_train':performance_train}
-        return output
-
-    def logregress_uniform_prior(self,n_unif,method): 
-        perf=np.zeros((n_unif,self.cv))
-        perf_th=np.zeros((n_unif,self.cv))
-        perf_train=np.zeros((n_unif,self.cv))
-        if method=='oversampling':
-            p_in=imbalanced_data.oversampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        if method=='undersampling':
-            p_in=imbalanced_data.undersampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        for i in range(len(index_balanced)):
-            clase_balanced=self.clase[index_balanced[i]]
-            feat_balanced=self.feat[index_balanced[i]]            
-            skf=StratifiedKFold(clase_balanced,self.cv)  
-            g=0
-            for train,test in skf: 
-                X_train=feat_balanced[train]
-                X_test=feat_balanced[test]
-                y_train=clase_balanced[train]
-                y_test=clase_balanced[test]
-                supp=nn_pytorch.nn_convolutional(type_class=self.type_class,feat=X_train,clase=y_train,regularization=self.regularization)
-                trainning=supp.fit()
-                perf[i,g]=supp.score(X_test,y_test)
-                perf_train[i,g]=supp.score(X_train,y_train)
-                g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        output={'performance':performance,'performance_train':performance_train}
-        return output
 
 class linear_svm:
     def __init__(self,feat,clase):
@@ -314,42 +254,109 @@ class svm:
         return output
 
 class logregress:
-    def __init__(self,feat,clase,regularization):
+    def __init__(self,feat,clase, regularization=10**5, cv=5, cv_shuffle=True,
+        balance_classes=True):
+        """Initalize logistic regression object
+        
+        cv : number of folds
+        cv_shuffle : shuffle the trials included in each fold
+            Used to set 'shuffle' in StratifiedKFold
+        balance_classes : whether to set balance classes by setting
+            'class_weight' to 'balanced' in LogisticRegression
+        
+        """
         self.feat=feat
         self.clase=clase
         self.clase_unique=np.unique(self.clase)
         self.prior=len(self.clase[self.clase==1])/float(len(self.clase))
-        self.cv=5
-        self.regularization=regularization
-        if regularization==0.0:
+        self.cv = cv
+        self.cv_shuffle = cv_shuffle
+        self.regularization = regularization
+        self.balance_classes = balance_classes
+        if regularization == 0.0:
             print 'la regularization no deberia ser 0'
             self.regularization=10**5
 
     def logregress(self):
+        """Run cross-validated logistic regression 
+        
+        Uses self.feat and self.clase as the features and labels. Uses
+        StratifiedKFold to generated the test and train sets. For each
+        fold, fits on the train set and tests on the test set.
+        
+        Returns: dict
+            'performance' : performance on test set, meaned over folds
+            'performance_train': same, but for training set
+            'weights': coefficients, meaned over folds
+                The last entry will be the intercept
+            'test_idxs': list of length n_folds (default 4)
+                Each entry is an array of indices into features and labels
+                that were tested on this fold.
+            'decision_function': decision function for all tested indices
+                This is in the same order as test_idxs, but concatenated
+                over folds
+            'predict_probability': probability
+                This is in the same order as test_idxs, but concatenated
+                over folds            
+        """
         perf=np.zeros((self.cv))
         perf_train=np.zeros((self.cv))
         wei=np.zeros((self.cv,len(self.feat[0])+1,1))
         dec_function=np.array([])
         predict_proba=np.array([])
-        skf=StratifiedKFold(self.clase,self.cv)
+        skf=StratifiedKFold(self.clase, self.cv, shuffle=self.cv_shuffle)
+        test_idxs = []
+        
+        # Iterate over folds
         g=0
         for train,test in skf: 
+            # Split out test and train sets
             X_train=self.feat[train]
             X_test=self.feat[test]
             y_train=self.clase[train]
             y_test=self.clase[test]
-            log=LogisticRegression(C=(1.0/self.regularization))
+            
+            # Initalize fitter
+            class_weight = 'balanced' if self.balance_classes else None
+            log=LogisticRegression(
+                C=(1.0/self.regularization),
+                class_weight=class_weight,
+            )
+            
+            # Fit
             trainning=log.fit(X_train,y_train)
+            
+            # Iteratively stack the decision function and predict proba
             dec_function=np.hstack((dec_function,log.decision_function(X_test)))
             predict_proba=np.hstack((predict_proba,log.predict_proba(X_test)[:,1]))
+            
+            # Store the performance on test and train
             perf[g]=log.score(X_test,y_test)
             perf_train[g]=log.score(X_train,y_train)
+            
+            # Store the train indices (which match up with dec_function and 
+            # predict_proba)
+            test_idxs.append(test)
+            
+            # Store the weights
             wei[g,:,0]=np.append(log.coef_[0],log.intercept_)
+            
+            # Increment fold count
             g=g+1
+        
+        # Mean performance and weights over folds
         performance=np.mean(perf)
         performance_train=np.mean(perf_train)
         weights=np.mean(wei,axis=0)
-        output={'performance':performance,'performance_train':performance_train,'weights':weights,'decision_function':dec_function,'predict_probability':predict_proba}
+        
+        output = {
+            'performance': performance,
+            'performance_train': performance_train,
+            'weights': weights,
+            'decision_function': dec_function,
+            'predict_probability': predict_proba,
+            'test_idxs': test_idxs,
+        }
         return output
 
     def logregress_shuffled(self,n):
