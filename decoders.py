@@ -255,7 +255,7 @@ class svm:
 
 class logregress:
     def __init__(self,feat,clase, regularization=10**5, cv=5, cv_shuffle=True,
-        balance_classes=True):
+        balance_classes=True, random_state=0):
         """Initalize logistic regression object
         
         cv : number of folds
@@ -263,6 +263,7 @@ class logregress:
             Used to set 'shuffle' in StratifiedKFold
         balance_classes : whether to set balance classes by setting
             'class_weight' to 'balanced' in LogisticRegression
+        random_state : sent to StratifiedKFold for shuffling
         
         """
         self.feat=feat
@@ -273,6 +274,7 @@ class logregress:
         self.cv_shuffle = cv_shuffle
         self.regularization = regularization
         self.balance_classes = balance_classes
+        self.random_state = random_state
         if regularization == 0.0:
             print 'la regularization no deberia ser 0'
             self.regularization=10**5
@@ -304,12 +306,13 @@ class logregress:
         wei=np.zeros((self.cv,len(self.feat[0])+1,1))
         dec_function=np.array([])
         predict_proba=np.array([])
-        skf=StratifiedKFold(self.clase, self.cv, shuffle=self.cv_shuffle)
+        skf=StratifiedKFold(n_splits=self.cv, shuffle=self.cv_shuffle,
+            random_state=self.random_state)
         test_idxs = []
         
         # Iterate over folds
         g=0
-        for train,test in skf: 
+        for train,test in skf.split(self.feat, self.clase): 
             # Split out test and train sets
             X_train=self.feat[train]
             X_test=self.feat[test]
