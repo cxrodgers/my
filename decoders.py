@@ -254,26 +254,47 @@ class svm:
         return output
 
 class logregress:
-    def __init__(self,feat,clase, regularization=10**5, cv=5, cv_shuffle=True,
-        balance_classes=True, random_state=0):
+    def __init__(self, features, labels, classes=None, 
+        regularization=10**5, cv=5, cv_shuffle=True,
+        balance_labels=True, balance_classes=True, random_state=0):
         """Initalize logistic regression object
         
+        features : shape (Ndata, Nfeatures)
+            The predictors to use to predict the labels
+            
+        labels : shape (Ndata,)
+            The actual labels of the data
+            Each label of data is equally weighted, if balance_labels is True
+        
+        classes : shape (Ndata, Nclasses)
+            The classes of the data, to be used in equalizing
+            Each "class of data" is equally weighted, if balance_classes is True
+        
         cv : number of folds
+        
         cv_shuffle : shuffle the trials included in each fold
             Used to set 'shuffle' in StratifiedKFold
-        balance_classes : whether to set balance classes by setting
+        
+        balance_labels : whether to balance labels by setting
             'class_weight' to 'balanced' in LogisticRegression
+
+        balance_classes : whether to balance labels by setting
+            'class_weight' to 'balanced' in LogisticRegression
+            balance_classes dominates balance_labels if both are True
+        
         random_state : sent to StratifiedKFold for shuffling
         
         """
-        self.feat=feat
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        self.prior=len(self.clase[self.clase==1])/float(len(self.clase))
+        self.features = features
+        self.labels = labels
+        self.unique_labels = np.unique(self.labels)
+        self.classes = classes
+        self.prior=len(self.labels[self.labels==1])/float(len(self.labels))
         self.cv = cv
         self.cv_shuffle = cv_shuffle
         self.regularization = regularization
         self.balance_classes = balance_classes
+        self.balance_labels = balance_labels
         self.random_state = random_state
         if regularization == 0.0:
             print 'la regularization no deberia ser 0'
@@ -303,32 +324,74 @@ class logregress:
         """
         perf=np.zeros((self.cv))
         perf_train=np.zeros((self.cv))
-        wei=np.zeros((self.cv,len(self.feat[0])+1,1))
+        wei=np.zeros((self.cv, len(self.features[0]) + 1, 1))
         dec_function=np.array([])
         predict_proba=np.array([])
+
+        # This object will select the train and test splits
+        # We'll use either self.classes or self.lablels to do the split,
+        # depending on self.balance_classes and self.balance_labels
         skf=StratifiedKFold(n_splits=self.cv, shuffle=self.cv_shuffle,
             random_state=self.random_state)
+
+        # The samples are weighted in inverse proportion to the class frequency
+        # (NOT the label frequency)
+        if self.classes is not None:
+            class_id2weight = {}
+            for this_class in np.unique(self.classes):
+                n_this_class = np.sum(self.classes == this_class)
+                weight_this_class = len(self.classes) / float(n_this_class)
+                class_id2weight[this_class] = weight_this_class
+        
+        # Store the test indices here
         test_idxs = []
+        
+        # Balancing
+        # Note that balance_classes dominates balance_labels
+        if self.balance_classes:
+            to_balance = self.classes
+        elif self.balance_labels:
+            to_balance = self.labels
+        else:
+            raise ValueError(
+                "either balance classes or balance labels must be True")
         
         # Iterate over folds
         g=0
-        for train,test in skf.split(self.feat, self.clase): 
+        for train,test in skf.split(self.features, to_balance): 
             # Split out test and train sets
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            
-            # Initalize fitter
-            class_weight = 'balanced' if self.balance_classes else None
-            log=LogisticRegression(
-                C=(1.0/self.regularization),
-                class_weight=class_weight,
-            )
+            X_train = self.features[train]
+            X_test = self.features[test]
+            y_train = self.labels[train]
+            y_test = self.labels[test]
             
             # Fit
-            trainning=log.fit(X_train,y_train)
-            
+            if self.balance_classes:
+                ## Balancing by classes
+                # Calculate the sample weights for this fold
+                fold_classes = self.classes[train]
+                fold_sample_weights = np.array([class_id2weight[class_id]
+                    for class_id in fold_classes])
+                
+                # Initialize fitter
+                log=LogisticRegression(
+                    C=(1.0/self.regularization),
+                )
+
+                # Fit, applying the sample weights
+                log.fit(X_train, y_train, sample_weight=fold_sample_weights)
+
+            elif self.balance_labels:
+                ## Balancing by labels
+                # Initialize fitter
+                log=LogisticRegression(
+                    C=(1.0/self.regularization),
+                    class_weight='balanced',
+                )
+
+                # Fit
+                log.fit(X_train, y_train)
+
             # Iteratively stack the decision function and predict proba
             dec_function=np.hstack((dec_function,log.decision_function(X_test)))
             predict_proba=np.hstack((predict_proba,log.predict_proba(X_test)[:,1]))
@@ -337,7 +400,7 @@ class logregress:
             perf[g]=log.score(X_test,y_test)
             perf_train[g]=log.score(X_train,y_train)
             
-            # Store the train indices (which match up with dec_function and 
+            # Store the test indices (which match up with dec_function and 
             # predict_proba)
             test_idxs.append(test)
             
@@ -355,6 +418,7 @@ class logregress:
         output = {
             'performance': performance,
             'performance_train': performance_train,
+            'fold_weights': wei,
             'weights': weights,
             'decision_function': dec_function,
             'predict_probability': predict_proba,
