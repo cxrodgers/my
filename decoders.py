@@ -256,7 +256,7 @@ class svm:
 class logregress:
     def __init__(self, features, labels, classes=None, 
         regularization=10**5, cv=5, cv_shuffle=True,
-        balance_labels=True, balance_classes=True, random_state=0):
+        balance_labels=True, balance_classes=False, random_state=0):
         """Initalize logistic regression object
         
         features : shape (Ndata, Nfeatures)
@@ -296,6 +296,7 @@ class logregress:
         self.balance_classes = balance_classes
         self.balance_labels = balance_labels
         self.random_state = random_state
+        
         if regularization == 0.0:
             print 'la regularization no deberia ser 0'
             self.regularization=10**5
@@ -347,6 +348,9 @@ class logregress:
         test_idxs = []
         
         # Balancing
+        if self.classes is None and self.balance_classes:
+            raise ArgumentError("cannot balance classes if classes is None")
+        
         # Note that balance_classes dominates balance_labels
         if self.balance_classes:
             to_balance = self.classes
