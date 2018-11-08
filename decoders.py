@@ -23,6 +23,7 @@ from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
 from sklearn import preprocessing
 
+from sklearn.ensemble import RandomForestClassifier
 
 class linear_svm:
     def __init__(self,feat,clase):
@@ -253,6 +254,183 @@ class svm:
         output={'performance_distr':performance_distr}
         return output
 
+class RandomForest:
+    def __init__(self, features, labels, classes=None, 
+        regularization=10**5, cv=5, cv_shuffle=True,
+        balance_labels=True, balance_classes=False, random_state=0):
+        """Initalize Random Forest object
+        
+        features : shape (Ndata, Nfeatures)
+            The predictors to use to predict the labels
+            
+        labels : shape (Ndata,)
+            The actual labels of the data
+            Each label of data is equally weighted, if balance_labels is True
+        
+        classes : shape (Ndata, Nclasses)
+            The classes of the data, to be used in equalizing
+            Each "class of data" is equally weighted, if balance_classes is True
+        
+        cv : number of folds
+        
+        cv_shuffle : shuffle the trials included in each fold
+            Used to set 'shuffle' in StratifiedKFold
+        
+        balance_labels : whether to balance labels by setting
+            'class_weight' to 'balanced' in LogisticRegression
+
+        balance_classes : whether to balance labels by setting
+            'class_weight' to 'balanced' in LogisticRegression
+            balance_classes dominates balance_labels if both are True
+        
+        random_state : sent to StratifiedKFold for shuffling
+        
+        """
+        self.features = features
+        self.labels = labels
+        self.unique_labels = np.unique(self.labels)
+        self.classes = classes
+        self.prior=len(self.labels[self.labels==1])/float(len(self.labels))
+        self.cv = cv
+        self.cv_shuffle = cv_shuffle
+        self.regularization = regularization
+        self.balance_classes = balance_classes
+        self.balance_labels = balance_labels
+        self.random_state = random_state
+        
+        if regularization == 0.0:
+            print 'la regularization no deberia ser 0'
+            self.regularization=10**5
+
+    def run(self, **kwargs):
+        """Run cross-validated Random Forest
+        
+        Uses self.feat and self.clase as the features and labels. Uses
+        StratifiedKFold to generated the test and train sets. For each
+        fold, fits on the train set and tests on the test set.
+        
+        Returns: dict
+            'performance' : performance on test set, meaned over folds
+            'performance_train': same, but for training set
+            'weights': coefficients, meaned over folds
+                The last entry will be the intercept
+            'test_idxs': list of length n_folds (default 4)
+                Each entry is an array of indices into features and labels
+                that were tested on this fold.
+            'decision_function': decision function for all tested indices
+                This is in the same order as test_idxs, but concatenated
+                over folds
+            'predict_probability': probability
+                This is in the same order as test_idxs, but concatenated
+                over folds            
+        """
+        perf=np.zeros((self.cv))
+        perf_train=np.zeros((self.cv))
+        wei=np.zeros((self.cv, len(self.features[0]) + 1, 1))
+        dec_function=np.array([])
+        predict_proba=np.array([])
+
+        # This object will select the train and test splits
+        # We'll use either self.classes or self.lablels to do the split,
+        # depending on self.balance_classes and self.balance_labels
+        skf=StratifiedKFold(n_splits=self.cv, shuffle=self.cv_shuffle,
+            random_state=self.random_state)
+
+        # The samples are weighted in inverse proportion to the class frequency
+        # (NOT the label frequency)
+        if self.classes is not None:
+            class_id2weight = {}
+            for this_class in np.unique(self.classes):
+                n_this_class = np.sum(self.classes == this_class)
+                weight_this_class = len(self.classes) / float(n_this_class)
+                class_id2weight[this_class] = weight_this_class
+        
+        # Store the test indices here
+        test_idxs = []
+        
+        # Balancing
+        if self.classes is None and self.balance_classes:
+            raise ValueError("cannot balance classes if classes is None")
+        
+        # Note that balance_classes dominates balance_labels
+        if self.balance_classes:
+            to_balance = self.classes
+        elif self.balance_labels:
+            to_balance = self.labels
+        else:
+            raise ValueError(
+                "either balance classes or balance labels must be True")
+        
+        # Iterate over folds
+        g=0
+        for train,test in skf.split(self.features, to_balance): 
+            # Split out test and train sets
+            X_train = self.features[train]
+            X_test = self.features[test]
+            y_train = self.labels[train]
+            y_test = self.labels[test]
+            
+            # Fit
+            if self.balance_classes:
+                ## Balancing by classes
+                # Calculate the sample weights for this fold
+                fold_classes = self.classes[train]
+                fold_sample_weights = np.array([class_id2weight[class_id]
+                    for class_id in fold_classes])
+                
+                # Initialize fitter
+                log=RandomForestClassifier(
+                    **kwargs
+                )
+
+                # Fit, applying the sample weights
+                log.fit(X_train, y_train, sample_weight=fold_sample_weights)
+
+            elif self.balance_labels:
+                ## Balancing by labels
+                # Initialize fitter
+                log=RandomForestClassifier(
+                    class_weight='balanced',
+                    **kwargs
+                )
+
+                # Fit
+                log.fit(X_train, y_train)
+
+            # Iteratively stack the decision function and predict proba
+            #~ dec_function=np.hstack((dec_function,log.decision_function(X_test)))
+            predict_proba=np.hstack((predict_proba,log.predict_proba(X_test)[:,1]))
+            
+            # Store the performance on test and train
+            perf[g]=log.score(X_test,y_test)
+            perf_train[g]=log.score(X_train,y_train)
+            
+            # Store the test indices (which match up with dec_function and 
+            # predict_proba)
+            test_idxs.append(test)
+            
+            # Store the weights
+            #~ wei[g,:,0]=np.append(log.coef_[0],log.intercept_)
+            
+            # Increment fold count
+            g=g+1
+        
+        # Mean performance and weights over folds
+        performance=np.mean(perf)
+        performance_train=np.mean(perf_train)
+        weights=np.mean(wei,axis=0)
+        
+        output = {
+            'performance': performance,
+            'performance_train': performance_train,
+            'fold_weights': wei,
+            'weights': weights,
+            'decision_function': dec_function,
+            'predict_probability': predict_proba,
+            'test_idxs': test_idxs,
+        }
+        return output
+
 class logregress:
     def __init__(self, features, labels, classes=None, 
         regularization=10**5, cv=5, cv_shuffle=True,
@@ -349,7 +527,7 @@ class logregress:
         
         # Balancing
         if self.classes is None and self.balance_classes:
-            raise ArgumentError("cannot balance classes if classes is None")
+            raise ValueError("cannot balance classes if classes is None")
         
         # Note that balance_classes dominates balance_labels
         if self.balance_classes:
