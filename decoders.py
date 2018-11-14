@@ -434,7 +434,8 @@ class RandomForest:
 class logregress:
     def __init__(self, features, labels, classes=None, 
         regularization=10**5, cv=5, cv_shuffle=True,
-        balance_labels=True, balance_classes=False, random_state=0):
+        balance_labels=True, balance_classes=False, undersample_classes=False,
+        random_state=0):
         """Initalize logistic regression object
         
         features : shape (Ndata, Nfeatures)
@@ -473,6 +474,7 @@ class logregress:
         self.regularization = regularization
         self.balance_classes = balance_classes
         self.balance_labels = balance_labels
+        self.undersample_classes = undersample_classes
         self.random_state = random_state
         
         if regularization == 0.0:
@@ -526,19 +528,23 @@ class logregress:
         test_idxs = []
         
         # Balancing
-        if self.classes is None and self.balance_classes:
+        if self.classes is None and (self.balance_classes or self.undersample_classes):
             raise ValueError("cannot balance classes if classes is None")
         
-        # Note that balance_classes dominates balance_labels
-        if self.balance_classes:
+        # In the stratification process, equalize in each fold the 
+        # number of classes (if balance_classes or undersample_classes)
+        # or the the number of labels (if balance_labels)
+        # Note that balance_classes and undersample_classes dominate balance_labels
+        if self.balance_classes or self.undersample_classes:
             to_balance = self.classes
         elif self.balance_labels:
             to_balance = self.labels
         else:
             raise ValueError(
-                "either balance classes or balance labels must be True")
+                "either balance_classes, balance_labels, or "
+                "undersample_classes must be True")
         
-        # Iterate over folds
+        # Iterate over folds, stratified by to_balance
         g=0
         for train,test in skf.split(self.features, to_balance): 
             # Split out test and train sets
@@ -562,6 +568,47 @@ class logregress:
 
                 # Fit, applying the sample weights
                 log.fit(X_train, y_train, sample_weight=fold_sample_weights)
+
+            elif self.undersample_classes:
+                ## Undersample each class to the size of the minimum class
+                # Get the classes for this fold
+                fold_classes = self.classes[train]
+                
+                # Count the samples of each class
+                n_samples_of_each_class = np.bincount(fold_classes)
+                
+                # Take this many from each
+                n_samples_per_class = np.min(n_samples_of_each_class)
+                
+                # Take
+                chosen_l = []
+                for class_id in range(len(n_samples_of_each_class)):
+                    # Indexes into fold_classes
+                    idxs = np.where(fold_classes == class_id)[0]
+                    
+                    # Choose some of them
+                    chosen_idxs = np.random.permutation(idxs)[
+                        :n_samples_per_class]
+                    
+                    # Index into train with this
+                    chosen_l.append(train[chosen_idxs])
+                
+                # Concatenate to get the new, undersampled "train"
+                new_train = np.sort(np.concatenate(chosen_l))
+                
+                # Rederive X_train, y_train, and fold_classes
+                X_train = self.features[new_train]
+                y_train = self.labels[new_train]
+                fold_classes = self.classes[new_train]
+                
+                # Initialize fitter, still balancing by labels
+                log=LogisticRegression(
+                    C=(1.0/self.regularization),
+                    class_weight='balanced',
+                )
+
+                # Fit
+                log.fit(X_train, y_train)                
 
             elif self.balance_labels:
                 ## Balancing by labels
