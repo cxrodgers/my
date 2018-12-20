@@ -583,6 +583,8 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
             print "cancelled"
         finally:
             plt.ioff()
+            plt.close(f)
+    
     return res    
 
 
