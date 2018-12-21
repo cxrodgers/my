@@ -226,6 +226,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     
     filename : file to read
     n_frames : number of frames to process
+        if None or np.inf, will continue until video is exhausted
     func : function to apply to each frame
         If 'mean', then func = lambda frame: frame.mean()
         If 'keep', then func = lambda frame: frame
@@ -238,9 +239,11 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     pix_fmt : Sent to ffmpeg
     
     TODO: 
-    if n_frames is None, set to max or inf
     get video params using ffprobe
     """
+    if n_frames is None:
+        n_frames = np.inf
+    
     # Default function is mean luminance
     if func == 'mean':
         func = lambda frame: frame.mean()
