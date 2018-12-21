@@ -65,7 +65,7 @@ def ffmpeg_frame_string(filename, frame_time=None, frame_number=None):
     return use_frame_string
 
 def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
-    pix_fmt='gray', bufsize=10**9, path_to_ffmpeg='ffmpeg'):
+    pix_fmt='gray', bufsize=10**9, path_to_ffmpeg='ffmpeg', vsync='drop'):
     """Returns a single frame from a video as an array.
     
     This creates an ffmpeg process and extracts data from it with a pipe.
@@ -112,6 +112,7 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
     command = [path_to_ffmpeg, 
         '-ss', frame_string,
         '-i', filename,
+        '-vsync', vsync,
         '-vframes', '1',       
         '-f', 'image2pipe',
         '-pix_fmt', pix_fmt,
@@ -214,7 +215,7 @@ def frame_dump(filename, frametime, output_filename='out.png',
 def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     frame_chunk_sz=1000, bufsize=10**9,
     image_w=None, image_h=None, pix_fmt='gray',
-    finalize='concatenate', path_to_ffmpeg='ffmpeg'):
+    finalize='concatenate', path_to_ffmpeg='ffmpeg', vsync='drop'):
     """Read frames from video, apply function, return result
     
     Uses a pipe to ffmpeg to load chunks of frame_chunk_sz frames, applies
@@ -266,6 +267,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     # Create the command
     command = [path_to_ffmpeg,
         '-i', filename,
+        '-vsync', vsync,
         '-f', 'image2pipe',
         '-pix_fmt', pix_fmt,
         '-vcodec', 'rawvideo', '-']
