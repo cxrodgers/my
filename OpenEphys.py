@@ -67,7 +67,7 @@ def loadFolder(folderpath,**kwargs):
 
 def loadFolderToArray(folderpath, channels='all', dtype=float, 
     source='100', recording=None, start_record=None, stop_record=None,
-    verbose=True):
+    verbose=False):
     """Load the neural data files in a folder to a single array.
     
     By default, all channels in the folder are loaded in numerical order.
@@ -89,7 +89,7 @@ def loadFolderToArray(folderpath, channels='all', dtype=float,
             and passed to loadContinuous. Python indexing is used, so 
             `stop_record` is not inclusive. If `start_record` is None, 
             start at the beginning; if `stop_record` is None, read to the end.
-        verbose : print status updateds
+        verbose : print status updates
     
     Returns: numpy array of shape (n_samples, n_channels)
     """
@@ -125,7 +125,7 @@ def loadFolderToArray(folderpath, channels='all', dtype=float,
     return data_array
 
 
-def loadContinuous(filepath, dtype=float, verbose=True, 
+def loadContinuous(filepath, dtype=float, verbose=False, 
     start_record=None, stop_record=None, ignore_last_record=True):
     """Load continuous data from a single channel in the file `filepath`.
     
