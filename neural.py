@@ -636,7 +636,7 @@ def get_cluster_channels(sort_dir, cluster_group, spike_cluster,
     
     return cluster_channels
 
-def extract_peak_and_width(waveform):
+def extract_peak_and_width(waveform, force_negative=True):
     """Return properties of the waveform peak
     
     Typically this is used to identify narrow-spiking cells. I find that
@@ -644,6 +644,9 @@ def extract_peak_and_width(waveform):
     When this value is < 8 samples (0.2667ms), call it narrow-spiking.
     
     waveform : array
+    force_negative : bool
+        If True, find a negative peak
+        If False, find the biggest peak (whether positive or negative)
     
     Returns : dict of properties
         idx : index of peak (where waveform reaches its greatest absolute value)
@@ -656,7 +659,10 @@ def extract_peak_and_width(waveform):
             sample after the peak, in which case the `width` is 1
     """
     # Identify polarity and peak
-    peak_loc = np.argmax(np.abs(waveform))
+    if force_negative:
+        peak_loc = np.argmin(waveform)
+    else:
+        peak_loc = np.argmax(np.abs(waveform))
     peak_ampl = waveform[peak_loc]
     peak_is_negative = peak_ampl < 0
     
