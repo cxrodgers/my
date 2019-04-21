@@ -8,7 +8,111 @@ import matplotlib.mlab as mlab
 import scipy.stats
 import misc
 import my
+import pandas
 
+def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median',
+    ax=None, ylim=None):
+    """Plot values by depth and layer
+    
+    df : DataFrame
+        Should have columns 'Z_corrected', 'layer', 'NS', and `column`
+    column : name of column in `df` to plot
+    combine_layer_5 : whether to combine 5a and 5b
+    aggregate : None, 'mean', or 'median'
+    ax : where to plot
+    ylim : desired ylim (affects layer name position)
+    
+    """
+    # Layer boundaries
+    layer_boundaries = [128, 419, 626, 1006, 1366]
+    layer_names = ['L1', 'L2/3', 'L4', 'L5', 'L6', 'L6b']
+    layer_depth_bins = np.concatenate([[-50], layer_boundaries, [1500]])
+    layer_centers = (layer_depth_bins[:-1] + layer_depth_bins[1:]) / 2
+    
+    # Make a copy
+    df = df.copy()
+    
+    # Optionally combine layers 5a and 5b
+    if combine_layer_5:
+        # Combine layers 5a and 5b
+        df['layer'] = df['layer'].astype(str)
+        df.loc[df['layer'].isin(['5a', '5b']), 'layer'] = '5'
+
+    # Optionally create figure
+    if ax is None:
+        f, ax = plt.subplots(figsize=(4.5, 3.5))
+
+    # Plot NS and RS separately
+    NS_l = [False, True]
+    for NS, sub_df in df.groupby('NS'):
+        # Color by NS
+        color = 'b' if NS else 'r'
+
+        # Plot raw data
+        ax.plot(
+            sub_df.loc[:, 'Z_corrected'].values, 
+            sub_df.loc[:, column].values,
+            color=color, marker='o',  mfc='none',
+            ls='none', alpha=1, ms=3,
+        )
+
+        # Optionally aggregate
+        if aggregate is not None:
+            # Aggregate over bins
+            gobj = sub_df.groupby('layer')[column]
+            counts_by_bin = gobj.size()
+        
+            # Aggregate
+            if aggregate is 'median':
+                agg_by_bin = gobj.median()
+            elif aggregate is 'median':
+                agg_by_bin = gobj.median()
+            else:
+                1/0
+            
+            # Block out aggregates with too few data points
+            agg_by_bin[counts_by_bin <= 3] = np.nan    
+            
+            # Reindex to ensure this matches layer_centers
+            # TODO: Make this match the way it was aggregated
+            agg_by_bin = agg_by_bin.reindex(['1', '2/3', '4', '5', '6', '6b'])
+            assert len(agg_by_bin) == len(layer_centers)
+            
+            # Plot aggregates
+            ax.plot(    
+                layer_centers,
+                agg_by_bin.values, 
+                color=color, marker='_', ls='none', ms=16, mew=4, alpha=.5,
+            )
+
+    # Keep track of this
+    if ylim is None:
+        ylim = ax.get_ylim()
+
+    # Plot layer boundaries, skipping L1 and L6b
+    for lb in layer_boundaries[1:-1]:
+        ax.plot([lb, lb], [ylim[0], ylim[1]], color='gray', ls='-', lw=1)
+
+    # Name the layers
+    text_ypos = ylim[1] - 0.1 * (ylim[1] - ylim[0])
+    for layer_name, layer_center in zip(layer_names, layer_centers):
+        if layer_name in ['L1', 'L6b']:
+            continue
+        ax.text(layer_center, text_ypos, layer_name[1:], ha='center', va='bottom', 
+            color='k', size='x-small')
+    
+    # Reset the ylim
+    ax.set_ylim(ylim)
+
+    # xticks
+    ax.set_xticks((200, 600, 1000, 1400))
+    ax.set_xticklabels([])
+    ax.set_xlim((100, 1500))
+    my.plot.despine(ax)
+    ax.set_xlabel('depth in cortex')
+    
+    return ax
+    
 def connected_pairs(v1, v2, p=None, signif=None, shapes=None, colors=None, 
     labels=None, ax=None):
     """Plot columns of (v1, v2) as connected pairs"""
@@ -857,4 +961,212 @@ def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0,
         else:
             ax.plot(np.mean(data, axis=axis), **kwargs)
     
+    return ax
+
+
+## Grouped bar plot stuff
+def index2plot_kwargs__shape_task(ser):
+    """Given Series, return plot_kwargs as dict"""
+    
+    if 'rewside' in ser:
+        if ser['rewside'] == 'left':
+            color = 'b'
+        elif ser['rewside'] == 'right':
+            color = 'r'
+        else:
+            raise ValueError("unknown rewside")
+    else:
+        color = 'k'
+    
+    if 'servo_pos' in ser:
+        if ser['servo_pos'] == 1670:
+            alpha = .3
+        elif ser['servo_pos'] == 1760:
+            alpha = .5
+        elif ser['servo_pos'] == 1850:
+            alpha = .7
+        else:
+            raise ValueError("unknown servo_pos")
+    else:
+        alpha = 1
+    
+    if 'outcome' in ser:
+        if ser['outcome'] == 'hit':
+            ec = 'none'
+            fc = color
+        elif ser['outcome'] == 'error':
+            fc = 'w'
+            ec = color
+        else:
+            raise ValueError("unknown outcome")
+    else:
+        # If no outcome specified, use filled bars
+        ec = 'none'
+        fc = color
+
+    res = {'ec': ec, 'alpha': alpha, 'fc': fc}
+    return res
+
+def index2label(ser):
+    """Given series, return xtick label"""
+    return ' '.join(map(str, ser.values))
+
+def index2label__shape_task(ser):
+    """Given series, return xtick label"""
+    if 'rewside' in ser:
+        if ser['rewside'] == 'left':
+            stim = 'CC'
+        elif ser['rewside'] == 'right':
+            stim = 'CV'
+    else:
+        stim = ''
+    
+    if 'servo_pos' in ser:
+        if ser['servo_pos'] == 1670:
+            servo_pos = 'far'
+        elif ser['servo_pos'] == 1760:
+            servo_pos = 'med'
+        elif ser['servo_pos'] == 1850:
+            servo_pos = 'close'
+        else:
+            raise ValueError("unknown servo_pos")
+    else:
+        servo_pos = ''
+    
+    if 'outcome' in ser:
+        if ser['outcome'] == 'hit':
+            outcome = 'hit'
+        elif ser['outcome'] == 'error':
+            outcome = 'error'
+        else:
+            raise ValueError("unknown outcome")
+    else:
+        outcome = ''
+
+    return ' '.join([servo_pos, stim, outcome])
+
+
+def group_index2group_label(group_index):
+    if group_index == 'left':
+        group_label = 'concave'
+    elif group_index == 'right':
+        group_label = 'convex'
+    else:
+        group_label = None
+
+    return group_label
+
+def grouped_bar_plot(df, 
+    index2plot_kwargs=index2plot_kwargs__shape_task, 
+    index2label=index2label, 
+    group_index2group_label=group_index2group_label, 
+    yerrlo=None, yerrhi=None, ax=None, 
+    xtls_kwargs=None, group_name_kwargs=None,
+    datapoint_plot_kwargs=None,
+    group_name_y_offset=.2,
+    ):
+    """Plot groups of bars
+    
+    df : DataFrame
+        The columns are considered replicates to aggregate over
+        The levels of the index determine the grouping
+    """
+    if ax is None:
+        f, ax = plt.subplots()
+    
+    if xtls_kwargs is None:
+        xtls_kwargs = {}
+    if group_name_kwargs is None:
+        group_name_kwargs = {}
+    
+    # Datapoint plot kwargs
+    default_datapoint_plot_kwargs = {
+        'marker': 'o', 'color': 'k', 'mfc': 'none', 'ls': 'none', 
+        'clip_on': False}
+    if datapoint_plot_kwargs is not None:
+        default_datapoint_plot_kwargs.update(datapoint_plot_kwargs)
+    datapoint_plot_kwargs = default_datapoint_plot_kwargs
+    
+    # Generate xts and xt_group_centers by iterating over groups
+    offset = 0
+    xts_l = []
+    xt_group_centers = []
+    
+    #
+    if df.index.nlevels > 1:
+        # Multi-level, group on first level
+        offset = 0
+        for group_idx in df.index.levels[0]:
+            group_len = len(df.loc[group_idx])
+            to_append = offset + np.arange(group_len, dtype=np.int)
+            xt_group_centers.append(to_append.mean())
+            xts_l.append(to_append)
+            offset += group_len + 1
+        
+        xts = np.concatenate(xts_l)
+    
+    else:
+        # Single level
+        xts = np.array(range(len(df)))
+        xt_group_centers = None
+    
+    # Plot bars    
+    if df.ndim == 1:
+        bars = ax.bar(xts, df.values)
+    else:
+        bars = ax.bar(xts, df.mean(1).values)
+    
+    # Add errorbars if provided
+    if yerrlo is not None and yerrhi is not None:
+        yerr = np.array([
+            (df - yerrlo).values,
+            (yerrhi - df).values
+            ])
+        ax.errorbar(xts, df.values, yerr=yerr, ls='none', ecolor='k')
+    
+    # Set plot kwargs on each bar
+    for bar, (iidx, idx_ser) in zip(bars, df.index.to_frame().iterrows()):
+        plot_kwargs = index2plot_kwargs(idx_ser)
+        if 'alpha' in plot_kwargs:
+            bar.set_alpha(plot_kwargs['alpha'])
+        if 'ec' in plot_kwargs:
+            bar.set_edgecolor(plot_kwargs['ec'])
+        if 'fc' in plot_kwargs:
+            bar.set_facecolor(plot_kwargs['fc'])
+
+    # Plot datapoints
+    if df.ndim > 1:
+        for n_idx, idx in enumerate(df.index):
+            xt = xts[n_idx]
+            ax.plot([xt] * df.shape[1], df.loc[idx].values, 
+                **datapoint_plot_kwargs)
+
+    
+    ## Get labels
+    if df.index.nlevels > 1:
+        # Drop the top level (group name)
+        idx_df = df.index.droplevel().to_frame()
+    else:
+        idx_df = df.index.to_frame()
+    
+    # Get label for each xtick
+    xtls = []
+    for iidx, row in idx_df.iterrows():
+        xtl = index2label(row)
+        xtls.append(xtl)
+    
+    # Set labels
+    ax.set_xticks(xts)
+    ax.set_xticklabels(xtls, **xtls_kwargs)
+
+    
+    ## The group labels
+    if df.index.nlevels > 1:
+        for group_idx, group_center in zip(df.index.levels[0], xt_group_centers):
+            group_name = group_index2group_label(group_idx)
+    
+            text_ypos = ax.get_ylim()[0] - group_name_y_offset * (ax.get_ylim()[1] - ax.get_ylim()[0])
+            ax.text(group_center, text_ypos, group_name, ha='center', va='center',
+                **group_name_kwargs)
+
     return ax
