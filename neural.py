@@ -511,13 +511,12 @@ def load_spikes(sort_dir):
     """Load spike times from kilosort
     
     Returns: 
-        spike_time_samples, spike_time_sec
+        spike_time_samples
     """
     spike_time_samples = np.load(
         os.path.join(sort_dir, 'spike_times.npy')).flatten()
-    spike_time_sec = spike_time_samples / 30e3
     
-    return spike_time_samples, spike_time_sec
+    return spike_time_samples
 
 def load_spike_templates1(sort_dir):
     """Return spike templates from kilosort
