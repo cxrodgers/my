@@ -481,7 +481,7 @@ class logregress:
             print 'la regularization no deberia ser 0'
             self.regularization=10**5
 
-    def logregress(self):
+    def logregress(self, train=None, test=None):
         """Run cross-validated logistic regression 
         
         Uses self.feat and self.clase as the features and labels. Uses
@@ -508,12 +508,6 @@ class logregress:
         wei=np.zeros((self.cv, len(self.features[0]) + 1, 1))
         dec_function=np.array([])
         predict_proba=np.array([])
-
-        # This object will select the train and test splits
-        # We'll use either self.classes or self.lablels to do the split,
-        # depending on self.balance_classes and self.balance_labels
-        skf=StratifiedKFold(n_splits=self.cv, shuffle=self.cv_shuffle,
-            random_state=self.random_state)
 
         # The samples are weighted in inverse proportion to the class frequency
         # (NOT the label frequency)
@@ -544,9 +538,22 @@ class logregress:
                 "either balance_classes, balance_labels, or "
                 "undersample_classes must be True")
         
+        # Iteration object
+        if train is None:
+            assert test is None
+            # This object will select the train and test splits
+            # We'll use either self.classes or self.lablels to do the split,
+            # depending on self.balance_classes and self.balance_labels
+            skf=StratifiedKFold(n_splits=self.cv, shuffle=self.cv_shuffle,
+                random_state=self.random_state)
+            iter_obj = skf.split(self.features, to_balance)
+        else:
+            assert train is not None
+            iter_obj = [[test, train]]        
+        
         # Iterate over folds, stratified by to_balance
         g=0
-        for train,test in skf.split(self.features, to_balance): 
+        for train, test in iter_obj: 
             # Split out test and train sets
             X_train = self.features[train]
             X_test = self.features[test]
