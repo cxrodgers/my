@@ -11,7 +11,7 @@ import my
 import pandas
 
 def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median',
-    ax=None, ylim=None):
+    ax=None, ylim=None, agg_plot_kwargs=None, point_alpha=.5, point_ms=3):
     """Plot values by depth and layer
     
     df : DataFrame
@@ -21,8 +21,16 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
     aggregate : None, 'mean', or 'median'
     ax : where to plot
     ylim : desired ylim (affects layer name position)
+    agg_plot_kwargs : how to plot aggregated
     
     """
+    # Set agg_plot_kwargs
+    default_agg_plot_kwargs = {'marker': '_', 'ls': 'none', 'ms': 16, 
+        'mew': 4, 'alpha': .5}
+    if agg_plot_kwargs is not None:
+        default_agg_plot_kwargs.update(agg_plot_kwargs)
+    agg_plot_kwargs = default_agg_plot_kwargs
+    
     # Layer boundaries
     layer_boundaries = [128, 419, 626, 1006, 1366]
     layer_names = ['L1', 'L2/3', 'L4', 'L5', 'L6', 'L6b']
@@ -53,7 +61,7 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
             sub_df.loc[:, 'Z_corrected'].values, 
             sub_df.loc[:, column].values,
             color=color, marker='o',  mfc='none',
-            ls='none', alpha=1, ms=3,
+            ls='none', alpha=point_alpha, ms=point_ms,
         )
 
         # Optionally aggregate
@@ -82,7 +90,8 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
             ax.plot(    
                 layer_centers,
                 agg_by_bin.values, 
-                color=color, marker='_', ls='none', ms=16, mew=4, alpha=.5,
+                color=color, 
+                **agg_plot_kwargs
             )
 
     # Keep track of this
