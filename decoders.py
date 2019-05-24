@@ -1,1490 +1,485 @@
+import pandas
+import my.decoders
 import numpy as np
-import matplotlib.pylab as plt
-import matplotlib as mpl
-from scipy.stats import sem
-import scipy.io
+import my.plot 
+import matplotlib.pyplot as plt
 import os
-from sklearn.model_selection import KFold
-from sklearn.model_selection import StratifiedKFold
-from sklearn.model_selection import ShuffleSplit
-from sklearn.linear_model import LogisticRegression
-from sklearn import svm
-from sklearn.model_selection import StratifiedShuffleSplit
-from numpy.random import permutation
-from numpy.random import choice
-from sklearn.linear_model import LinearRegression
-#~ import imbalanced_data
-from sklearn.linear_model import ElasticNet
-from sklearn.linear_model import Lasso
-import scipy.stats
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
-from sklearn.svm import SVC
-from sklearn.svm import LinearSVC
-from sklearn import preprocessing
+import sklearn.linear_model
 
-from sklearn.ensemble import RandomForestClassifier
 
-class linear_svm:
-    def __init__(self,feat,clase):
-        self.feat=preprocessing.scale(feat)
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        self.prior=len(self.clase[self.clase==1])/float(len(self.clase))
-        self.cv=5
-        
-    def svm(self):
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        wei=np.zeros((self.cv,len(self.feat[0])+1,1))
-        skf=StratifiedKFold(self.clase,self.cv)
-        g=0
-        for train,test in skf: 
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            supp=LinearSVC(dual=True)
-            trainning=supp.fit(X_train,y_train)
-            perf[g]=supp.score(X_test,y_test)
-            perf_train[g]=supp.score(X_train,y_train)
-            wei[g,:,0]=np.append(supp.coef_[0],supp.intercept_)
-            g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=0)
-        output={'performance':performance,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def svm_shuffled(self,n):
-        perf=np.zeros((self.cv,n))
-        perf_train=np.zeros((self.cv,n))
-        wei=np.zeros((self.cv,n,len(self.feat[0])+1,1))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            skf=StratifiedKFold(clase_s,self.cv) 
-            g=0
-            for train,test in skf: 
-                X_train=self.feat[train]
-                X_test=self.feat[test]
-                y_train=clase_s[train]
-                y_test=clase_s[test]
-                supp=LinearSVC(dual=True)
-                trainning=supp.fit(X_train,y_train)
-                perf[g,k]=supp.score(X_test,y_test)
-                perf_train[g,k]=supp.score(X_train,y_train)
-                wei[g,k,:,0]=np.append(supp.coef_[0],supp.intercept_)
-                g=g+1
-        performance_distr=np.mean(perf,axis=0)
-        performance_train_distr=np.mean(perf_train,axis=0)
-        weights_distr=np.mean(wei,axis=0)
-        output={'performance_distr':performance_distr,'performance_train_distr':performance_train_distr,'weights_distr':weights_distr}
-        return output
-
-    def svm_uniform_prior(self,n_unif,method): 
-        perf=np.zeros((n_unif,self.cv))
-        perf_th=np.zeros((n_unif,self.cv))
-        perf_train=np.zeros((n_unif,self.cv))
-        wei=np.zeros((n_unif,self.cv,len(self.feat[0])+1,1))
-        if method=='oversampling':
-            p_in=imbalanced_data.oversampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        if method=='undersampling':
-            p_in=imbalanced_data.undersampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        for i in range(len(index_balanced)):
-            clase_balanced=self.clase[index_balanced[i]]
-            feat_balanced=self.feat[index_balanced[i]]            
-            skf=StratifiedKFold(clase_balanced,self.cv)  
-            g=0
-            for train,test in skf: 
-                X_train=feat_balanced[train]
-                X_test=feat_balanced[test]
-                y_train=clase_balanced[train]
-                y_test=clase_balanced[test]
-                supp=LinearSVC(dual=True)
-                trainning=supp.fit(X_train,y_train)
-                perf[i,g]=supp.score(X_test,y_test)
-                perf_train[i,g]=supp.score(X_train,y_train)
-                wei[i,g,:,0]=np.append(supp.coef_[0],supp.intercept_)
-                g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=(0,1))
-        output={'performance':performance,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def svm_uniform_prior_shuffled(self,n_unif,n,method): 
-        perf=np.zeros((n_unif,self.cv,n))
-        wei=np.zeros((n_unif,self.cv,n,len(self.feat[0])+1,1))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            if method=='oversampling':
-                p_in=imbalanced_data.oversampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            if method=='undersampling':
-                p_in=imbalanced_data.undersampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            for i in range(len(index_balanced)):
-                clase_balanced=clase_s[index_balanced[i]]
-                feat_balanced=self.feat[index_balanced[i]]
-                skf=StratifiedKFold(clase_balanced,self.cv)  
-                g=0
-                for train,test in skf: 
-                    X_train=feat_balanced[train]
-                    X_test=feat_balanced[test]
-                    y_train=clase_balanced[train]
-                    y_test=clase_balanced[test]
-                    supp=LinearSVC(dual=True)
-                    trainning=supp.fit(X_train,y_train)
-                    perf[i,g,k]=supp.score(X_test,y_test)
-                    wei[i,g,k,:,0]=np.append(supp.coef_[0],supp.intercept_)
-                    g=g+1
-        performance_distr=np.mean(perf,axis=(0,1))
-        weights_distr=np.mean(wei,axis=(0,1))
-        output={'performance_distr':performance_distr,'weights_distr':weights_distr}
-        return output
-
-class svm:
-    def __init__(self,feat,clase,regularization,kernel):
-        self.feat=preprocessing.scale(feat)
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        self.prior=len(self.clase[self.clase==1])/float(len(self.clase))
-        self.cv=5
-        self.regularization=regularization
-        self.kernel=kernel
-
-    def svm(self):
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        skf=StratifiedKFold(self.clase,self.cv)
-        g=0
-        for train,test in skf: 
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            supp=SVC(C=self.regularization,kernel=self.kernel)
-            trainning=supp.fit(X_train,y_train)
-            perf[g]=supp.score(X_test,y_test)
-            perf_train[g]=supp.score(X_train,y_train)
-            g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        output={'performance':performance,'performance_train':performance_train}
-        return output
-
-    def svm_shuffled(self,n):
-        perf=np.zeros((self.cv,n))
-        perf_train=np.zeros((self.cv,n))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            skf=StratifiedKFold(clase_s,self.cv) 
-            g=0
-            for train,test in skf: 
-                X_train=self.feat[train]
-                X_test=self.feat[test]
-                y_train=clase_s[train]
-                y_test=clase_s[test]
-                supp=SVC(C=self.regularization,kernel=self.kernel)
-                trainning=supp.fit(X_train,y_train)
-                perf[g,k]=supp.score(X_test,y_test)
-                perf_train[g,k]=supp.score(X_train,y_train)
-                g=g+1
-        performance_distr=np.mean(perf,axis=0)
-        performance_train_distr=np.mean(perf_train,axis=0)
-        output={'performance_distr':performance_distr,'performance_train_distr':performance_train_distr}
-        return output
-
-    def svm_uniform_prior(self,n_unif,method): 
-        perf=np.zeros((n_unif,self.cv))
-        perf_train=np.zeros((n_unif,self.cv))
-        if method=='oversampling':
-            p_in=imbalanced_data.oversampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        if method=='undersampling':
-            p_in=imbalanced_data.undersampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        for i in range(len(index_balanced)):
-            clase_balanced=self.clase[index_balanced[i]]
-            feat_balanced=self.feat[index_balanced[i]]            
-            skf=StratifiedKFold(clase_balanced,self.cv)  
-            g=0
-            for train,test in skf: 
-                X_train=feat_balanced[train]
-                X_test=feat_balanced[test]
-                y_train=clase_balanced[train]
-                y_test=clase_balanced[test]
-                supp=SVC(C=self.regularization,kernel=self.kernel)
-                trainning=supp.fit(X_train,y_train)
-                perf[i,g]=supp.score(X_test,y_test)
-                perf_train[i,g]=supp.score(X_train,y_train)
-                g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        output={'performance':performance,'performance_train':performance_train}
-        return output
-
-    def svm_uniform_prior_shuffled(self,n_unif,n,method): 
-        perf=np.zeros((n_unif,self.cv,n))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            if method=='oversampling':
-                p_in=imbalanced_data.oversampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            if method=='undersampling':
-                p_in=imbalanced_data.undersampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            for i in range(len(index_balanced)):
-                clase_balanced=clase_s[index_balanced[i]]
-                feat_balanced=self.feat[index_balanced[i]]
-                skf=StratifiedKFold(clase_balanced,self.cv)  
-                g=0
-                for train,test in skf: 
-                    X_train=feat_balanced[train]
-                    X_test=feat_balanced[test]
-                    y_train=clase_balanced[train]
-                    y_test=clase_balanced[test]
-                    supp=SVC(C=self.regularization,kernel=self.kernel)
-                    trainning=supp.fit(X_train,y_train)
-                    perf[i,g,k]=supp.score(X_test,y_test)
-                    g=g+1
-        performance_distr=np.mean(perf,axis=(0,1))
-        output={'performance_distr':performance_distr}
-        return output
-
-class RandomForest:
-    def __init__(self, features, labels, classes=None, 
-        regularization=10**5, cv=5, cv_shuffle=True,
-        balance_labels=True, balance_classes=False, random_state=0):
-        """Initalize Random Forest object
-        
-        features : shape (Ndata, Nfeatures)
-            The predictors to use to predict the labels
-            
-        labels : shape (Ndata,)
-            The actual labels of the data
-            Each label of data is equally weighted, if balance_labels is True
-        
-        classes : shape (Ndata, Nclasses)
-            The classes of the data, to be used in equalizing
-            Each "class of data" is equally weighted, if balance_classes is True
-        
-        cv : number of folds
-        
-        cv_shuffle : shuffle the trials included in each fold
-            Used to set 'shuffle' in StratifiedKFold
-        
-        balance_labels : whether to balance labels by setting
-            'class_weight' to 'balanced' in LogisticRegression
-
-        balance_classes : whether to balance labels by setting
-            'class_weight' to 'balanced' in LogisticRegression
-            balance_classes dominates balance_labels if both are True
-        
-        random_state : sent to StratifiedKFold for shuffling
-        
-        """
-        self.features = features
-        self.labels = labels
-        self.unique_labels = np.unique(self.labels)
-        self.classes = classes
-        self.prior=len(self.labels[self.labels==1])/float(len(self.labels))
-        self.cv = cv
-        self.cv_shuffle = cv_shuffle
-        self.regularization = regularization
-        self.balance_classes = balance_classes
-        self.balance_labels = balance_labels
-        self.random_state = random_state
-        
-        if regularization == 0.0:
-            print 'la regularization no deberia ser 0'
-            self.regularization=10**5
-
-    def run(self, **kwargs):
-        """Run cross-validated Random Forest
-        
-        Uses self.feat and self.clase as the features and labels. Uses
-        StratifiedKFold to generated the test and train sets. For each
-        fold, fits on the train set and tests on the test set.
-        
-        Returns: dict
-            'performance' : performance on test set, meaned over folds
-            'performance_train': same, but for training set
-            'weights': coefficients, meaned over folds
-                The last entry will be the intercept
-            'test_idxs': list of length n_folds (default 4)
-                Each entry is an array of indices into features and labels
-                that were tested on this fold.
-            'decision_function': decision function for all tested indices
-                This is in the same order as test_idxs, but concatenated
-                over folds
-            'predict_probability': probability
-                This is in the same order as test_idxs, but concatenated
-                over folds            
-        """
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        wei=np.zeros((self.cv, len(self.features[0]) + 1, 1))
-        dec_function=np.array([])
-        predict_proba=np.array([])
-
-        # This object will select the train and test splits
-        # We'll use either self.classes or self.lablels to do the split,
-        # depending on self.balance_classes and self.balance_labels
-        skf=StratifiedKFold(n_splits=self.cv, shuffle=self.cv_shuffle,
-            random_state=self.random_state)
-
-        # The samples are weighted in inverse proportion to the class frequency
-        # (NOT the label frequency)
-        if self.classes is not None:
-            class_id2weight = {}
-            for this_class in np.unique(self.classes):
-                n_this_class = np.sum(self.classes == this_class)
-                weight_this_class = len(self.classes) / float(n_this_class)
-                class_id2weight[this_class] = weight_this_class
-        
-        # Store the test indices here
-        test_idxs = []
-        
-        # Balancing
-        if self.classes is None and self.balance_classes:
-            raise ValueError("cannot balance classes if classes is None")
-        
-        # Note that balance_classes dominates balance_labels
-        if self.balance_classes:
-            to_balance = self.classes
-        elif self.balance_labels:
-            to_balance = self.labels
-        else:
-            raise ValueError(
-                "either balance classes or balance labels must be True")
-        
-        # Iterate over folds
-        g=0
-        for train,test in skf.split(self.features, to_balance): 
-            # Split out test and train sets
-            X_train = self.features[train]
-            X_test = self.features[test]
-            y_train = self.labels[train]
-            y_test = self.labels[test]
-            
-            # Fit
-            if self.balance_classes:
-                ## Balancing by classes
-                # Calculate the sample weights for this fold
-                fold_classes = self.classes[train]
-                fold_sample_weights = np.array([class_id2weight[class_id]
-                    for class_id in fold_classes])
-                
-                # Initialize fitter
-                log=RandomForestClassifier(
-                    **kwargs
-                )
-
-                # Fit, applying the sample weights
-                log.fit(X_train, y_train, sample_weight=fold_sample_weights)
-
-            elif self.balance_labels:
-                ## Balancing by labels
-                # Initialize fitter
-                log=RandomForestClassifier(
-                    class_weight='balanced',
-                    **kwargs
-                )
-
-                # Fit
-                log.fit(X_train, y_train)
-
-            # Iteratively stack the decision function and predict proba
-            #~ dec_function=np.hstack((dec_function,log.decision_function(X_test)))
-            predict_proba=np.hstack((predict_proba,log.predict_proba(X_test)[:,1]))
-            
-            # Store the performance on test and train
-            perf[g]=log.score(X_test,y_test)
-            perf_train[g]=log.score(X_train,y_train)
-            
-            # Store the test indices (which match up with dec_function and 
-            # predict_proba)
-            test_idxs.append(test)
-            
-            # Store the weights
-            #~ wei[g,:,0]=np.append(log.coef_[0],log.intercept_)
-            
-            # Increment fold count
-            g=g+1
-        
-        # Mean performance and weights over folds
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=0)
-        
-        output = {
-            'performance': performance,
-            'performance_train': performance_train,
-            'fold_weights': wei,
-            'weights': weights,
-            'decision_function': dec_function,
-            'predict_probability': predict_proba,
-            'test_idxs': test_idxs,
-        }
-        return output
-
-class logregress:
-    def __init__(self, features, labels, classes=None, 
-        regularization=10**5, cv=5, cv_shuffle=True,
-        balance_labels=True, balance_classes=False, undersample_classes=False,
-        random_state=0):
-        """Initalize logistic regression object
-        
-        features : shape (Ndata, Nfeatures)
-            The predictors to use to predict the labels
-            
-        labels : shape (Ndata,)
-            The actual labels of the data
-            Each label of data is equally weighted, if balance_labels is True
-        
-        classes : shape (Ndata, Nclasses)
-            The classes of the data, to be used in equalizing
-            Each "class of data" is equally weighted, if balance_classes is True
-        
-        cv : number of folds
-        
-        cv_shuffle : shuffle the trials included in each fold
-            Used to set 'shuffle' in StratifiedKFold
-        
-        balance_labels : whether to balance labels by setting
-            'class_weight' to 'balanced' in LogisticRegression
-
-        balance_classes : whether to balance labels by setting
-            'class_weight' to 'balanced' in LogisticRegression
-            balance_classes dominates balance_labels if both are True
-        
-        random_state : sent to StratifiedKFold for shuffling
-        
-        """
-        self.features = features
-        self.labels = labels
-        self.unique_labels = np.unique(self.labels)
-        self.classes = classes
-        self.prior=len(self.labels[self.labels==1])/float(len(self.labels))
-        self.cv = cv
-        self.cv_shuffle = cv_shuffle
-        self.regularization = regularization
-        self.balance_classes = balance_classes
-        self.balance_labels = balance_labels
-        self.undersample_classes = undersample_classes
-        self.random_state = random_state
-        
-        if regularization == 0.0:
-            print 'la regularization no deberia ser 0'
-            self.regularization=10**5
-
-    def logregress(self, train=None, test=None):
-        """Run cross-validated logistic regression 
-        
-        Uses self.feat and self.clase as the features and labels. Uses
-        StratifiedKFold to generated the test and train sets. For each
-        fold, fits on the train set and tests on the test set.
-        
-        Returns: dict
-            'performance' : performance on test set, meaned over folds
-            'performance_train': same, but for training set
-            'weights': coefficients, meaned over folds
-                The last entry will be the intercept
-            'test_idxs': list of length n_folds (default 4)
-                Each entry is an array of indices into features and labels
-                that were tested on this fold.
-            'decision_function': decision function for all tested indices
-                This is in the same order as test_idxs, but concatenated
-                over folds
-            'predict_probability': probability
-                This is in the same order as test_idxs, but concatenated
-                over folds            
-        """
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        wei=np.zeros((self.cv, len(self.features[0]) + 1, 1))
-        dec_function=np.array([])
-        predict_proba=np.array([])
-
-        # The samples are weighted in inverse proportion to the class frequency
-        # (NOT the label frequency)
-        if self.classes is not None:
-            class_id2weight = {}
-            for this_class in np.unique(self.classes):
-                n_this_class = np.sum(self.classes == this_class)
-                weight_this_class = len(self.classes) / float(n_this_class)
-                class_id2weight[this_class] = weight_this_class
-        
-        # Store the test indices here
-        test_idxs = []
-        
-        # Balancing
-        if self.classes is None and (self.balance_classes or self.undersample_classes):
-            raise ValueError("cannot balance classes if classes is None")
-        
-        # In the stratification process, equalize in each fold the 
-        # number of classes (if balance_classes or undersample_classes)
-        # or the the number of labels (if balance_labels)
-        # Note that balance_classes and undersample_classes dominate balance_labels
-        if self.balance_classes or self.undersample_classes:
-            to_balance = self.classes
-        elif self.balance_labels:
-            to_balance = self.labels
-        else:
-            raise ValueError(
-                "either balance_classes, balance_labels, or "
-                "undersample_classes must be True")
-        
-        # Iteration object
-        if train is None:
-            assert test is None
-            # This object will select the train and test splits
-            # We'll use either self.classes or self.lablels to do the split,
-            # depending on self.balance_classes and self.balance_labels
-            skf=StratifiedKFold(n_splits=self.cv, shuffle=self.cv_shuffle,
-                random_state=self.random_state)
-            iter_obj = skf.split(self.features, to_balance)
-        else:
-            assert train is not None
-            iter_obj = [[test, train]]        
-        
-        # Iterate over folds, stratified by to_balance
-        g=0
-        for train, test in iter_obj: 
-            # Split out test and train sets
-            X_train = self.features[train]
-            X_test = self.features[test]
-            y_train = self.labels[train]
-            y_test = self.labels[test]
-            
-            # Fit
-            if self.balance_classes:
-                ## Balancing by classes
-                # Calculate the sample weights for this fold
-                fold_classes = self.classes[train]
-                fold_sample_weights = np.array([class_id2weight[class_id]
-                    for class_id in fold_classes])
-                
-                # Initialize fitter
-                log=LogisticRegression(
-                    C=(1.0/self.regularization),
-                )
-
-                # Fit, applying the sample weights
-                log.fit(X_train, y_train, sample_weight=fold_sample_weights)
-
-            elif self.undersample_classes:
-                ## Undersample each class to the size of the minimum class
-                # Get the classes for this fold
-                fold_classes = self.classes[train]
-                
-                # Count the samples of each class
-                n_samples_of_each_class = np.bincount(fold_classes)
-                
-                # Take this many from each
-                n_samples_per_class = np.min(n_samples_of_each_class)
-                
-                # Take
-                chosen_l = []
-                for class_id in range(len(n_samples_of_each_class)):
-                    # Indexes into fold_classes
-                    idxs = np.where(fold_classes == class_id)[0]
-                    
-                    # Choose some of them
-                    chosen_idxs = np.random.permutation(idxs)[
-                        :n_samples_per_class]
-                    
-                    # Index into train with this
-                    chosen_l.append(train[chosen_idxs])
-                
-                # Concatenate to get the new, undersampled "train"
-                new_train = np.sort(np.concatenate(chosen_l))
-                
-                # Rederive X_train, y_train, and fold_classes
-                X_train = self.features[new_train]
-                y_train = self.labels[new_train]
-                fold_classes = self.classes[new_train]
-                
-                # Initialize fitter, still balancing by labels
-                log=LogisticRegression(
-                    C=(1.0/self.regularization),
-                    class_weight='balanced',
-                )
-
-                # Fit
-                log.fit(X_train, y_train)                
-
-            elif self.balance_labels:
-                ## Balancing by labels
-                # Initialize fitter
-                log=LogisticRegression(
-                    C=(1.0/self.regularization),
-                    class_weight='balanced',
-                )
-
-                # Fit
-                log.fit(X_train, y_train)
-
-            # Iteratively stack the decision function and predict proba
-            dec_function=np.hstack((dec_function,log.decision_function(X_test)))
-            predict_proba=np.hstack((predict_proba,log.predict_proba(X_test)[:,1]))
-            
-            # Store the performance on test and train
-            perf[g]=log.score(X_test,y_test)
-            perf_train[g]=log.score(X_train,y_train)
-            
-            # Store the test indices (which match up with dec_function and 
-            # predict_proba)
-            test_idxs.append(test)
-            
-            # Store the weights
-            wei[g,:,0]=np.append(log.coef_[0],log.intercept_)
-            
-            # Increment fold count
-            g=g+1
-        
-        # Mean performance and weights over folds
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=0)
-        
-        output = {
-            'performance': performance,
-            'performance_train': performance_train,
-            'fold_weights': wei,
-            'weights': weights,
-            'decision_function': dec_function,
-            'predict_probability': predict_proba,
-            'test_idxs': test_idxs,
-        }
-        return output
-
-    def logregress_shuffled(self,n):
-        perf=np.zeros((self.cv,n))
-        perf_train=np.zeros((self.cv,n))
-        wei=np.zeros((self.cv,n,len(self.feat[0])+1,1))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            skf=StratifiedKFold(clase_s,self.cv) 
-            g=0
-            for train,test in skf: 
-                X_train=self.feat[train]
-                X_test=self.feat[test]
-                y_train=clase_s[train]
-                y_test=clase_s[test]
-                log=LogisticRegression(C=(1.0/self.regularization))
-                trainning=log.fit(X_train,y_train)
-                perf[g,k]=log.score(X_test,y_test)
-                perf_train[g,k]=log.score(X_train,y_train)
-                wei[g,k,:,0]=np.append(log.coef_[0],log.intercept_)
-                g=g+1
-        performance_distr=np.mean(perf,axis=0)
-        performance_train_distr=np.mean(perf_train,axis=0)
-        weights_distr=np.mean(wei,axis=0)
-        output={'performance_distr':performance_distr,'performance_train_distr':performance_train_distr,'weights_distr':weights_distr}
-        return output
-
-    def logregress_uniform_prior(self,n_unif,method): 
-        perf=np.zeros((n_unif,self.cv))
-        perf_th=np.zeros((n_unif,self.cv))
-        perf_train=np.zeros((n_unif,self.cv))
-        wei=np.zeros((n_unif,self.cv,len(self.feat[0])+1,1))
-        if method=='oversampling':
-            p_in=imbalanced_data.oversampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        if method=='undersampling':
-            p_in=imbalanced_data.undersampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        for i in range(len(index_balanced)):
-            clase_balanced=self.clase[index_balanced[i]]
-            feat_balanced=self.feat[index_balanced[i]]            
-            skf=StratifiedKFold(clase_balanced,self.cv)  
-            g=0
-            for train,test in skf: 
-                X_train=feat_balanced[train]
-                X_test=feat_balanced[test]
-                y_train=clase_balanced[train]
-                y_test=clase_balanced[test]
-                log=LogisticRegression(C=(1.0/self.regularization))
-                trainning=log.fit(X_train,y_train)
-                perf[i,g]=log.score(X_test,y_test)
-                perf_train[i,g]=log.score(X_train,y_train)
-                wei[i,g,:,0]=np.append(log.coef_[0],log.intercept_)
-                g=g+1
-        performance=np.mean(perf)
-        performance_th=np.mean(perf_th)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=(0,1))
-        output={'performance':performance,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def logregress_uniform_prior_shuffled(self,n_unif,n,method): 
-        perf=np.zeros((n_unif,self.cv,n))
-        wei=np.zeros((n_unif,self.cv,n,len(self.feat[0])+1,1))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            if method=='oversampling':
-                p_in=imbalanced_data.oversampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            if method=='undersampling':
-                p_in=imbalanced_data.undersampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            for i in range(len(index_balanced)):
-                clase_balanced=clase_s[index_balanced[i]]
-                feat_balanced=self.feat[index_balanced[i]]
-                skf=StratifiedKFold(clase_balanced,self.cv)  
-                g=0
-                for train,test in skf: 
-                    X_train=feat_balanced[train]
-                    X_test=feat_balanced[test]
-                    y_train=clase_balanced[train]
-                    y_test=clase_balanced[test]
-                    log=LogisticRegression(C=(1.0/self.regularization))
-                    trainning=log.fit(X_train,y_train)
-                    perf[i,g,k]=log.score(X_test,y_test)
-                    wei[i,g,k,:,0]=np.append(log.coef_[0],log.intercept_)
-                    g=g+1
-        performance_distr=np.mean(perf,axis=(0,1))
-        weights_distr=np.mean(wei,axis=(0,1))
-        output={'performance_distr':performance_distr,'weights_distr':weights_distr}
-        return output
-
-class logregress_multinomial:
-    def __init__(self,feat,clase,regularization):
-        self.clase=clase
-        self.feat=feat
-        self.outputs_unique=np.unique(self.clase)
-        self.num_outputs=len(self.outputs_unique)
-        self.chance=(1.0/self.num_outputs)
-        self.prior=max(np.array([np.sum(self.clase==i) for i in self.outputs_unique]))/float(len(self.clase))
-        self.cv=5
-        self.regularization=regularization
-
-    def logregress(self):
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        wei=np.zeros((self.cv,self.num_outputs,len(self.feat[0])+1))
-        skf=StratifiedKFold(self.clase,self.cv)
-        g=0
-        for train,test in skf: 
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            log=LogisticRegression(C=(1.0/self.regularization),multi_class='multinomial',solver='lbfgs')
-            trainning=log.fit(X_train,y_train)
-            perf[g]=log.score(X_test,y_test)
-            perf_train[g]=log.score(X_train,y_train)
-            offset=np.reshape(log.intercept_,(1,len(log.intercept_)))
-            #wei[g]=np.concatenate((log.coef_,offset),axis=1) # hay que incorporar los weights del intercept
-            g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=0)
-        output={'performance':performance,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def logregress_shuffled(self,n):
-        perf=np.zeros((self.cv,n))
-        perf_train=np.zeros((self.cv,n))
-        wei=np.zeros((self.cv,n,self.num_outputs,len(self.feat[0])+1))
-        for k in range(n):  
-            clase_s=permutation(self.clase)
-            skf=StratifiedKFold(len(clase_s),self.cv) 
-            g=0
-            for train,test in skf: 
-                X_train=self.feat[train]
-                X_test=self.feat[test]
-                y_train=self.clase[train]
-                y_test=self.clase[test]
-                log=LogisticRegression(C=(1.0/self.regularization),multi_class='multinomial',solver='lbfgs')
-                trainning=log.fit(X_train,y_train)
-                perf[g,k]=log.score(X_test,y_test)
-                perf_train[g,k]=log.score(X_train,y_train)
-                offset=np.reshape(log.intercept_,(1,len(log.intercept_)))
-                wei[g,k]=np.concatenate((log.coef_,offset),axis=1)
-                g=g+1
-        performance_distr=np.mean(perf,axis=0)
-        performance_train_distr=np.mean(perf_train,axis=0)
-        weights_distr=np.mean(wei,axis=0)
-        output={'performance_distr':performance_distr,'performance_train_distr':performance_train_distr,'weights_distr':weights_distr}
-        return output
-
-    def logregress_uniform_prior(self,n_unif,method):
-        perf=np.zeros((n_unif,self.cv))
-        perf_categories=np.zeros((n_unif,self.cv,self.num_outputs))
-        perf_train=np.zeros((n_unif,self.cv))
-        wei=np.zeros((n_unif,self.cv,self.num_outputs,len(self.feat[0])+1))
-        if method=='undersampling':
-            p_in=imbalanced_data.undersampling_multinomial(self.clase,n_unif)
-            index_balanced=p_in.index
-        for i in range(len(index_balanced)):
-            clase_balanced=self.clase[index_balanced[i]]
-            feat_balanced=self.feat[index_balanced[i]]
-            skf=StratifiedKFold(clase_balanced,self.cv)  
-            g=0
-            for train,test in skf: 
-                X_train=feat_balanced[train]
-                X_test=feat_balanced[test]
-                y_train=clase_balanced[train]
-                y_test=clase_balanced[test]
-                log=LogisticRegression(C=(1.0/self.regularization),multi_class='multinomial',solver='lbfgs')
-                trainning=log.fit(X_train,y_train)
-                perf[i,g]=log.score(X_test,y_test)
-                perf_train[i,g]=log.score(X_train,y_train)
-                offset=np.reshape(log.intercept_,(len(log.intercept_),1))
-                wei[i,g]=np.concatenate((log.coef_,offset),axis=1)
-                for hh in range(self.num_outputs):
-                    y_test_cir=y_test[y_test==self.outputs_unique[hh]]
-                    X_test_cir=X_test[y_test==self.outputs_unique[hh]]
-                    pred_cir=log.predict(X_test_cir)
-                    perf_cir=np.sum(pred_cir==y_test_cir)/float(len(y_test_cir))
-                    perf_categories[i,g,hh]=perf_cir
-                g=g+1
-        performance=np.mean(perf)
-        performance_categories=np.mean(perf_categories,axis=(0,1))
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=(0,1))
-        output={'performance':performance,'performance_categories':performance_categories,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def logregress_uniform_prior_shuffled(self,n_unif,n,method): 
-        perf=np.zeros((n_unif,self.cv,n))
-        wei=np.zeros((n_unif,self.cv,n,self.num_outputs,len(self.feat[0])+1))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            if method=='undersampling':
-                p_in=imbalanced_data.undersampling_multinomial(clase_s,n_unif)
-                index_balanced=p_in.index
-            for i in range(len(index_balanced)):
-                clase_balanced=clase_s[index_balanced[i]]
-                feat_balanced=self.feat[index_balanced[i]]
-                skf=StratifiedKFold(clase_balanced,self.cv)  
-                g=0
-                for train,test in skf: 
-                    X_train=feat_balanced[train]
-                    X_test=feat_balanced[test]
-                    y_train=clase_balanced[train]
-                    y_test=clase_balanced[test]
-                    log=LogisticRegression(C=(1.0/self.regularization),multi_class='multinomial',solver='lbfgs')
-                    trainning=log.fit(X_train,y_train)
-                    perf[i,g,k]=log.score(X_test,y_test)
-                    offset=np.reshape(log.intercept_,(len(log.intercept_),1))
-                    wei[i,g,k]=np.concatenate((log.coef_,offset),axis=1)
-                    g=g+1
-        performance_distr=np.mean(perf,axis=(0,1))
-        weights_distr=np.mean(wei,axis=(0,1))
-        output={'performance_distr':performance_distr,'weights_distr':weights_distr}
-        return output
-
-class lda:
-    def __init__(self,feat,clase):
-        self.feat=feat
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        self.cv=5
-
-    def lda(self):
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        wei=np.zeros((self.cv,len(self.feat[0])+1,1))
-        skf=StratifiedKFold(self.clase,self.cv)
-        g=0
-        for train,test in skf: 
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            log=LinearDiscriminantAnalysis()
-            trainning=log.fit(X_train,y_train)
-            perf[g]=log.score(X_test,y_test)
-            perf_train[g]=log.score(X_train,y_train)
-            wei[g,:,0]=np.append(log.coef_[0],log.intercept_)
-            g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=0)
-        output={'performance':performance,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def lda_shuffled(self,n):
-        perf=np.zeros((self.cv,n))
-        perf_train=np.zeros((self.cv,n))
-        wei=np.zeros((self.cv,n,len(self.feat[0])+1,1))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            skf=StratifiedKFold(clase_s,self.cv) 
-            g=0
-            for train,test in skf: 
-                X_train=self.feat[train]
-                X_test=self.feat[test]
-                y_train=clase_s[train]
-                y_test=clase_s[test]
-                log=LinearDiscriminantAnalysis()
-                trainning=log.fit(X_train,y_train)
-                perf[g,k]=log.score(X_test,y_test)
-                perf_train[g,k]=log.score(X_train,y_train)
-                wei[g,k,:,0]=np.append(log.coef_[0],log.intercept_)
-                g=g+1
-        performance_distr=np.mean(perf,axis=0)
-        performance_train_distr=np.mean(perf_train,axis=0)
-        weights_distr=np.mean(wei,axis=0)
-        output={'performance_distr':performance_distr,'performance_train_distr':performance_train_distr,'weights_distr':weights_distr}
-        return output
-
-    def lda_uniform_prior(self,n_unif,method): 
-        perf=np.zeros((n_unif,self.cv))
-        perf_th=np.zeros((n_unif,self.cv))
-        perf_train=np.zeros((n_unif,self.cv))
-        wei=np.zeros((n_unif,self.cv,len(self.feat[0])+1,1))
-        if method=='oversampling':
-            p_in=imbalanced_data.oversampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        if method=='undersampling':
-            p_in=imbalanced_data.undersampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        for i in range(len(index_balanced)):
-            clase_balanced=self.clase[index_balanced[i]]
-            feat_balanced=self.feat[index_balanced[i]]            
-            skf=StratifiedKFold(clase_balanced,self.cv)  
-            g=0
-            for train,test in skf: 
-                X_train=feat_balanced[train]
-                X_test=feat_balanced[test]
-                y_train=clase_balanced[train]
-                y_test=clase_balanced[test]
-                log=LinearDiscriminantAnalysis()
-                trainning=log.fit(X_train,y_train)
-                perf[i,g]=log.score(X_test,y_test)
-                perf_th[i,g]=1.0/((np.std(log.decision_function(X_test)))**2)
-                perf_train[i,g]=log.score(X_train,y_train)
-                wei[i,g,:,0]=np.append(log.coef_[0],log.intercept_)
-                g=g+1
-        performance=np.mean(perf)
-        performance_th=np.mean(perf_th)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=(0,1))
-        output={'performance':performance,'performance_th':performance_th,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def lda_uniform_prior_shuffled(self,n_unif,n,method): 
-        perf=np.zeros((n_unif,self.cv,n))
-        wei=np.zeros((n_unif,self.cv,n,len(self.feat[0])+1,1))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            if method=='oversampling':
-                p_in=imbalanced_data.oversampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            if method=='undersampling':
-                p_in=imbalanced_data.undersampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            for i in range(len(index_balanced)):
-                clase_balanced=clase_s[index_balanced[i]]
-                feat_balanced=self.feat[index_balanced[i]]
-                skf=StratifiedKFold(clase_balanced,self.cv)  
-                g=0
-                for train,test in skf: 
-                    X_train=feat_balanced[train]
-                    X_test=feat_balanced[test]
-                    y_train=clase_balanced[train]
-                    y_test=clase_balanced[test]
-                    log=LinearDiscriminantAnalysis()
-                    trainning=log.fit(X_train,y_train)
-                    perf[i,g,k]=log.score(X_test,y_test)
-                    wei[i,g,k,:,0]=np.append(log.coef_[0],log.intercept_)
-                    g=g+1
-        performance_distr=np.mean(perf,axis=(0,1))
-        weights_distr=np.mean(wei,axis=(0,1))
-        output={'performance_distr':performance_distr,'weights_distr':weights_distr}
-        return output
-
-class qda:
-    def __init__(self,feat,clase):
-        self.feat=feat
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        self.cv=5
-
-    def qda(self):
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        skf=StratifiedKFold(self.clase,self.cv)
-        g=0
-        for train,test in skf: 
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            log=QuadraticDiscriminantAnalysis()
-            trainning=log.fit(X_train,y_train)
-            perf[g]=log.score(X_test,y_test)
-            perf_train[g]=log.score(X_train,y_train)
-            g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        output={'performance':performance,'performance_train':performance_train}
-        return output
-
-    def qda_shuffled(self,n):
-        perf=np.zeros((self.cv,n))
-        perf_train=np.zeros((self.cv,n))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            skf=StratifiedKFold(clase_s,self.cv) 
-            g=0
-            for train,test in skf: 
-                X_train=self.feat[train]
-                X_test=self.feat[test]
-                y_train=clase_s[train]
-                y_test=clase_s[test]
-                log=QuadraticDiscriminantAnalysis()
-                trainning=log.fit(X_train,y_train)
-                perf[g,k]=log.score(X_test,y_test)
-                perf_train[g,k]=log.score(X_train,y_train)
-                g=g+1
-        performance_distr=np.mean(perf,axis=0)
-        performance_train_distr=np.mean(perf_train,axis=0)
-        output={'performance_distr':performance_distr,'performance_train_distr':performance_train_distr}
-        return output
-
-    def qda_uniform_prior(self,n_unif,method): 
-        perf=np.zeros((n_unif,self.cv))
-        perf_th=np.zeros((n_unif,self.cv))
-        perf_train=np.zeros((n_unif,self.cv))
-        if method=='oversampling':
-            p_in=imbalanced_data.oversampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        if method=='undersampling':
-            p_in=imbalanced_data.undersampling(self.clase,n_unif)
-            index_balanced=p_in.index
-        for i in range(len(index_balanced)):
-            clase_balanced=self.clase[index_balanced[i]]
-            feat_balanced=self.feat[index_balanced[i]]            
-            skf=StratifiedKFold(clase_balanced,self.cv)  
-            g=0
-            for train,test in skf: 
-                X_train=feat_balanced[train]
-                X_test=feat_balanced[test]
-                y_train=clase_balanced[train]
-                y_test=clase_balanced[test]
-                log=QuadraticDiscriminantAnalysis()
-                trainning=log.fit(X_train,y_train)
-                perf[i,g]=log.score(X_test,y_test)
-                perf_th[i,g]=1.0/((np.std(log.decision_function(X_test)))**2)
-                perf_train[i,g]=log.score(X_train,y_train)
-                g=g+1
-        performance=np.mean(perf)
-        performance_th=np.mean(perf_th)
-        performance_train=np.mean(perf_train)
-        output={'performance':performance,'performance_th':performance_th,'performance_train':performance_train}
-        return output
-
-    def qda_uniform_prior_shuffled(self,n_unif,n,method): 
-        perf=np.zeros((n_unif,self.cv,n))
-        for k in range(n):
-            clase_s=permutation(self.clase)
-            if method=='oversampling':
-                p_in=imbalanced_data.oversampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            if method=='undersampling':
-                p_in=imbalanced_data.undersampling(clase_s,n_unif)
-                index_balanced=p_in.index
-            for i in range(len(index_balanced)):
-                clase_balanced=clase_s[index_balanced[i]]
-                feat_balanced=self.feat[index_balanced[i]]
-                skf=StratifiedKFold(clase_balanced,self.cv)  
-                g=0
-                for train,test in skf: 
-                    X_train=feat_balanced[train]
-                    X_test=feat_balanced[test]
-                    y_train=clase_balanced[train]
-                    y_test=clase_balanced[test]
-                    log=QuadraticDiscriminantAnalysis()
-                    trainning=log.fit(X_train,y_train)
-                    perf[i,g,k]=log.score(X_test,y_test)
-                    g=g+1
-        performance_distr=np.mean(perf,axis=(0,1))
-        output={'performance_distr':performance_distr}
-        return output
-
-class linregress_ols:
-    def __init__(self,regressors,target):
-        self.regressors=regressors
-        self.target=target
-        self.fit_intercept=True
-        self.normalize=False
-        self.test_size=0.2
-        self.n_iter=100
-        self.n_iter_sh=5
-
-    def linregress(self):
-        perform=[]
-        perform_train=[]
-        weights=[]
-        weight0=[]
-        skf=ShuffleSplit(len(self.target),n_iter=self.n_iter,test_size=self.test_size)  #  KFold(n=len(self.target),n_folds=5)
-        for train,test in skf: 
-            X_train=self.regressors[train]
-            X_test=self.regressors[test]
-            y_train=self.target[train]
-            y_test=self.target[test]
-            linr=LinearRegression(fit_intercept=self.fit_intercept,normalize=self.normalize)    
-            trainning=linr.fit(X_train,y_train)
-            prediccion=linr.predict(X_test)
-	    perf=linr.score(X_test,y_test)
-            prediccion_trian=linr.predict(X_train)
-            perf_train=linr.score(X_train,y_train)
-            perform.append(perf) 
-            perform_train.append(perf_train)
-            weights.append(linr.coef_)
-            weight0.append(linr.intercept_)
-        performance=np.mean(perform)
-        performance_train=np.mean(perform_train)
-        weights=np.mean(weights,axis=0)
-        weight0=np.mean(weight0)
-        output={'performance':performance,'performance_train':performance_train,'weights':weights,'weight0':weight0}
-        return output
-
-    def linregress_shuffled(self,n):
-        perform=[]
-        weights=[]
-        weight0=[] 
-        for k in range(n):  
-            perfor=[]
-            wei=[]
-            wei0=[]
-            target_s=permutation(self.target)
-            skf=ShuffleSplit(len(target_s),n_iter=self.n_iter_sh,test_size=self.test_size)       
-            for train,test in skf: 
-                X_train=self.regressors[train]
-                X_test=self.regressors[test]
-                y_train=target_s[train]
-                y_test=target_s[test]
-                linr=LinearRegression(fit_intercept=self.fit_intercept,normalize=self.normalize)
-                trainning=linr.fit(X_train,y_train)
-                prediccion=linr.predict(X_test)
-                perf=linr.score(X_test,y_test)
-                perfor.append(perf) 
-                wei.append(linr.coef_)
-                wei0.append(linr.intercept_)
-            perform.append(np.mean(perfor))
-            weights.append(np.mean(wei,axis=0))
-            weight0.append(np.mean(wei0))
-        performance_distr=np.array(perform)
-        weights_distr=np.array(weights)
-        weights=np.mean(weights,axis=0)
-        weight0=np.mean(weight0)
-        output={'performance_distr':performance_distr,'weights':weights,'weight0':weight0,'weights_distr':weights_distr}
-        return output
-
-class logregress_statsmodels:
-    def __init__(self,feat,clase,regularization):
-        self.feat=sm.add_constant(feat,prepend=False) # En los weights el ultimo valor es el del intercept
-        self.clase=clase
-        self.clase[self.clase==-1]=0
-        self.cv=5
-        self.regularization=regularization
-
-    def logregress(self):
-        perf=np.zeros((self.cv))
-        perf_train=np.zeros((self.cv))
-        wei=np.zeros((self.cv,len(self.feat[0])))
-        skf=StratifiedKFold(self.clase,self.cv)
-        g=0
-        for train,test in skf: 
-            X_train=self.feat[train]
-            X_test=self.feat[test]
-            y_train=self.clase[train]
-            y_test=self.clase[test]
-            lr=sm.Logit(endog=y_train,exog=X_train)
-            model_pre=lr.fit(disp=False)
-            model=lr.fit_regularized(start_params=model_pre.params,alpha=self.regularization,disp=False)
-            predict=(model.predict(exog=X_test))>0.5
-            predict_train=(model.predict(exog=X_train))>0.5
-            perf[g]=np.sum(predict==y_test)/float(len(y_test))
-            perf_train[g]==np.sum(predict_train==y_train)/float(len(y_train))
-            wei[g,:]=model.params
-            g=g+1
-        performance=np.mean(perf)
-        performance_train=np.mean(perf_train)
-        weights=np.mean(wei,axis=0)
-        output={'performance':performance,'performance_train':performance_train,'weights':weights}
-        return output
-
-    def logregress_shuffled(self,n):
-        perf=np.zeros((self.cv,n))
-        perf_train=np.zeros((self.cv,n))
-        wei=np.zeros((self.cv,n,len(self.feat[0])))
-        for k in range(n):  
-            clase_s=permutation(self.clase)
-            skf=KFold(len(clase_s),self.cv) 
-            g=0
-            for train,test in skf: 
-                X_train=self.feat[train]
-                X_test=self.feat[test]
-                y_train=clase_s[train]
-                y_test=clase_s[test]
-                lr=sm.Logit(endog=y_train,exog=X_train)
-                model_pre=lr.fit(disp=False)
-                model=lr.fit_regularized(start_params=model_pre.params,alpha=self.regularization,disp=False)
-                predict=(model.predict(exog=X_test))>0.5
-                predict_train=(model.predict(exog=X_train))>0.5
-                perf[g,k]=np.sum(predict==y_test)/float(len(y_test))
-                perf_train[g,k]==np.sum(predict_train==y_train)/float(len(y_train))
-                wei[g,k,:]=model.params
-                g=g+1
-        performance_distr=np.mean(perf,axis=0)
-        performance_train_distr=np.mean(perf_train,axis=0)
-        weights_distr=np.mean(wei,axis=0)
-        output={'performance_distr':performance_distr,'performance_train_distr':performance_train_distr,'weights_distr':weights_distr}
-        return output
-
-# ROC donde se le pasa solo las clases y las features, sin tiempo ni nada, del estilo del Logregress de arriba
-class ROC_standard:
-    'Solo se pasa una neurona'
-    def __init__(self,feat,clase): 
-        self.feat=feat
-        self.feat=np.reshape(self.feat,len(self.feat))
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        if len(np.where(self.feat<0)[0])!=0:
-            print 'z-score On, it should be removed'
-                       
-    def ROC(self):
-        index_clase1=np.where(self.clase==self.clase_unique[0])[0] 
-        index_clase2=np.where(self.clase==self.clase_unique[1])[0]   
-# ponemos cada feature a la clase que le corresponde
-        feature_1=self.feat[index_clase1]
-        feature_2=self.feat[index_clase2]
-        ma=max(max(feature_1),max(feature_2))
-        delta_x=10.0
-        resolution=delta_x*ma
-        if resolution==0.0:
-            perf=0.5
-        else:
-            hist1=np.histogram(feature_1,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-            hist2=np.histogram(feature_2,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-            p=[]
-# Aqui hacemos la integral
-            for l in range(len(hist1)):
-                s=hist1[l]*(np.sum(hist2[(l+1):])) 
-                s=s+hist1[l]*hist2[l]/2.0
-                p.append(s)
-            perf=np.sum(p)
-        if np.isnan(perf)==True:
-            print 'aqui hay nan'
-        return perf
+def intify_classes(session_classes):
+    ## Code the session classes
+    coded_session_classes = session_classes.replace({
+        'rewside': {'left': 0, 'right': 1}, 
+        'choice': {'left': 0, 'right': 1}, 
+        'servo_pos': {1670: 0, 1760:1, 1850:2}
+    })
+    intified_session_classes = (
+        coded_session_classes['rewside'] + 
+        2 * coded_session_classes['choice'] + 
+        4 * coded_session_classes['servo_pos']
+    )
     
-    def ROC_shuffled(self,n):
-        perf_dist=[]
-        for i in range(n):
-            clase_s=permutation(self.clase)
-# encontramos los indices a los que pertenece cada clase                
-            index_clase1=np.where(clase_s==self.clase_unique[0])[0] 
-            index_clase2=np.where(clase_s==self.clase_unique[1])[0]                     
-# ponemos cada feature a la clase que le corresponde
-            feature_1=self.feat[index_clase1]
-            feature_2=self.feat[index_clase2]
-            ma=max(max(feature_1),max(feature_2))
-            delta_x=10.0
-            resolution=delta_x*ma
-            if resolution==0.0:
-                perf=0.5
-            else:
-                hist1=np.histogram(feature_1,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-                hist2=np.histogram(feature_2,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-                p=[]
-# Aqui hacemos la integral
-                for l in range(len(hist1)):
-                    s=hist1[l]*(np.sum(hist2[(l+1):])) 
-                    s=s+hist1[l]*hist2[l]/2.0
-                    p.append(s)
-                perf=np.sum(p)
-            perf_dist.append(perf)
-            if np.isnan(perf)==True:
-                print 'aqui hay sh nan'
-        perf_dist=np.array(perf_dist)  
-        return perf_dist
+    return intified_session_classes
 
-# ROC donde se le pasa solo las clases y las features, sin tiempo ni nada, del estilo del Logregress de arriba
-class ROC_absolute:
-    'Solo se pasa una neurona'
-    def __init__(self,feat,clase): 
-        self.feat=feat
-        self.feat=np.reshape(self.feat,len(self.feat))
-        self.clase=clase
-        self.clase_unique=np.unique(self.clase)
-        if len(np.where(self.feat<0)[0])!=0:
-            print 'z-score On, it should be removed'
-                       
-    def ROC(self):
-        index_clase1=np.where(self.clase==self.clase_unique[0])[0] 
-        index_clase2=np.where(self.clase==self.clase_unique[1])[0]   
-# ponemos cada feature a la clase que le corresponde
-        feature_1=self.feat[index_clase1]
-        feature_2=self.feat[index_clase2]
-        ma=max(max(feature_1),max(feature_2))
-        delta_x=10.0
-        resolution=int(delta_x*ma)
-        if resolution==0.0:
-            perf=0.5
-        else:
-            hist1=np.histogram(feature_1,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-            hist2=np.histogram(feature_2,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-            p=[]
-# Aqui hacemos la integral
-            for l in range(len(hist1)):
-                s=hist1[l]*(np.sum(hist2[(l+1):])) 
-                s=s+hist1[l]*hist2[l]/2.0
-                p.append(s)
-            perf=np.sum(p)
-        if perf>=0.5:
-            perf=perf
-        if perf<0.5:
-            perf=1.0-perf
-        if np.isnan(perf)==True:
-            print 'aqui hay nan'
-        return perf
+def normalize_features(session_features):
+    """Normalize features
     
-    def ROC_shuffled(self,n):
-        perf_dist=[]
-        for i in range(n):
-            clase_s=permutation(self.clase)
-# encontramos los indices a los que pertenece cada clase                
-            index_clase1=np.where(clase_s==self.clase_unique[0])[0] 
-            index_clase2=np.where(clase_s==self.clase_unique[1])[0]                     
-# ponemos cada feature a la clase que le corresponde
-            feature_1=self.feat[index_clase1]
-            feature_2=self.feat[index_clase2]
-            ma=max(max(feature_1),max(feature_2))
-            delta_x=10.0
-            resolution=int(delta_x*ma)
-            if resolution==0.0:
-                perf=0.5
-            else:
-                hist1=np.histogram(feature_1,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-                hist2=np.histogram(feature_2,range=(0,ma),bins=resolution,density=True)[0]*(1.0/delta_x)
-                p=[]
-# Aqui hacemos la integral
-                for l in range(len(hist1)):
-                    s=hist1[l]*(np.sum(hist2[(l+1):])) 
-                    s=s+hist1[l]*hist2[l]/2.0
-                    p.append(s)
-                perf=np.sum(p)
-            if perf>=0.5:
-                perf=perf
-            if perf<0.5:
-                perf=1.0-perf
-            perf_dist.append(perf)
-            if np.isnan(perf)==True:
-                print 'aqui hay sh nan'
-        perf_dist=np.array(perf_dist)  
-        return perf_dist
+    Returns: norm_session_features, normalizing_mu, normalizing_sigma
+    """
+    norm_session_features = session_features.copy()
+    
+    # Demean
+    normalizing_mu = norm_session_features.mean()
+    norm_session_features = norm_session_features - normalizing_mu
 
+    # Fill with zero here so that NaNs cannot impact the result
+    norm_session_features = norm_session_features.fillna(0)            
+    
+    # Scale, AFTER fillna, so that the scale is really 1
+    normalizing_sigma = norm_session_features.std()
+    norm_session_features = norm_session_features / normalizing_sigma
+    
+    # Fillna again, in the case that every feature was the same
+    # in which case it all became inf after scaling
+    norm_session_features = norm_session_features.fillna(0)            
+    norm_session_features = norm_session_features.replace(
+        {-np.inf: 0, np.inf: 0})
 
-    # Usamos el decodificador ROC con el sampling. Las variables de entrada son 2: vector con spike rate para cada trial y clase a al que pertenece cada trial. 
-class ROC_montecarlo:
-    'Solo se pasa una neurona'
-    def __init__(self,feat,clase,resolution=int(10E4),shuff=False):
-        self.feat=feat
-        self.clase=clase 
-        self.resolution=resolution
+    return norm_session_features, normalizing_mu, normalizing_sigma
+
+def stratify_and_calculate_sample_weights(strats):
+    """Calculate the weighting of each sample
+    
+    The samples are weighted in inverse proportion to the 
+    frequency of the corresponding value in `strats`.
+    
+    Returns: strat_id2weight, sample_weights
+        strat_id2weight : dict of strat value to weight
+        sample_weights : weight of each sample (mean 1)
+    """
+    # Calculate weight of each strat_id
+    strat_id2weight = {}
+    for this_strat in np.unique(strats):
+        n_this_strat = np.sum(strats == this_strat)
+        weight_this_strat = len(strats) / float(n_this_strat)
+        strat_id2weight[this_strat] = weight_this_strat
+    
+    # Sample weights
+    sample_weights = np.array([strat_id2weight[strat_id]
+        for strat_id in strats])
+    
+    # Make them mean 1
+    sample_weights = sample_weights / sample_weights.mean()
+    
+    # Return
+    return strat_id2weight, sample_weights
+
+def stratified_split_data(stratifications, n_splits=3, 
+    shuffle=False, random_seed=None, return_arr=False, test_name='test',
+    group_names=['train', 'tune']):
+    """Stratify data into different groups, equalizing by class.
+    
+    Typically this is for splitting into "train", "tune", and "test" groups,
+    while equalizing the number of rows from each stratification in each 
+    group. We always want each row to occur in exactly one "test" group,
+    but the relative sizes of the tune and train groups are a free parameter.
+    
+    The data is stratified by the values in stratifications. Each
+    stratification is considered separately, and concatenated at the end.
+    
+    Within each stratification: the data are split into `n_splits` 
+    "testing splits". Each data point will be in exactly one testing split.
+    For each testing split, the remaining (non-test) data are split equally
+    into each group in `group_names` (e.g., tuning and training).
+    """
+    # Set state
+    if random_seed is not None:
+        np.random.seed(random_seed)
+    
+    # Identify the unique values of `stratifications`
+    unique_strats = np.sort(np.unique(stratifications))
+    
+    # These will be of length n_splits
+    test_indices_by_split = [[] for n_split in range(n_splits)]
+    
+    # These will be of length n_splits, each of length n_groups
+    group_indices_by_split = [
+        [[] for n_group in range(len(group_names))]
+        for n_split in range(n_splits)
+    ]
+    
+    # Consider each stratification separately
+    for strat in unique_strats:
+        # Find the corresponding indices into stratifications
+        indices = np.where(stratifications == strat)[0]
         
-    def ROC(self):
-        clase_unique=np.unique(self.clase)
-        index_clase1=np.where(self.clase==clase_unique[0])[0] 
-        index_clase2=np.where(self.clase==clase_unique[1])[0] 
-
-        feature_1=self.feat[index_clase1]
-        feature_2=self.feat[index_clase2]
-
-        t=0
-        for l in range(self.resolution):
-            x=np.random.randint(0,len(feature_1))
-            y=np.random.randint(0,len(feature_2))
-            if feature_1[x]>feature_2[y]:
-                t=t+1
-            if feature_1[x]==feature_2[y]:
-                t=t+0.5
-        t=float(t)
-        perf_pre=t/self.resolution
-
-        return 1-perf_pre # cuidado con esto
-
-class generalized_linear_model_no_cv:
-    def __init__(self,noise_model,feat,target,regularization):
-        self.feat=sm.add_constant(feat,prepend=False) # En los weights el ultimo valor es el del intercept
-        self.clase=target 
-        self.noise_model=noise_model
-        if noise_model=='logistic_regression':
-            self.clase[self.clase==-1]=0
-        self.regularization=regularization
-        self.exposure=0.15*np.ones(len(self.clase))
-
-    def glm(self):
-        if self.noise_model=='logistic_regression':
-            lr=sm.GLM(endog=self.clase,exog=self.feat,family=sm.families.Binomial())
-            model=lr.fit()
-            performance=model.deviance
-        if self.noise_model=='poisson_regression':
-            lr=sm.Poisson(endog=self.clase,exog=self.feat,offset=self.exposure)
-            if self.regularization==0.0:
-                model=lr.fit(method='powell',disp=False)
-                params=model.params
-            else:
-                model_pre=lr.fit(method='powell',disp=False)
-                params_pre=model_pre.params
-                model=lr.fit_regularized(start_params=params_pre,method='l1',disp=False,alpha=self.regularization,trim_mode='size',maxiter=100000)
-            performance=model.prsquared
-        if self.noise_model=='linear_regression':
-            lr=sm.OLS(endog=self.clase,exog=self.feat)
-            if self.regularization==0.0:
-                model=lr.fit()
-            else:
-                model=lr.fit_regularized(alpha=self.regularization,L1_wt=0.0)
-            performance=model.rsquared
-        llh=model.llf
-        aic=model.aic
-        bic=model.bic
-        weights=model.params
-        output={'performance':performance,'weights':weights,'llh':llh,'aic':aic,'bic':bic}
-        return output
+        # Shufle them
+        if shuffle:
+            np.random.shuffle(indices)
         
-    def glm_shuffled(self,n):
-        performance=np.zeros(n)
-        weights=np.zeros((n,len(self.feat[0])))
-        k=0
-        while k<n:
-            clase_s=permutation(self.clase)
-            try:
-                if self.noise_model=='logistic_regression':
-                    lr=sm.GLM(endog=clase_s,exog=self.feat,family=sm.families.Binomial())
-                    model=lr.fit()
-                    performance[k]=model.deviance
-                if self.noise_model=='poisson_regression':
-                    lr=sm.Poisson(endog=clase_s,exog=self.feat)
-                    if self.regularization==0.0:
-                        model=lr.fit(method='powell',disp=False)
-                        params=model.params
-                    else:
-                        model_pre=lr.fit(method='powell',disp=False)
-                        params_pre=model_pre.params
-                        model=lr.fit_regularized(start_params=params_pre,method='l1',disp=False,alpha=self.regularization,trim_mode='size')
-                    performance[k]=model.prsquared
-                if self.noise_model=='linear_regression':
-                    lr=sm.OLS(endog=clase_s,exog=self.feat)
-                    if self.regularization==0.0:
-                        model=lr.fit()
-                    else:
-                        model=lr.fit_regularized(alpha=self.regularization,L1_wt=0.0)
-                    performance[k]=model.rsquared
-                weights[k]=model.params
-                k=k+1
-            except:
-                print 'except sh'
-        output={'performance_distr':performance,'weights_distr':weights}
-        return output
+        # Equal size test splits
+        split_indices = np.mod(np.arange(len(indices), dtype=np.int), n_splits)
+        
+        # For each test set, split the rest into groups
+        for n_split in range(n_splits):
+            # Get the test_indices and the rest_indices
+            test_indices = indices[split_indices == n_split]
+            rest_indices = indices[split_indices != n_split]
 
+            # Split the rest_indices into groups of the appropriate sizes
+            rest_indices_modded = np.mod(
+                n_split + np.arange(len(rest_indices), dtype=np.int), 
+                len(group_names))
+
+            # Store the test indices
+            test_indices_by_split[n_split].append(test_indices)
+            
+            # Store the groups
+            for n_group in range(len(group_names)):
+                group_indices_by_split[n_split][n_group].append(
+                    rest_indices[rest_indices_modded == n_group])
+
+    # Concatenate over strats
+    for n_split in range(n_splits):
+        test_indices_by_split[n_split] = np.sort(np.concatenate(
+            test_indices_by_split[n_split]))
+        
+        for n_group in range(len(group_names)):
+            group_indices_by_split[n_split][n_group] = np.sort(np.concatenate(
+                group_indices_by_split[n_split][n_group]))
+    
+    if return_arr:
+        return test_indices_by_split, group_indices_by_split
+    
+    # DataFrame it
+    split_ser_l = []
+    for n_split in range(n_splits):
+        # Generate a series for this split
+        split_ser = pandas.Series([''] * len(stratifications), 
+            index=stratifications.index, name=n_split)
+        
+        # Set the test indices
+        split_ser.iloc[test_indices_by_split[n_split]] = test_name
+        
+        # Set each group indices
+        zobj = zip(group_names, group_indices_by_split[n_split])
+        for group_name, group_indices in zobj:
+            split_ser.iloc[group_indices] = group_name
+        
+        # Store
+        split_ser_l.append(split_ser)
+    
+    res = pandas.concat(split_ser_l, axis=1)
+    res.columns.name = 'split'
+    
+    return res
+
+def logregress2(
+    features, labels, train_indices, test_indices,
+    sample_weights=None, strats=None, regularization=10**5,
+    testing_set_name='test',
+    ):
+    """Run cross-validated logistic regression 
+       
+    testing_set_name : this is used to set the values in the 'set' column
+        of the per_row_df, and also in scores_df
+        If this is a tuning set, pass 'tune'
+    
+    Returns: dict
+        'weights': logreg.coef_[0],
+        'intercept': logreg.intercept_[0],
+        'scores_df': scores_df,
+        'per_row_df': res_df,       
+    """
+    ## Split out test and train sets
+    X_train = features[train_indices]
+    X_test = features[test_indices]
+    y_train = labels[train_indices]
+    y_test = labels[test_indices]
+    
+    
+    ## Set up sample weights
+    # Get them if they don't exist
+    if sample_weights is None:
+        # Use strat if available, otherwise use 1
+        if strats is None:
+            sample_weights = np.ones(len(features))
+        else:
+            strat_id2weight, sample_weights = (
+                stratify_and_calculate_sample_weights(strats)
+            )
+    
+    # Split
+    sample_weights_train = sample_weights[train_indices]
+    sample_weights_test = sample_weights[test_indices]    
+    
+    
+    ## Fit
+    # Initialize fitter
+    logreg = sklearn.linear_model.LogisticRegression(
+        C=(1.0 / regularization),
+    )
+
+    # Fit, applying the sample weights
+    logreg.fit(X_train, y_train, sample_weight=sample_weights_train)
+    
+    
+    ## Extract results
+    # The per-row predictions and scores
+    predictions = logreg.predict(features)
+    res_df = pandas.DataFrame.from_dict({
+        'dec_function': logreg.decision_function(features),
+        'proba': logreg.predict_proba(features)[:, 1],
+        'prediction': predictions,
+        'pred_correct': (predictions == labels).astype(np.float),
+        'actual': labels,
+        'sample_weight': sample_weights,
+        })
+    res_df['weighted_correct'] = res_df['sample_weight'] * res_df['pred_correct']
+    
+    # Assign train or test set to each row
+    res_df['set'] = ''
+    res_df['set'].values[test_indices] = testing_set_name
+    res_df['set'].values[train_indices] = 'train'
+    
+    # The overall scores
+    scores_df = res_df.loc[
+        res_df['set'].isin([testing_set_name, 'train']),
+        ['set', 'pred_correct', 'weighted_correct']
+        ].groupby('set').mean()
+    
+    
+    ## Return
+    output = {
+        'weights': logreg.coef_[0],
+        'intercept': logreg.intercept_[0],
+        'scores_df': scores_df,
+        'per_row_df': res_df,
+    }
+    return output
+
+
+def tuned_logregress(folds, norm_session_features, intified_labels,
+    sample_weights, reg_l):
+    """Train over all splits and all regularizations, evaluate on the tuning set
+
+    """
+    ## Iterate over splits
+    tuning_results_l = []
+    tuning_scores_l = []
+    tuning_keys_l = []
+    
+    for split in folds.columns:
+        ## Extract data masks and indices
+        test_data_mask = folds.loc[:, split] == 'test'
+        tune_data_mask = folds.loc[:, split] == 'tune'
+        train_data_mask = folds.loc[:, split] == 'train'
+        
+        test_indices = np.where(test_data_mask.values)[0]
+        tune_indices = np.where(tune_data_mask.values)[0]
+        train_indices = np.where(train_data_mask.values)[0]
+        
+        
+        ## Iterate over regularizations
+        for reg in reg_l:
+            # Train on the training set, test on the tuning set
+            logreg_res = logregress2(
+                features=norm_session_features.values, 
+                labels=intified_labels.values, 
+                train_indices=train_indices, 
+                test_indices=tune_indices,
+                sample_weights=sample_weights,
+                regularization=10 ** reg,
+                testing_set_name='tune',
+                )                    
+            
+            # Rename the sets, because  the unused rows marked with 
+            # '' were actually 'test'
+            logreg_res['per_row_df']['set'] = (
+                logreg_res['per_row_df']['set'].replace(
+                {'': 'test'})
+            )
+            
+            # Add the index back
+            logreg_res['per_row_df'].index = norm_session_features.index
+            logreg_res['weights'] = pandas.Series(logreg_res['weights'],
+                index=norm_session_features.columns, name='weights')
+
+            # Error check
+            assert (logreg_res['per_row_df']['set'] == folds.loc[:, split]).all()
+           
+            # Store
+            tuning_results_l.append(logreg_res)
+            tuning_keys_l.append((split, reg))
+    
+    return tuning_keys_l, tuning_results_l
+    
+def recalculate_decfun_standard(features, mu, sigma, weights, intercepts):
+    """Recalculate the decision function from features in the standard way.
+    
+    In the standard approach, we first standardize the features (zero mean and
+    unit variance), multiply by the weights, and add the intercept.
+    
+    features : DataFrame of shape (n_trials, n_features)
+        index: MultiIndex (session, trial)
+        columns: MultiIndex of features
+        These are the raw features. They can contain null values.
+    
+    mu, sigma : DataFrame of shape (n_sessions, n_features)
+        index: session
+        columns: MultiIndex of features
+        These are the mean and standard deviation of the raw features.
+        When there is no data in features, mu will be null, and standard
+        deviation should be zero.
+        filled with zeros.
+    
+    weights : DataFrame of shape (n_sessions * n_decode_labels, n_features)
+        index : MultiIndex (session, decode_label)
+        columns : MultiIndex of features
+        These are the coefficients from the model. They should not be null.
+    
+    intercepts : Series of length (n_sessions * n_decode_labels)
+        index : MultiIndex (session, decode_label)
+    
+    Returns: Series
+        index : MultiIndex (session, decode_label, trial)
+        This is the decision function for each trial. 
+    """
+    # Debugging: this was for a single session * label
+    #~ srecalc_decfun = sfeatures.sub(snmu).divide(snsig).mul(sweights).fillna(
+        #~ 0).sum(1) + sicpt
+
+    return features.sub(mu).divide(sigma).mul(weights).fillna(
+        0).sum(1).add(intercepts)
+
+def recalculate_decfun_raw(features, mu, sigma, weights, intercepts):
+    """Recalculate the decision function from features in the raw way.
+    
+    This is a reordering of the standard formula, so that the weights
+    are directly interpretable as the effect of a single instance of
+    a feature (e.g., a single contact).
+    
+    Because we want to use the raw non-standardized features, we have to
+    apply the feature scaling to the weights. These "scaled weights" are
+    the weights divided by the standard deviation of the features. We
+    also have to account for this change in the intercept.
+    
+    decfun = weights * (features - mu) / sigma + intercept
+    decfun = (weights / sigma) * features + (-mu * weights / sigma) + intercept
+    decfun = scaled_weights * features + (-scaled_weights * mu + intercept)
+    decfun = scaled_weights * features + icpt_transformed
+    
+    The inputs are the same as recalculate_decfun_standard.
+    
+    Returns: scaled_weights, icpt_transformed, decfun
+        scaled_weights : DataFrame, same shape as weights
+            The scaled weights
+        icpt_transformed : Series, same shape as intercepts
+            The transformed intercepts
+        decfun : Series, same shape as the result of recalculate_decfun_standard
+            The recalculated decision function
+    """
+    # Debugging: this was for a single session * label
+    #~ sweights_unscaled = sweights.divide(snsig).fillna(0)
+    #~ sicpt_transformed = -sweights_unscaled.mul(snmu).fillna(0).sum() + sicpt
+    #~ srecalc_decfun2 = (
+        #~ sfeatures.fillna(sfeatures.mean()).mul(sweights_unscaled).fillna(0).sum(1) 
+        #~ + sicpt_transformed
+    #~ )
+    
+    # Scale the weights
+    scaled_weights = weights.divide(sigma).fillna(0)
+
+    # Transform the intercepts
+    icpt_transformed = (-scaled_weights.mul(mu).fillna(0).sum(1)).add(
+        intercepts)
+
+    # Must pre-fill model_features with the session mean of each feature
+    filled_features = pandas.concat([
+        features.loc[session].fillna(features.loc[session].mean())
+        for session in features.index.levels[0]],
+        axis=0, keys=features.index.levels[0]
+    )
+
+    # Recalculate
+    decfun = filled_features.mul(scaled_weights).fillna(0).sum(1).add(
+        icpt_transformed)
+    
+    return scaled_weights, icpt_transformed, decfun
+
+def recalculate_decfun_partitioned(features, mu, sigma, weights, intercepts,
+    raw_mask):
+    """Recalculate the decision function using some raw and some scaled.
+    
+    This is a combination of the approaches in recalculate_decfun_standard
+    and recalculate_decfun_raw. Some "raw" features are handled in the raw
+    way and the rest are handled in the scaled way.
+    
+    The inputs are the same as recalculate_decfun_standard, except for:
+    
+    raw_mask : boolean Series, same shape as the feature columns
+        True for raw features
+    
+    Returns: features_part, weights_part, icpt_transformed, decfun
+        features_part : DataFrame, same shape as features
+            The transformed features. Raw features are unchanged from `features`,
+            and the rest are scaled as in the standard way.
+        weights_part : DataFrame, same shape as weights
+            The transformed weights. The weights of raw features are scaled,
+            and the rest are the the same as in `weights`.
+        icpt_transformed : Series, same shape as intercepts
+            The transformed intercepts, now including the effect of the
+            raw weights.
+        decfun : Series, same shape as the result of recalculate_decfun_standard
+            The recalculated decision function
+    """
+    # Debugging
+    #~ sraw_mask = sweights.index.get_level_values('family') == 'summed_count'
+    #~ sfeatures_part = sfeatures.copy()
+    #~ sweights_part = sweights.copy()
+    #~ sfeatures_part = sfeatures_part.fillna(sfeatures_part.mean())
+    #~ sfeatures_part.loc[:, ~sraw_mask] = sfeatures_part.loc[:, ~sraw_mask].sub(
+        #~ snmu).divide(snsig)
+    #~ sweights_part.loc[raw_mask] = sweights_part.loc[raw_mask].divide(
+        #~ snsig.loc[raw_mask]).fillna(0)
+    #~ srecalc_decfun4 = (
+        #~ sfeatures_part.mul(sweights_part).fillna(0).sum(1) + 
+        #~ raw_sicpt_transformed + sicpt
+    #~ )
+    #~ raw_sicpt_transformed = -sweights_part.loc[raw_mask].mul(snmu.loc[raw_mask]
+        #~ ).fillna(0).sum()
+    
+    # Copy because some will be changed
+    features_part = features.copy()
+    weights_part = weights.copy()
+
+    # Fill all features with their session mean
+    features_part = pandas.concat([
+        features_part.loc[session].fillna(features_part.loc[session].mean())
+        for session in features_part.index.levels[0]],
+        axis=0, keys=features_part.index.levels[0]
+    )
+
+    # Normalize some of the features (the standard way) but leave the 
+    # raw features alone
+    features_part.loc[:, ~raw_mask] = features_part.loc[:, ~raw_mask].sub(
+        mu.loc[:, ~raw_mask]).divide(
+        sigma.loc[:, ~raw_mask])
+
+    # Scale the raw weights
+    weights_part.loc[:, raw_mask] = weights_part.loc[:, raw_mask].divide(
+        sigma.loc[:, raw_mask]).fillna(0)
+
+    # Transform the intercept corresponding to raw weights
+    raw_icpt_component = -weights_part.loc[:, raw_mask].mul(
+        mu.loc[:, raw_mask]).fillna(0).sum(1)
+    icpt_transformed = raw_icpt_component + intercepts
+
+    # Compute
+    decfun = (
+        features_part.mul(weights_part).fillna(0).sum(1).add(
+        icpt_transformed)
+    )
+    
+    return features_part, weights_part, icpt_transformed, decfun
