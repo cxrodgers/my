@@ -1005,6 +1005,102 @@ def times_near_times(x, y, dstart, dstop, sort_x=True):
     # nothing will ever trigger)
     return v0 > v1
 
+def find_interval(event_times, interval_starts, interval_stops, 
+    stop_type='open'):
+    """Find the interval containing the events
+    
+    event_times : array-like
+        An array of event times
+    interval_starts, interval_stops : array-like
+        The stops and starts of each intervals. They should be of equal
+        length and they should be sorted. Not sure what happens if the
+        intervals overlap.
+    stop_type : 'open' or 'closed'
+        If the intervals are half-open (Pythonic), specify 'open'.
+        Otherwise if they are closed, specify 'closed'.
+    
+    Returns: array of float
+        The index of the interval corresponding to each event, or nan if 
+        no such interval
+    
+    Examples:
+    Equally spaced points every 0.5 from -.5 to 5.0
+    data = np.arange(-.5, 5.5, .5)
+    Consider two intervals: [0, 2) and [2, 4)
+    
+    0, 0.5, 1, and 1.5 are in the first interval,
+    2, 2.5, 3, 3.5 are in the second interval,
+    and the rest are in no interval
+    
+    list(zip(data, find_interval(data, [0, 2], [2, 4])))
+    [(-0.5, nan),
+     (0.0, 0.0),
+     (0.5, 0.0),
+     (1.0, 0.0),
+     (1.5, 0.0),
+     (2.0, 1.0),
+     (2.5, 1.0),
+     (3.0, 1.0),
+     (3.5, 1.0),
+     (4.0, nan),
+     (4.5, nan),
+     (5.0, nan)]
+
+    If the intervals are closed [0, 2], and [3, 4]
+    list(zip(data, find_interval(data, [0, 3], [2, 4], stop_type='closed')))
+    [(-0.5, nan),
+     (0.0, 0.0),
+     (0.5, 0.0),
+     (1.0, 0.0),
+     (1.5, 0.0),
+     (2.0, 0.0),
+     (2.5, nan),
+     (3.0, 1.0),
+     (3.5, 1.0),
+     (4.0, 1.0),
+     (4.5, nan),
+     (5.0, nan)]
+    """
+    # Datatype
+    event_times = np.asarray(event_times)
+    interval_starts = np.asarray(interval_starts)
+    interval_stops = np.asarray(interval_stops)
+    
+    # Error check
+    if not (np.sort(interval_starts) == interval_starts).all():
+        raise ValueError("interval_starts must be sorted")
+    if not (np.sort(interval_stops) == interval_stops).all():
+        raise ValueError("interval_stops must be sorted")
+    
+    # Note on searchsorted
+    # When an event time is equal to an interval time, then side='right'
+    # returns a bigger index than side='left'. That's what we typically want
+    # Pythonically, because as soon as equality is achieved the event 
+    # enters the next interval.
+    
+    # For each event, the index of the interval start that it is 
+    # equal to or after
+    start_idx = np.searchsorted(interval_starts, event_times, side='right') - 1
+
+    # The corresponding interval stop
+    if stop_type == 'open':
+        # For each event, the index of the interval stop that it is 
+        # strictly before
+        stop_idx = np.searchsorted(interval_stops, event_times, side='right')
+    elif stop_type == 'closed':
+        # For each event, the index of the interval stop that it is 
+        # equal to or strictly before
+        stop_idx = np.searchsorted(interval_stops, event_times, side='left')
+
+    # Where ss1 == ss2, the contact is within the inclusive interval
+    # defined by some corresponding cycle_start and cycle_stop
+    contained_mask = start_idx == stop_idx
+    
+    # Blank out interval where not contained
+    res = start_idx.astype(np.float)
+    res[~contained_mask] = np.nan
+    
+    return res
 
 def cut_dataframe(df, column, edges, new_column='bin', dropna=True, **kwargs):
     """Bin dataframe by values in specified column
