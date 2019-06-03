@@ -192,6 +192,11 @@ def logregress2(
         'scores_df': scores_df,
         'per_row_df': res_df,       
     """
+    if len(train_indices) == 1:
+        raise ValueError("must provide more than one training example")
+    if len(np.unique(test_indices)) == 1:
+        raise ValueError("must provide more than one label type")
+    
     ## Split out test and train sets
     X_train = features[train_indices]
     X_test = features[test_indices]
