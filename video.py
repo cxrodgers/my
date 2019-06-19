@@ -518,7 +518,8 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
         frames.append(frame)
     
     # Plot them
-    f, axa = plt.subplots(1, 4, figsize=(15, 4))
+    f, axa = plt.subplots(1, 4, figsize=(11, 2.5))
+    f.subplots_adjust(left=.05, right=.975, bottom=.05, top=.975)
     for frame, ax in zip(frames, axa.flatten()):
         my.plot.imshow(frame, ax=ax, axis_call='image', cmap=plt.cm.gray)
     my.plot.harmonize_clim_in_subplots(fig=f, clim=(0, 255))
