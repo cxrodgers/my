@@ -280,10 +280,15 @@ class Spectrogrammer:
         self.t = t_rebinned_a
         return Pxx_rebinned_a_log, freqs, t_rebinned_a
 
-def fix_pandas_display_width(dw=0):
-    """Sets display width to 0 (auto) or other"""
+def fix_pandas_display_width(meth=1, dw=0, max_columns=12):
+    """Various fixes"""
     import pandas
-    pandas.set_option('display.width', dw)
+    if meth == 0:
+        pandas.set_option('display.width', 0)
+    elif meth == 1:
+        pandas.set_option('display.max_columns', max_columns)
+        pandas.set_option('display.width', None)
+
 
 class UniquenessError(Exception):
     pass
@@ -1257,3 +1262,55 @@ def simple_sort_whisker_names(whisker_names):
         sorted(junk_whiskers) + sorted(unk_whiskers))
     
     return sorted_whisker_names
+
+def insert_level(df, func, name, level=0, sort=True):
+    """Inserts a level with the mouse name, using a level with the session
+    
+    level : integer position of new mouse level
+    
+    sort : bool
+        Whether to sort before returning
+    
+    Returns : DataFrame with new level on index
+    """
+    # Copy without changing
+    df = df.copy()
+    
+    # Get the index
+    idx = df.index.to_frame().reset_index(drop=True)
+    
+    # Calculate new level
+    to_insert = func(idx)
+    
+    # Insert the mouse column
+    idx.insert(level, name, to_insert)
+    
+    # Reset the index
+    df.index = pandas.MultiIndex.from_frame(idx)
+    
+    # Sort
+    df.sort_index(inplace=True)
+    
+    return df
+
+def insert_mouse_level(df, level=0, sort=True):
+    """Inserts a level with the mouse name, using a level with the session
+    
+    level : integer position of new mouse level
+    
+    sort : bool
+        Whether to sort before returning
+    
+    Returns : DataFrame with new level on index
+    """
+    if 'session' not in df.index.names:
+        raise ValueError("DataFrame must have session as a level on the index")
+    
+    def session_name2mouse_name(idx_df):
+        return [session.split('_')[1] for session in idx_df['session']]
+    
+    res = insert_level(
+        df, func=session_name2mouse_name, name='mouse', 
+        level=level, sort=sort)
+    
+    return res
