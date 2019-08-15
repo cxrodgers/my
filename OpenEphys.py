@@ -12,6 +12,7 @@ Usage:
 
 """
 
+import warnings
 import os
 import numpy as np
 import scipy.signal
@@ -620,6 +621,7 @@ def _get_sorted_channels(folderpath, recording=1):
     channel_numbers_int = map(int, channel_numbers_s)
     return sorted(channel_numbers_int)
 
+issued_warnings = []
 def get_number_of_records(filepath):
     # Open the file
     with file(filepath, 'rb') as f:
@@ -633,7 +635,13 @@ def get_number_of_records(filepath):
         record_length_bytes = 2 * header['blockLength'] + 22
         n_records = int((fileLength - 1024) / record_length_bytes)
         if (n_records * record_length_bytes + 1024) != fileLength:
-            raise IOError("file does not divide evenly into full records")
+            msg = (
+                'file %s does not divide evenly into full records' %
+                filepath
+            )
+            if msg not in issued_warnings:
+                print msg
+                issued_warnings.append(msg)
     
     return n_records
 
