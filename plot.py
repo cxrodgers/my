@@ -1079,6 +1079,12 @@ def grouped_bar_plot(df,
     df : DataFrame
         The columns are considered replicates to aggregate over
         The levels of the index determine the grouping
+    
+    index2label : function
+        Used to create the labels for the xticks.
+        Applied to `df.index` if `df.index.nlevels == 1`, else the index 
+        after dropping the top level (group name).
+        
     """
     if ax is None:
         f, ax = plt.subplots()
@@ -1161,7 +1167,10 @@ def grouped_bar_plot(df,
     # Get label for each xtick
     xtls = []
     for iidx, row in idx_df.iterrows():
-        xtl = index2label(row)
+        if index2label is None:
+            xtl = ''
+        else:
+            xtl = index2label(row)
         xtls.append(xtl)
     
     # Set labels
