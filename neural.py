@@ -416,30 +416,23 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
     
     sorted_channels_to_remove : list of channels to remove, using the GUI 
         sorted numbering.
-    probe : 'janelia' or 'H3' (case-insensitive)
-    adapter : 'ON4'
+    probe : 'janelia', 'H3', '4253', '2892' (case-insensitive)
+    adapter : 'ON4', 'Helen'
     
     Returns : dataflow df with channels removed
         Also adds a 'Srt_wo_broken' column which is just the channels
         in sorted order not including the broken ones. This is the way
         they are indexed by `cluster_channels`.
     """
-    # Main adapter dataflow
-    if adapter == 'ON4':
-        if probe.lower() == 'janelia':
-            dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON4_df
-        elif probe.lower() == 'h3':
-            dataflow = Adapters.dataflow.dataflow_h3_ON4_df
-        else:
-            raise ValueError("probe %s not supported" % probe)
-    elif adapter == 'ON2A':
-        if probe.lower() == 'janelia':
-            # I think this is right
-            dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON2_df
-        else:
-            raise ValueError("probe %s not supported" % probe)            
+    ## Get dataflow
+    if adapter == 'Helen' and probe in ['h3', '4253', '2892']:
+        dataflow = Adapters.dataflow.dataflow_helen_64ch_df
+    elif adapter == 'ON4' and probe.lower() == 'janelia':
+        dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON4_df
+    elif adapter == 'ON4' and probe.lower() in ['h3', '4253', '2892']:
+        dataflow = Adapters.dataflow.dataflow_h3_ON4_df
     else:
-        raise ValueError("adapter %s not supported" % adapter)
+        raise ValueError("unknown probe or adapter")    
 
     # Ensure it is sorted by Srt
     dataflow = dataflow.sort_values(by='Srt')
