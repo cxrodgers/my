@@ -454,8 +454,8 @@ def correct_z_in_dataflow(gs, chmap_filename, dura_correction=50):
     """
     ## Get info about missing channels and channel ordering
     # get probe and adapter
-    assert gs.neuralsession.adapter == 'ON4'
     probe = gs.neuralsession.electrode
+    adapter = gs.neuralsession.adapter
     
     # Get missing channels
     chmap_dict = scipy.io.loadmat(chmap_filename)
@@ -465,7 +465,7 @@ def correct_z_in_dataflow(gs, chmap_filename, dura_correction=50):
     # Get sorted order of channels after dropping broken
     # This is the way they are indexed by cluster_channels
     dataflow = my.neural.get_dataflow_accounting_for_missing(
-        missing_channels, probe=probe)
+        missing_channels, probe=probe, adapter=adapter)
 
     # correct depth for manipulator
     if gs.neuralsession.z_withdraw is None:
