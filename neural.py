@@ -475,6 +475,12 @@ def correct_z_in_dataflow(gs, chmap_filename, dura_correction=50):
             [gs.neuralsession.z_touch, gs.neuralsession.z_withdraw])
     z_record = gs.neuralsession.z_final
     
+    # infer whether it's in mm or um and put it into mm
+    if np.abs(z_surface - z_record) > 100:
+        # Must be in um
+        z_surface = z_surface / 1000.
+        z_record = z_record / 1000.
+    
     # the deepest site is the difference of the two measurements,
     # -37.5 to account for distance between deepest site and tip
     deepest_actual = 1000 * (z_surface - z_record) - 37.5
