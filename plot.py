@@ -60,7 +60,7 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
         ax.plot(
             sub_df.loc[:, 'Z_corrected'].values, 
             sub_df.loc[:, column].values,
-            color=color, marker='o',  mfc='none',
+            color=color, marker='o',  mfc='white',
             ls='none', alpha=point_alpha, ms=point_ms,
         )
 
@@ -1072,7 +1072,9 @@ def grouped_bar_plot(df,
     yerrlo=None, yerrhi=None, ax=None, 
     xtls_kwargs=None, group_name_kwargs=None,
     datapoint_plot_kwargs=None,
-    group_name_y_offset=.2,
+    group_name_y_offset=None,
+    group_name_fig_ypos=.1,
+    plot_error_bars_instead_of_points=False,
     ):
     """Plot groups of bars
     
@@ -1084,15 +1086,28 @@ def grouped_bar_plot(df,
         Used to create the labels for the xticks.
         Applied to `df.index` if `df.index.nlevels == 1`, else the index 
         after dropping the top level (group name).
-        
+    
+    group_name_fig_ypos : y-position of the group labels, in figure coordinates
+    
+    plot_error_bars_instead_of_points : bool
+        If True, plot standard error bars instead of raw datapoints
     """
+    # Create figure handles if needed
     if ax is None:
         f, ax = plt.subplots()
     
+    # Default values
     if xtls_kwargs is None:
         xtls_kwargs = {}
     if group_name_kwargs is None:
         group_name_kwargs = {}
+    
+    # Deal with error bars versus points
+    if plot_error_bars_instead_of_points:
+        assert df.ndim == 2
+        yerrlo = df.mean(1) - df.sem(1)
+        yerrhi = df.mean(1) + df.sem(1)
+        df = df.mean(1)
     
     # Datapoint plot kwargs
     default_datapoint_plot_kwargs = {
@@ -1172,7 +1187,7 @@ def grouped_bar_plot(df,
         else:
             xtl = index2label(row)
         xtls.append(xtl)
-    
+
     # Set labels
     ax.set_xticks(xts)
     ax.set_xticklabels(xtls, **xtls_kwargs)
@@ -1180,11 +1195,33 @@ def grouped_bar_plot(df,
     
     ## The group labels
     if df.index.nlevels > 1:
+        # Iterate over groups
         for group_idx, group_center in zip(df.index.levels[0], xt_group_centers):
+            # Get the name of this group
             group_name = group_index2group_label(group_idx)
     
-            text_ypos = ax.get_ylim()[0] - group_name_y_offset * (ax.get_ylim()[1] - ax.get_ylim()[0])
-            ax.text(group_center, text_ypos, group_name, ha='center', va='center',
-                **group_name_kwargs)
+            # We want to place the text centered on the group name in x,
+            # at a certain figure location in y.
 
+            if group_name_fig_ypos is not None:
+                # x in data, y in figure
+                blended_transform = matplotlib.transforms.blended_transform_factory(
+                    ax.transData, ax.figure.transFigure)
+            
+                # text
+                ax.text(group_center, group_name_fig_ypos, group_name, 
+                    ha='center', va='center', transform=blended_transform,
+                    **group_name_kwargs)
+            
+            elif group_name_y_offset is not None:
+                # deprecated
+                # Get ypos in axis coordinates
+                text_ypos = ax.get_ylim()[0] - group_name_y_offset * (
+                    ax.get_ylim()[1] - ax.get_ylim()[0])
+                
+                # text in axis coordinates
+                ax.text(group_center, text_ypos, group_name, 
+                    ha='center', va='center',
+                    **group_name_kwargs)
+    
     return ax
