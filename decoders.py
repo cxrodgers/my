@@ -6,6 +6,62 @@ import matplotlib.pyplot as plt
 import os
 import sklearn.linear_model
 
+def to_indicator_df(ser, bins=None, propagate_nan=True):
+    """Bin series and convert to DataFrame of indicators
+    
+    ser : series of data
+    bins : how to bin the data
+        If None, assume the ser is already binned (or labeled)
+    propagate_nan : bool
+        If True, then wherever ser is null, that row will be all null
+        in return value
+    
+    Returns : DataFrame
+        Rows corresponding to values in `ser` outside `bins` 
+        will be all zero (I think).
+    """
+    # Cut
+    if bins is not None:
+        binned = pandas.cut(ser, bins, labels=False)
+        unique_bins = binned.dropna().unique().astype(np.int)
+    else:
+        binned = ser
+        unique_bins = binned.dropna().unique()
+    
+    # Indicate
+    indicated_l = []
+    for bin in unique_bins:
+        indicated = (binned == bin).astype(np.int)
+        indicated_l.append(indicated)
+    indicator_df = pandas.DataFrame(np.transpose(indicated_l), 
+        index=ser.index, columns=unique_bins).sort_index(axis=1)
+    
+    # Propagate nan
+    if propagate_nan and ser.isnull().any():
+        indicator_df.loc[ser.isnull(), :] = np.nan
+    
+    return indicator_df
+
+def indicate_series(series):
+    """Different version of to_indicator_df"""
+    # Indicate each unique variable within `series`
+    indicated_l = []
+    indicated_keys_l = []
+    
+    # Get unique
+    unique_variables = sorted(series.unique())
+
+    # Indicate
+    for unique_variable in unique_variables:
+        indicated_l.append((series == unique_variable).astype(np.int))
+        indicated_keys_l.append(unique_variable)
+
+    # DataFrame it
+    df = pandas.concat(indicated_l, keys=indicated_keys_l, 
+        names=[series.name], axis=1, verify_integrity=True)
+    
+    return df
+    
 
 def intify_classes(session_classes):
     ## Code the session classes
