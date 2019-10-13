@@ -1314,3 +1314,74 @@ def insert_mouse_level(df, level=0, sort=True):
         level=level, sort=sort)
     
     return res
+
+def insert_mouse_and_task_levels(df, mouse2task, level=0, sort=True):
+    """Insert levels for mouse and task
+    
+    df : DataFrame
+    
+    mouse2task : Series mapping mouse name to task name
+    
+    Returns : DataFrame
+        A copy of `df` with the new levels inserted
+    """
+    # Insert mouse level
+    df = my.misc.insert_mouse_level(df)
+    
+    # Insert task level
+    df = my.misc.insert_level(
+        df, name='task', 
+        func=lambda idx: idx['mouse'].map(mouse2task))    
+    
+    return df
+
+def slice_df_by_some_levels(df, slicing_midx):
+    """Slice DataFrame by a subset of the levels in its index.
+    
+    df : DataFrame
+    
+    slicing_midx : a MultiIndex to slice it with
+    
+    Returns : DataFrame
+    """
+    # The levels to slice on, in sorted order
+    slicing_levels = list(slicing_midx.names)
+    
+    # The levels not to slice on
+    non_slicing_levels = [level for level in df.index.names 
+        if level not in slicing_levels]
+    
+    # Error check
+    if not np.in1d(slicing_midx.names, df.index.names).all():
+        raise ValueError("cannot slice on missing levels")
+    
+    # Convert slicing_midx to DataFrame
+    df1 = slicing_midx.to_frame().reset_index(drop=True)
+    
+    # Drop duplicates on the slicing midx (otherwise merging makes it too big)
+    df1 = df1.drop_duplicates()
+    
+    df2 = df.index.to_frame().reset_index(drop=True)
+    df1['key'] = 1
+    mask = ~pandas.merge(
+        df2, df1, on=slicing_levels, how='left')[
+        'key'].isnull()
+    return df.loc[mask.values]    
+
+def assert_index_equal_on_levels(df1, df2, levels):
+    """Check that the indexes of df1 and df2 are equal, considering only levels
+    
+    """
+    
+    # Get sorted unique values of `levels` on `df1`
+    df1_levels = df1.index.to_frame()[levels].reset_index( 
+        drop=True).drop_duplicates().sort_values(levels).reset_index(
+        drop=True)
+    
+    # Same for df2
+    df2_levels = df2.index.to_frame()[levels].reset_index( 
+        drop=True).drop_duplicates().sort_values(levels).reset_index(
+        drop=True)
+    
+    # Assert
+    assert df1_levels.equals(df2_levels)
