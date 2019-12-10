@@ -1,3 +1,4 @@
+from builtins import range
 import scipy.spatial
 import numpy as np
 from matplotlib import mlab
@@ -88,7 +89,7 @@ def permute_mahalanobis(full_cluster, subcluster_size, n_perms=1000,
         # Fake the data
         fake_subcluster_mask = np.zeros(full_cluster_size, dtype=np.bool)
         fake_subcluster_mask[random.sample(
-            xrange(full_cluster_size), subcluster_size)] = 1
+            range(full_cluster_size), subcluster_size)] = 1
         fake_sub = full_cluster[fake_subcluster_mask]
         fake_full = full_cluster[~fake_subcluster_mask]
         
@@ -131,7 +132,7 @@ def permute_mahalanobis2(full_cluster, subcluster_size1, subcluster_size2,
     dist_l = []
     for n_perm in range(n_perms):
         # Fake the data
-        idxs = random.sample(xrange(full_cluster_size),
+        idxs = random.sample(range(full_cluster_size),
             subcluster_size1 + subcluster_size2)
         fake_sub1 = full_cluster[idxs[:subcluster_size1]]
         fake_sub2 = full_cluster[idxs[subcluster_size1:]]

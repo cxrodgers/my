@@ -1,3 +1,4 @@
+from builtins import object
 import numpy as np
 from functools import reduce
 
@@ -9,7 +10,7 @@ def order2prime(order):
     else:
         return int(10**order) + 1
 
-class randspool:
+class randspool(object):
     def __init__(self, cache_len=64433, genfun=np.random.standard_normal,
         order=None):
         """Init new spooler.

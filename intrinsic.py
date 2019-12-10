@@ -1,4 +1,9 @@
 from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from builtins import map
+from builtins import range
+from past.utils import old_div
 import os
 import my
 import glob
@@ -30,8 +35,8 @@ def _parse_tiffs_into_array(session_dir, session_root_path):
     trial_nums = my.misc.regex_capture(pat, file_list, 0)
     frame_nums = my.misc.regex_capture(pat, file_list, 1)
     file_df = pandas.DataFrame(
-        {'filename': file_list, 'trial': map(int, trial_nums),
-            'frame': map(int, frame_nums)})
+        {'filename': file_list, 'trial': list(map(int, trial_nums)),
+            'frame': list(map(int, frame_nums))})
 
     trial_list = []
     for trial in file_df.trial.unique():
@@ -59,7 +64,7 @@ def make_slideshow(image3d, c_panels=10, r_panels=None):
     """Panelized a 3d image"""
     n_panels, n_rows, n_cols = image3d.shape
     if r_panels is None:
-        r_panels = n_panels / c_panels
+        r_panels = old_div(n_panels, c_panels)
 
     # Concatenate into a big row of panels
     concatted = np.concatenate(image3d, axis=1)
@@ -162,8 +167,8 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
         print("rebinning")
         rebinned_image_data = image_data.reshape(
             (n_trials, n_frames, 
-                n_rows / REBIN_FACTOR, REBIN_FACTOR,
-                n_cols / REBIN_FACTOR, REBIN_FACTOR)).mean(axis=(-3, -1))
+                old_div(n_rows, REBIN_FACTOR), REBIN_FACTOR,
+                old_div(n_cols, REBIN_FACTOR), REBIN_FACTOR)).mean(axis=(-3, -1))
 
         if plot_timecourse:
             # Display the trial average normalized to the mean of the first ten

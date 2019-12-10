@@ -1,3 +1,7 @@
+from __future__ import division
+from builtins import zip
+from builtins import range
+from past.utils import old_div
 import pandas
 import my.decoders
 import numpy as np
@@ -94,7 +98,7 @@ def normalize_features(session_features):
     
     # Scale, AFTER fillna, so that the scale is really 1
     normalizing_sigma = norm_session_features.std()
-    norm_session_features = norm_session_features / normalizing_sigma
+    norm_session_features = old_div(norm_session_features, normalizing_sigma)
     
     # Fillna again, in the case that every feature was the same
     # in which case it all became inf after scaling
@@ -118,7 +122,7 @@ def stratify_and_calculate_sample_weights(strats):
     strat_id2weight = {}
     for this_strat in np.unique(strats):
         n_this_strat = np.sum(strats == this_strat)
-        weight_this_strat = len(strats) / float(n_this_strat)
+        weight_this_strat = old_div(len(strats), float(n_this_strat))
         strat_id2weight[this_strat] = weight_this_strat
     
     # Sample weights
@@ -126,7 +130,7 @@ def stratify_and_calculate_sample_weights(strats):
         for strat_id in strats])
     
     # Make them mean 1
-    sample_weights = sample_weights / sample_weights.mean()
+    sample_weights = old_div(sample_weights, sample_weights.mean())
     
     # Return
     return strat_id2weight, sample_weights
@@ -219,7 +223,7 @@ def stratified_split_data(stratifications, n_splits=3,
         split_ser.iloc[test_indices_by_split[n_split]] = test_name
         
         # Set each group indices
-        zobj = zip(group_names, group_indices_by_split[n_split])
+        zobj = list(zip(group_names, group_indices_by_split[n_split]))
         for group_name, group_indices in zobj:
             split_ser.iloc[group_indices] = group_name
         
@@ -279,7 +283,7 @@ def logregress2(
     ## Fit
     # Initialize fitter
     logreg = sklearn.linear_model.LogisticRegression(
-        C=(1.0 / regularization),
+        C=(old_div(1.0, regularization)),
     )
 
     # Fit, applying the sample weights

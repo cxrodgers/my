@@ -1,5 +1,12 @@
 """Generating or processing video, often using ffmpeg"""
 from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from builtins import str
+from builtins import map
+from builtins import input
+from builtins import object
+from past.utils import old_div
 import numpy as np
 import subprocess
 import re
@@ -52,12 +59,12 @@ def ffmpeg_frame_string(filename, frame_time=None, frame_number=None):
     if frame_number is not None:
         # If specified by number, convert to time
         frame_rate = get_video_params(filename)[2]
-        use_frame_time = (frame_number / float(frame_rate)) - .001
-        use_frame_time = np.floor(use_frame_time * 1000) / 1000.
+        use_frame_time = (old_div(frame_number, float(frame_rate))) - .001
+        use_frame_time = old_div(np.floor(use_frame_time * 1000), 1000.)
     
     elif frame_time is not None:
         frame_rate = get_video_params(filename)[2]
-        use_frame_time = frame_time - (1. / (2 * frame_rate))
+        use_frame_time = frame_time - (old_div(1., (2 * frame_rate)))
     
     else:
         raise ValueError("must specify frame by time or number")
@@ -309,7 +316,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
             if len(raw_image) < read_size_per_frame * this_chunk:
                 print("warning: ran out of frames")
                 out_of_frames = True
-                this_chunk = len(raw_image) / read_size_per_frame
+                this_chunk = old_div(len(raw_image), read_size_per_frame)
                 assert this_chunk * read_size_per_frame == len(raw_image)
             
             # Process
@@ -323,7 +330,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
             
             # Store as list to avoid dtype and shape problems later
             #chunk_res = np.asarray(map(func, video))
-            chunk_res = map(func, video)
+            chunk_res = list(map(func, video))
             
             # Store
             res_l.append(chunk_res)
@@ -405,7 +412,7 @@ def get_video_aspect(video_filename):
             raise ValueError("malformed size string:", size_string)
         
         # Cast to int
-        width_height_l.append(map(int, width_height))
+        width_height_l.append(list(map(int, width_height)))
     
     if len(width_height_l) > 1:
         print("warning: multiple video streams found, returning first")
@@ -550,7 +557,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
                     # Keep getting input till it is valid
                     while True:
                         try:
-                            val = raw_input(request_s)
+                            val = input(request_s)
                             break
                         except ValueError:
                             print("invalid entry")
@@ -576,7 +583,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
                 plt.draw()
 
                 # Get confirmation
-                choice = raw_input("Confirm [y/n/q]: ")
+                choice = input("Confirm [y/n/q]: ")
                 if choice == 'q':
                     res = {}
                     print("cancelled")
@@ -678,7 +685,7 @@ def get_video_params(video_filename):
             raise ValueError("malformed size string:", size_string)
         
         # Cast to int
-        width_height_l.append(map(int, width_height))
+        width_height_l.append(list(map(int, width_height)))
     
         # Either comma_split[4] is "%f fps"
         # or comma_split[3] is "%f fps"
@@ -704,7 +711,7 @@ def get_video_params(video_filename):
     return width_height_l[0][0], width_height_l[0][1], frame_rate_l[0]
 
 
-class WebcamController:
+class WebcamController(object):
     def __init__(self, device='/dev/video0', output_filename='/dev/null',
         width=320, height=240, framerate=30,
         window_title='webcam', image_controls=None,
@@ -821,7 +828,7 @@ class WebcamController:
             '--set-fmt-video=width=%d,height=%d' % (self.width, self.height),
             '--set-parm=%d' % self.framerate,    
             ]
-        for k, v in self.image_controls.items():
+        for k, v in list(self.image_controls.items()):
             cmd_list += ['-c', '%s=%d' % (k, v)]
 
         # Create a process to set the parameters and run it

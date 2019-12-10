@@ -1,6 +1,11 @@
 """Neural data stuff"""
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
+from builtins import map
+from builtins import zip
+from builtins import range
+from past.utils import old_div
 from . import OpenEphys
 import matplotlib.pyplot as plt
 import numpy as np
@@ -83,7 +88,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
         n_range = tuple(map(int, n_range))
     
     # data range in seconds
-    t = np.arange(n_range[0], n_range[1]) / 30000.
+    t = old_div(np.arange(n_range[0], n_range[1]), 30000.)
     t_ds = t[::downsample]
 
     # Grab the data that will actually be plotted
@@ -98,7 +103,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
         got_data = got_data + apply_offset
     
     if highpass:
-        buttb, butta = scipy.signal.butter(3, 300./30e3, 'high')
+        buttb, butta = scipy.signal.butter(3, old_div(300.,30e3), 'high')
         got_data = scipy.signal.filtfilt(buttb, butta, got_data, axis=0)
     
     got_data = got_data[::downsample]
@@ -158,8 +163,8 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
                         nspike_time = spike_time - n_range[0]
                         
                         # The indices to plot, downsampled
-                        idx0 = int((nspike_time - 15) / downsample)
-                        idx1 = int((nspike_time + 15) / downsample)
+                        idx0 = int(old_div((nspike_time - 15), downsample))
+                        idx1 = int(old_div((nspike_time + 15), downsample))
                         
                         ax.plot(
                             t_ds[idx0:idx1],
@@ -263,7 +268,7 @@ def sync_behavior_and_neural(neural_syncing_signal_filename, trial_matrix,
     # Use timestamps to convert to seconds
     n_onsets_records = n_onsets_samples // 1024
     n_onsets_modsamps = np.mod(n_onsets_samples, 1024)
-    n_onsets_seconds = (timestamps[n_onsets_records] + n_onsets_modsamps) / 30e3
+    n_onsets_seconds = old_div((timestamps[n_onsets_records] + n_onsets_modsamps), 30e3)
 
     # Backlight times are just the start time
     backlight_times = trial_matrix['start_time']
@@ -313,8 +318,8 @@ def load_all_spikes_and_clusters(kwik_path):
             group2cluster[key].append(cluster)
         
         # Get all of the spike times
-        spike_times = h5file.get_node(
-            '/channel_groups/0/spikes/time_samples')[:] / 30e3
+        spike_times = old_div(h5file.get_node(
+            '/channel_groups/0/spikes/time_samples')[:], 30e3)
 
     # Sort spike times
     sortmask = np.argsort(spike_times)
@@ -480,8 +485,8 @@ def correct_z_in_dataflow(gs, chmap_filename, dura_correction=50):
     # infer whether it's in mm or um and put it into mm
     if np.abs(z_surface - z_record) > 100:
         # Must be in um
-        z_surface = z_surface / 1000.
-        z_record = z_record / 1000.
+        z_surface = old_div(z_surface, 1000.)
+        z_record = old_div(z_record, 1000.)
     
     # the deepest site is the difference of the two measurements,
     # -37.5 to account for distance between deepest site and tip
@@ -627,7 +632,7 @@ def get_cluster_channels(sort_dir, cluster_group, spike_cluster,
         
         # Weighted average of template_channel by n_spikes_by_template
         cluster_channel = (
-            (n_spikes_by_template / n_spikes_by_template.sum()) *
+            (old_div(n_spikes_by_template, n_spikes_by_template.sum())) *
             template_channel[n_spikes_by_template.index.values]
         ).sum()
         cluster_channel_l.append(cluster_channel)
@@ -675,7 +680,7 @@ def extract_peak_and_width(waveform, force_negative=True):
     # First point that crosses zero after the peak
     mask = (
         (pos_waveform <= 0) &
-        (range(len(pos_waveform)) > peak_loc))
+        (list(range(len(pos_waveform))) > peak_loc))
     if np.all(~mask):
         after_loc = len(pos_waveform)
     else:
@@ -923,6 +928,6 @@ def convert_samples_to_timestamps(samples, timestamps):
     modsamps = np.mod(samples, 1024)
     
     # Index into timestamps
-    res = (timestamps[records] + modsamps) / 30e3   
+    res = old_div((timestamps[records] + modsamps), 30e3)   
     
     return res

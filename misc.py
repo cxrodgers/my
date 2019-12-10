@@ -1,5 +1,15 @@
 """Catchall module within the catchall module for really one-off stuff."""
 from __future__ import print_function
+from __future__ import division
+from future import standard_library
+standard_library.install_aliases()
+from builtins import zip
+from builtins import str
+from builtins import map
+from builtins import range
+from past.builtins import basestring
+from builtins import object
+from past.utils import old_div
 
 import numpy as np
 import warnings
@@ -44,7 +54,7 @@ def globjoin(dirname, pattern, normalize=True):
     """
     res = glob.glob(os.path.join(dirname, pattern))
     if normalize:
-        res = map(os.path.abspath, res)
+        res = list(map(os.path.abspath, res))
     return res
 
 def time_of_file(filename, fmt='%Y%m%d%H%M%S'):
@@ -60,7 +70,7 @@ def time_of_file(filename, fmt='%Y%m%d%H%M%S'):
         return dt.strftime(fmt)
 
 
-class Spectrogrammer:
+class Spectrogrammer(object):
     """Turns a waveform into a spectrogram"""
     def __init__(self, NFFT=256, downsample_ratio=1, new_bin_width_sec=None,
         max_freq=None, min_freq=None, Fs=1.0, noverlap=None, normalization=0,
@@ -198,7 +208,7 @@ class Spectrogrammer:
             # Set noverlap to default
             if noverlap is None:
                 # Try to do it with 50% overlap
-                noverlap = NFFT / 2
+                noverlap = old_div(NFFT, 2)
             
             # Calculate downsample_ratio to achieve this
             self.downsample_ratio = \
@@ -217,7 +227,7 @@ class Spectrogrammer:
     
         # Default value for noverlap if still None
         if noverlap is None:
-            noverlap = NFFT / 2
+            noverlap = old_div(NFFT, 2)
         self.noverlap = noverlap
         
         # store other defaults
@@ -341,19 +351,19 @@ def get_file_time(filename, human=False):
     return res
 
 def pickle_load(filename):
-    import cPickle
+    import pickle
     with file(filename) as fi:
-        res = cPickle.load(fi)
+        res = pickle.load(fi)
     return res
 
 def pickle_dump(obj, filename):
-    import cPickle
+    import pickle
     with file(filename, 'w') as fi:
-        cPickle.dump(obj, fi)
+        pickle.dump(obj, fi)
 
 def invert_linear_poly(p):
     """Helper function for inverting fit.coeffs"""
-    return np.array([1, -p[1]]).astype(np.float) / p[0]
+    return old_div(np.array([1, -p[1]]).astype(np.float), p[0])
 
 def apply_and_filter_by_regex(pattern, list_of_strings, sort=True):
     """Apply regex pattern to each string and return result.
@@ -456,7 +466,7 @@ def pick(df, isnotnull=None, **kwargs):
     return unique, ....
     """
     msk = np.ones(len(df), dtype=np.bool)
-    for key, val in kwargs.items():
+    for key, val in list(kwargs.items()):
         if val is None:
             continue
         elif is_nonstring_iter(val):
@@ -525,7 +535,7 @@ def parse_by_block(lb_counts, pb_counts, lb_trial_numbers, pb_trial_numbers,
             # Convert to beginning of first LBPB with any trials
             # The first block might be quite short
             # Change the final +1 to +161 to start at the first full block
-            start_trial = ((first_trial - 1) / 160) * 160 + 1
+            start_trial = (old_div((first_trial - 1), 160)) * 160 + 1
     
     # Arrayify
     lb_counts = np.asarray(lb_counts)
@@ -652,9 +662,9 @@ def yoked_zscore(list_of_arrays, axis=1):
     res = []
     for arr in list_of_arrays:
         if axis == 1:
-            res.append((arr - means[:, None]) / stdevs[:, None])
+            res.append(old_div((arr - means[:, None]), stdevs[:, None]))
         elif axis == 0:
-            res.append((arr - means[None, :]) / stdevs[None, :])
+            res.append(old_div((arr - means[None, :]), stdevs[None, :]))
         else:
             raise ValueError("axis must be 0 or 1")
     return res
@@ -691,7 +701,7 @@ def gaussian_smooth(signal, gstd=100, glen=None, axis=1, **filtfilt_kwargs):
     
     # Incantation such that b[0] == 1.0
     b = scipy.signal.gaussian(glen * 2, gstd, sym=False)[glen:]
-    b = b / b.sum()
+    b = old_div(b, b.sum())
     
     # Smooth
     if signal.ndim == 1:
@@ -773,13 +783,13 @@ def correlate(v0, v1, mode='valid', normalize=True, auto=False):
     if mode == 'full':
         corrn = np.arange(-len(v0) + 1, len(v0), dtype=np.int)
     elif mode == 'same':
-        corrn = np.arange(-len(v0) / 2, len(v0) - (len(v0) / 2), 
+        corrn = np.arange(old_div(-len(v0), 2), len(v0) - (old_div(len(v0), 2)), 
             dtype=np.int)
     else:
         raise ValueError('mode not tested')
     
     if normalize:
-        counts = counts / (len(v0) - np.abs(corrn)).astype(np.float)
+        counts = old_div(counts, (len(v0) - np.abs(corrn)).astype(np.float))
     
     if auto:
         counts[corrn == 0] = 0
@@ -804,7 +814,7 @@ def binned_pair2cxy(binned0, binned1, Fs=1000., NFFT=256, noverlap=None,
     """
     # Set up psd_kwargs
     if noverlap is None:
-        noverlap = NFFT / 2
+        noverlap = old_div(NFFT, 2)
     psd_kwargs = {'Fs': Fs, 'NFFT': NFFT, 'noverlap': noverlap, 
         'detrend': detrend, 'window': windw}
 
@@ -824,7 +834,7 @@ def binned_pair2cxy(binned0, binned1, Fs=1000., NFFT=256, noverlap=None,
         S12 = S12.mean(0)
         S1 = S1.mean(0)
         S2 = S2.mean(0)
-    Cxy = S12 / np.sqrt(S1 * S2)
+    Cxy = old_div(S12, np.sqrt(S1 * S2))
     
     # Truncate unnecessary frequencies
     if freq_high:
@@ -846,7 +856,7 @@ def binned2pxx(binned, Fs=1000., NFFT=256, noverlap=None,
     """
     # Set up psd_kwargs
     if noverlap is None:
-        noverlap = NFFT / 2
+        noverlap = old_div(NFFT, 2)
     psd_kwargs = {'Fs': Fs, 'NFFT': NFFT, 'noverlap': noverlap, 
         'detrend': detrend, 'window': windw}    
     
@@ -871,7 +881,7 @@ def sem(data, axis=None):
     else:
         N = np.asarray(data).shape[axis]
     
-    return np.std(np.asarray(data), axis) / np.sqrt(N)
+    return old_div(np.std(np.asarray(data), axis), np.sqrt(N))
 
 def take_equally_spaced(arr, n):
     """Take n equally spaced elements from arr
@@ -881,7 +891,7 @@ def take_equally_spaced(arr, n):
     """
     # e.g., we want 2 equally spaced, so they are at 1/3 and 2/3
     arr = np.asarray(arr)
-    first_element_relative = 1.0 / (n + 1)
+    first_element_relative = old_div(1.0, (n + 1))
     relative_pos = np.linspace(
         first_element_relative, 1 - first_element_relative, n)
     absolute_pos = my.rint((len(arr) - 1) * relative_pos)
@@ -1227,7 +1237,7 @@ def sort_whisker_names(curated_whiskers_as_dict):
     """
     # Order: real, then junk, then unk
     junk_whiskers, unk_whiskers, greek_whiskers, real_whiskers = [], [], [], []
-    for whisker_name in curated_whiskers_as_dict.values():
+    for whisker_name in list(curated_whiskers_as_dict.values()):
         if 'junk' in whisker_name:
             junk_whiskers.append(whisker_name)
         elif 'unk' in whisker_name:

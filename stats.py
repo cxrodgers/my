@@ -1,4 +1,8 @@
 from __future__ import print_function
+from __future__ import division
+from builtins import str
+from builtins import range
+from past.utils import old_div
 import numpy as np
 import scipy.stats
 
@@ -16,7 +20,7 @@ def mad_1d(arr1d):
     median is not subtracted from the data
     """
     deviations = arr1d - np.median(arr1d)
-    return np.median(np.abs(deviations)) / .6745
+    return old_div(np.median(np.abs(deviations)), .6745)
     
 def binom_confint(x=None, n=None, data=None, alpha=.95, meth='beta'):
     """Calculates the confidence interval for binomial data.
@@ -184,7 +188,7 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
     else:
         res = r("wilcox.test(x, y, mu=%r, exact=%s, paired=%s)" % (mu, exact, paired))
         U, p = res[0][0], res[2][0]
-        auroc = float(U) / (len(x) * len(y))
+        auroc = old_div(float(U), (len(x) * len(y)))
     
     # Fix p-value
     if fix_nan and np.isnan(p):
@@ -211,20 +215,20 @@ def anova(df, fmla, typ=3):
     # Grab the pvalues (note we use Type III)
     aov = anova_lm(lm, typ=typ)
     pvals = aov["PR(>F)"]
-    pvals.index = map(lambda s: 'p_' + s, pvals.index)
+    pvals.index = ['p_' + s for s in pvals.index]
     
     # Grab the explainable sum of squares
     ess = aov.drop("Residual").sum_sq
-    ess = ess / ess.sum()
-    ess.index = map(lambda s: 'ess_' + s, ess.index)
+    ess = old_div(ess, ess.sum())
+    ess.index = ['ess_' + s for s in ess.index]
     
     # Grab the fit
     fit = lm.params
-    fit.index = map(lambda s: 'fit_' + s, fit.index)   
+    fit.index = ['fit_' + s for s in fit.index]   
 
     # I think this happens with pathological inputs
     if np.any(aov['sum_sq'] < 0):
-        1/0
+        old_div(1,0)
 
     return {'lm':lm, 'aov':aov, 'pvals':pvals, 'ess':ess, 'fit':fit}
     

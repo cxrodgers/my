@@ -1,5 +1,7 @@
 """Methods for finding PSTH peaks of unknown timecourse"""
 from __future__ import absolute_import
+from __future__ import division
+from past.utils import old_div
 
 from .stats import r_utest
 import numpy as np
@@ -170,9 +172,9 @@ def plot_peaks(peak_intervals, onset_results, tested_t, traces_per_ax=4):
     for msg, sub_PI in gobj:
         # Divide figure into enough subplots
         n_traces = len(sub_PI)
-        n_subplots = int(np.ceil(n_traces / float(traces_per_ax)))
+        n_subplots = int(np.ceil(old_div(n_traces, float(traces_per_ax))))
         n_rows = np.int(np.sqrt(n_subplots))
-        n_cols = int(np.ceil(float(n_subplots) / n_rows))
+        n_cols = int(np.ceil(old_div(float(n_subplots), n_rows)))
         
         # Create figure and iterate over subplots
         f, axa = plt.subplots(n_rows, n_cols, squeeze=False)

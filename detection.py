@@ -1,5 +1,9 @@
 """Stuff for Detection task"""
 from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from builtins import range
+from past.utils import old_div
 import numpy as np
 import pandas
 import my
@@ -46,14 +50,14 @@ def parse_trial_matrix(bfile):
 
     # Ignore everything before "BEGIN DATA"
     start_line = np.where(
-        map(lambda line: line.strip() == 'BEGIN DATA', lines))[0][0] + 1
+        [line.strip() == 'BEGIN DATA' for line in lines])[0][0] + 1
 
     # Parse out commandas and times
     commands = lines[start_line::2]
     times = lines[start_line + 1::2]
     commands = commands[:len(times)] # in case we missed the last line
-    times = map(lambda line: int(line.strip()), times)
-    commands = map(lambda line: line.strip(), commands)
+    times = [int(line.strip()) for line in times]
+    commands = [line.strip() for line in commands]
     commands_df = pandas.DataFrame({'command': commands, 'time': times})
 
     # Drop lever presses
@@ -91,11 +95,11 @@ def parse_trial_matrix(bfile):
             rec['warmup'] = True
 
         # Parse each command
-        zobj = zip(trial_df['command'].values, trial_df['time'].values)
+        zobj = list(zip(trial_df['command'].values, trial_df['time'].values))
         for command, time in zobj:
             if command == 'Trial started at:':
                 assert 'start' not in rec
-                rec['start'] = time / 1000.0
+                rec['start'] = old_div(time, 1000.0)
             elif command == 'catch trial':
                 assert 'typ' not in rec
                 rec['typ'] = 'nogo'
@@ -108,12 +112,12 @@ def parse_trial_matrix(bfile):
                 # This is only for FA
                 assert 'outcome' not in rec
                 rec['outcome'] = 'FA'
-                rec['response_time'] = time / 1000.0
+                rec['response_time'] = old_div(time, 1000.0)
             elif command == 'REWARD!!!':
                 # This is only for HIT
                 assert 'outcome' not in rec
                 rec['outcome'] = 'hit'
-                rec['response_time'] = time / 1000.0
+                rec['response_time'] = old_div(time, 1000.0)
             elif command == 'dark':
                 assert 'opto' not in rec
                 rec['opto'] = False
@@ -121,7 +125,7 @@ def parse_trial_matrix(bfile):
                 assert 'opto' not in rec
                 rec['opto'] = True
             else:
-                1/0
+                old_div(1,0)
         
         # Specify opto explicitly if not yet done (warmup?)
         if 'opto' not in rec:
@@ -173,6 +177,6 @@ def calculate_perf_metrics(trial_matrix, exclude_warmup=True):
             rec_l.append({'opto': opto, 'typ': typ, 'n_hits': n_hits,   
                 'n_tots': n_tots})
     perfdf = pandas.DataFrame.from_records(rec_l)
-    perfdf['perf'] = perfdf['n_hits'] / perfdf['n_tots']    
+    perfdf['perf'] = old_div(perfdf['n_hits'], perfdf['n_tots'])    
     
     return perfdf

@@ -3,6 +3,7 @@
 This is all specific to the layout of the data on my computer and
 the typical defaults for this expt.
 """
+from builtins import object
 
 import numpy as np
 import pandas, kkpandas, kkpandas.kkrs
@@ -37,7 +38,7 @@ def ulabel2trials_info(ulabel):
     trials_info = kkpandas.io.load_trials_info(rs.full_path)
     return trials_info
 
-class SpikeServer:
+class SpikeServer(object):
     """Wrapper around ulabel2spikes to make it work like `pipeline` likes"""
     @classmethod
     def get(self, **kwargs):
@@ -200,7 +201,7 @@ def getstarted():
     
     res['kk_servers'] = dict([
         (ratname, kkpandas.kkio.KK_Server.from_saved(kksfile))
-        for ratname, kksfile in res['kksfiles'].items()])
+        for ratname, kksfile in list(res['kksfiles'].items())])
     
     res['data_dirs'] = {
         'CR20B' : '/media/hippocampus/chris/20120705_CR20B_allsessions',
@@ -217,12 +218,12 @@ def getstarted():
     
     res['xml_roots'] = dict([
         (ratname, etree.parse(xmlfile).getroot())
-        for ratname, xmlfile in res['xmlfiles'].items()])
+        for ratname, xmlfile in list(res['xmlfiles'].items())])
 
     xpath_str = '//unit[quality/text()>=3 and ../../../@analyze="True"]'
     res['manual_units'] = dict([
         (ratname, root.xpath(xpath_str))
-        for ratname, root in res['xml_roots'].items()])
+        for ratname, root in list(res['xml_roots'].items())])
     
     res['unit_db'] = pandas.DataFrame.from_csv(os.path.expanduser(
         '~/Dropbox/lab/unit_db.csv'))
@@ -240,7 +241,7 @@ def session2rs(session_name):
     gets = getstarted()
     kk_servers, data_dirs = gets['kk_servers'], gets['data_dirs']
     
-    for ratname, kk_server in kk_servers.items():
+    for ratname, kk_server in list(kk_servers.items()):
         if session_name not in kk_server.session_list:
             continue
         
@@ -258,7 +259,7 @@ def session2kk_server(session_name):
     gets = getstarted()
     kk_servers = gets['kk_servers']
     
-    for ratname, kk_server in kk_servers.items():
+    for ratname, kk_server in list(kk_servers.items()):
         if session_name in kk_server.session_list:
             return kk_server
         

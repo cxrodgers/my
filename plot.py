@@ -2,6 +2,11 @@
 """
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
+from builtins import zip
+from builtins import map
+from builtins import range
+from past.utils import old_div
 
 import matplotlib
 import numpy as np, warnings
@@ -37,7 +42,7 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
     layer_boundaries = [128, 419, 626, 1006, 1366]
     layer_names = ['L1', 'L2/3', 'L4', 'L5', 'L6', 'L6b']
     layer_depth_bins = np.concatenate([[-50], layer_boundaries, [1500]])
-    layer_centers = (layer_depth_bins[:-1] + layer_depth_bins[1:]) / 2
+    layer_centers = old_div((layer_depth_bins[:-1] + layer_depth_bins[1:]), 2)
     
     # Make a copy
     df = df.copy()
@@ -78,7 +83,7 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
             elif aggregate is 'median':
                 agg_by_bin = gobj.median()
             else:
-                1/0
+                old_div(1,0)
             
             # Block out aggregates with too few data points
             agg_by_bin[counts_by_bin <= 3] = np.nan    
@@ -651,7 +656,7 @@ def horiz_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
 def auto_subplot(n, return_fig=True, squeeze=False, **kwargs):
     """Return nx and ny for n subplots total"""
     nx = int(np.floor(np.sqrt(n)))
-    ny = int(np.ceil(n / float(nx)))
+    ny = int(np.ceil(old_div(n, float(nx))))
     
     if return_fig:
         return plt.subplots(nx, ny, squeeze=squeeze, **kwargs)
@@ -738,16 +743,16 @@ def imshow(C, x=None, y=None, ax=None,
         
         # Calculate extent from data range by adding (subtracting) half a pixel
         try:
-            xwidth = (xd_range[1] - xd_range[0]) / (C.shape[1] - 1)
+            xwidth = old_div((xd_range[1] - xd_range[0]), (C.shape[1] - 1))
         except ZeroDivisionError:
             xwidth = 1.
         try:
-            ywidth = (yd_range[1] - yd_range[0]) / (C.shape[0] - 1)
+            ywidth = old_div((yd_range[1] - yd_range[0]), (C.shape[0] - 1))
         except ZeroDivisionError:
             ywidth=1.
         extent = (
-            xd_range[0] - xwidth/2., xd_range[1] + xwidth/2.,
-            yd_range[0] - ywidth/2., yd_range[1] + ywidth/2.)
+            xd_range[0] - old_div(xwidth,2.), xd_range[1] + old_div(xwidth,2.),
+            yd_range[0] - old_div(ywidth,2.), yd_range[1] + old_div(ywidth,2.))
 
         # Optionally invert the yd_range
         # Because we specify the `extent` manually, we also need to correct
@@ -961,11 +966,11 @@ def errorbar_data(data=None, x=None, ax=None, errorbar=True, axis=0,
         single_trace = True
         errorbar = False        
         if x is None:
-            x = range(len(data))
+            x = list(range(len(data)))
     else:
         single_trace = False        
         if x is None:
-            x = range(len(np.mean(data, axis=axis)))
+            x = list(range(len(np.mean(data, axis=axis))))
     
     # plot
     if single_trace:
@@ -1149,7 +1154,7 @@ def grouped_bar_plot(df,
     
     else:
         # Single level
-        xts = np.array(range(len(df)))
+        xts = np.array(list(range(len(df))))
         xt_group_centers = None
     
     # Plot bars    

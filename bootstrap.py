@@ -2,6 +2,10 @@
 groups. Loosely based on Efron 1983.
 """
 from __future__ import print_function
+from __future__ import division
+from builtins import range
+from builtins import object
+from past.utils import old_div
 
 import numpy as np
 import matplotlib.mlab as mlab
@@ -57,7 +61,7 @@ def bootstrap_rms_distance(full_distribution, subset, n_boots=1000, seed=0):
     # Now we just take the z-score of the mean distance of the real dataset
     abs_deviations = np.abs(mdistances_by_boot - mdistances_by_boot.mean())
     true_abs_deviation = np.abs(true_mdistance - mdistances_by_boot.mean())
-    p_value = np.sum(true_abs_deviation <= abs_deviations) / float(n_boots)
+    p_value = old_div(np.sum(true_abs_deviation <= abs_deviations), float(n_boots))
     
     return p_value, true_distances, mdistances_by_boot
     
@@ -84,12 +88,12 @@ def pvalue_of_distribution(data, compare=0, floor=True, verbose=True):
     test on the underlying data.
     """
     n_more_extreme = np.sum(data < compare)
-    cdf_at_value = n_more_extreme / float(len(data))
+    cdf_at_value = old_div(n_more_extreme, float(len(data)))
     p_at_value = 2 * np.min([cdf_at_value, 1 - cdf_at_value])    
     
     # Optionally deal with p = 0
     if floor and (n_more_extreme == 0 or n_more_extreme == len(data)):
-        p_at_value = 2 / float(len(data))
+        p_at_value = old_div(2, float(len(data)))
         
         if verbose:
             print("warning: exactly zero p-value encountered in " + \
@@ -97,7 +101,7 @@ def pvalue_of_distribution(data, compare=0, floor=True, verbose=True):
     
     return p_at_value
 
-class DiffBootstrapper:
+class DiffBootstrapper(object):
     """Object to estimate the difference between two groups with bootstrapping."""
     def __init__(self, data1, data2, n_boots=1000, min_bucket=5):
         self.data1 = data1
@@ -217,8 +221,8 @@ def difference_CI_bootstrap_wrapper(data, **boot_kwargs):
     difference_CI = mlab.prctile(difference_of_conditions, (2.5, 97.5)) 
 
     # p-value of 0. in the difference distribution
-    cdf_at_value = np.sum(difference_of_conditions < 0.) / \
-        float(len(difference_of_conditions))
+    cdf_at_value = old_div(np.sum(difference_of_conditions < 0.), \
+        float(len(difference_of_conditions)))
     p_at_value = 2 * np.min([cdf_at_value, 1 - cdf_at_value])
     
     # Should probably floor the p-value at 1/n_boots
