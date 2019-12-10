@@ -4,6 +4,7 @@ import numpy as np
 import warnings
 import matplotlib.mlab as mlab
 import matplotlib # for spectrogrammer
+import scipy.signal
 import os
 import re
 import datetime
@@ -1385,3 +1386,109 @@ def assert_index_equal_on_levels(df1, df2, levels):
     
     # Assert
     assert df1_levels.equals(df2_levels)
+
+def find_image_shift(img0, img1):
+    """Find the best shift to make img0 look like img1
+    
+    img0 : 2d reference image
+    img1 : 2d test image
+    
+    Returns: numpy array of shape (2,)
+        This is the displacement to apply to img0 to make it look like img1
+        It is in (dim0, dim1) / (r, c) / (y, x) order
+        scipy.ndimage.shift(img0, displacement) will be approx equal to img1
+        scipy.ndimage.shift(img1, -displacement) will be approx equal to img0
+    """
+    # Use this shape to interpret the offset
+    image_dims = img0.shape
+    half_image_dims = (image_dims[0] // 2, image_dims[1] // 2)
+    
+    # we have to reverse the second image to make it a true "convolution"
+    img_corr = scipy.signal.fftconvolve(img1, img0[::-1,::-1], 
+        mode="same")
+    
+    # Find the peak (2d offset of best correlation)
+    brightest_spot = np.unravel_index(
+        np.argmax(img_corr), img_corr.shape)
+
+    # Convert to a displacement. A peak in the center means no displacement.
+    # These are in (dim0, dim1) / (r, c) / (y, x) order.
+    displacement = np.array([
+        brightest_spot[0] - half_image_dims[0], 
+        brightest_spot[1] - half_image_dims[1],
+        ])    
+    
+    #~ # Debug plot
+    #~ f, axa = plt.subplots(2, 2)
+    #~ my.plot.imshow(img0, ax=axa[0, 0])
+    #~ axa[0, 0].set_title('img0')
+    #~ my.plot.imshow(img1, ax=axa[0, 1])
+    #~ axa[0, 1].set_title('img1')
+    #~ my.plot.imshow(scipy.ndimage.shift(img0, displacement), ax=axa[1, 1])
+    #~ axa[1, 1].set_title('img0 shifted to look like img1')
+    #~ my.plot.imshow(scipy.ndimage.shift(img1, -displacement), ax=axa[1, 0])
+    #~ axa[1, 0].set_title('img1 shifted to look like img0')
+    
+    return displacement
+
+def CustomCmap(from_rgb,to_rgb):
+    from matplotlib.colors import LinearSegmentedColormap
+
+    # https://stackoverflow.com/questions/16267143/matplotlib-single-colored-colormap-with-saturation
+
+    # from color r,g,b
+    r1,g1,b1 = from_rgb
+
+    # to color r,g,b
+    r2,g2,b2 = to_rgb
+
+    cdict = {'red': ((0, r1, r1),
+                   (1, r2, r2)),
+           'green': ((0, g1, g1),
+                    (1, g2, g2)),
+           'blue': ((0, b1, b1),
+                   (1, b2, b2))}
+
+    cmap = LinearSegmentedColormap('custom_cmap', cdict)
+    return cmap
+
+def transform(data, transformation_df):
+    """Transform coordinates in `data` using `transformation_df`
+    
+    data : 2d DataFrame with 2 columns, ending in 'x' and 'y'
+    transformation_df : must have columns shift_x, shift_y, c00, c01, c10, c11
+    
+    Returns: DataFrame shaped like `data`    
+    """
+    assert data.shape[1] == 2
+    
+    # Figure out which column is x and which is y
+    x_col = None
+    y_col = None
+    for colname in data.columns:
+        if colname.endswith('x'):
+            x_col = colname
+        if colname.endswith('y'):
+            y_col = colname
+    assert x_col is not None
+    assert y_col is not None
+    
+    # Rename x and y
+    data2 = data.rename(columns={x_col: 'x', y_col: 'y'})
+    
+    # Apply the shift
+    data2 = data2 + transformation_df[['shift_x', 'shift_y']].rename(
+        columns={'shift_x': 'x', 'shift_y': 'y'})
+    
+    # Apply the rotation and scaling
+    res_x = transformation_df['c00'] * data2['x'] + transformation_df['c01'] * data2['y']
+    res_y = transformation_df['c10'] * data2['x'] + transformation_df['c11'] * data2['y']
+    
+    # Concat 
+    res = pandas.concat([res_x.rename(x_col), res_y.rename(y_col)], axis=1)
+    
+    # Reindex like input data
+    res = res.reindex(data.columns, axis=1)
+    
+    # Return
+    return res
