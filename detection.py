@@ -1,4 +1,5 @@
 """Stuff for Detection task"""
+from __future__ import print_function
 import numpy as np
 import pandas
 import my
@@ -61,7 +62,7 @@ def parse_trial_matrix(bfile):
 
     # Check
     if not np.all(np.sort(commands_df.time.values) == commands_df.time.values):
-        print "warning: commands are not sorted"
+        print("warning: commands are not sorted")
 
     # Find when laser started
     laser_start = np.where(commands_df.command.values == 'begin OPTOSTIM')[0][0]

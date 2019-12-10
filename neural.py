@@ -1,5 +1,7 @@
 """Neural data stuff"""
-import OpenEphys
+from __future__ import print_function
+from __future__ import absolute_import
+from . import OpenEphys
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal
@@ -86,7 +88,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
 
     # Grab the data that will actually be plotted
     got_size = len(t_ds) * len(ch_list)
-    print "getting %g datapoints..." % got_size
+    print("getting %g datapoints..." % got_size)
     if len(t_ds) * len(ch_list) > max_data_size:
         raise ValueError("you requested %g datapoints" % got_size)
     got_data = data[n_range[0]:n_range[1], ch_list]

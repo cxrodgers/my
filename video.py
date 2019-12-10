@@ -1,4 +1,5 @@
 """Generating or processing video, often using ffmpeg"""
+from __future__ import print_function
 import numpy as np
 import subprocess
 import re
@@ -138,7 +139,7 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
         frame = flattened_im.reshape(reshape_size)    
     
     except OutOfFrames:
-        print "warning: cannot get frame"
+        print("warning: cannot get frame")
         frame = None
     
     finally:
@@ -188,7 +189,7 @@ def frame_dump(filename, frametime, output_filename='out.png',
     """
     
     if meth == 'mplayer':
-        raise ValueError, "mplayer not supported"
+        raise ValueError("mplayer not supported")
     elif meth == 'ffmpeg best':
         # Break the seek into a coarse and a fine
         coarse = np.max([0, frametime - subseek_cushion])
@@ -203,14 +204,14 @@ def frame_dump(filename, frametime, output_filename='out.png',
             frametime, filename, output_filename)
     
     if verbose:
-        print syscall
+        print(syscall)
     if not dry_run:
         #os.system(syscall)
         syscall_l = syscall.split(' ')
         syscall_result = subprocess.check_output(syscall_l, 
             stderr=subprocess.STDOUT)
         if very_verbose:
-            print syscall_result
+            print(syscall_result)
 
 def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     frame_chunk_sz=1000, bufsize=10**9,
@@ -294,7 +295,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
         out_of_frames = False
         while frames_read < n_frames and not out_of_frames:
             if verbose:
-                print frames_read
+                print(frames_read)
             # Figure out how much to acquire
             if frames_read + frame_chunk_sz > n_frames:
                 this_chunk = n_frames - frames_read
@@ -306,7 +307,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
             
             # check if we ran out of frames
             if len(raw_image) < read_size_per_frame * this_chunk:
-                print "warning: ran out of frames"
+                print("warning: ran out of frames")
                 out_of_frames = True
                 this_chunk = len(raw_image) / read_size_per_frame
                 assert this_chunk * read_size_per_frame == len(raw_image)
@@ -347,7 +348,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
 
     # Stick chunks together
     if len(res_l) == 0:
-        print "warning: no data found"
+        print("warning: no data found")
         res = np.array([])
     elif finalize == 'concatenate':
         res = np.concatenate(res_l)
@@ -356,7 +357,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     elif finalize == 'list':
         res = res_l
     else:
-        print "warning: unknown finalize %r" % finalize
+        print("warning: unknown finalize %r" % finalize)
         res = res_l
         
     return res
@@ -407,7 +408,7 @@ def get_video_aspect(video_filename):
         width_height_l.append(map(int, width_height))
     
     if len(width_height_l) > 1:
-        print "warning: multiple video streams found, returning first"
+        print("warning: multiple video streams found, returning first")
     return width_height_l[0]
 
 
@@ -552,7 +553,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
                             val = raw_input(request_s)
                             break
                         except ValueError:
-                            print "invalid entry"
+                            print("invalid entry")
                     res[param] = int(val)
 
                 # Check ordering
@@ -578,7 +579,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
                 choice = raw_input("Confirm [y/n/q]: ")
                 if choice == 'q':
                     res = {}
-                    print "cancelled"
+                    print("cancelled")
                     break
                 elif choice == 'y':
                     break
@@ -586,7 +587,7 @@ def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
                     pass
         except KeyboardInterrupt:
             res = {}
-            print "cancelled"
+            print("cancelled")
         finally:
             plt.ioff()
             plt.close(f)
@@ -622,7 +623,7 @@ def crop(input_file, output_file, crop_x0, crop_x1,
 
     # Call, redirecting to standard output so that we can catch it
     if verbose:
-        print ' '.join(syscall_l)
+        print(' '.join(syscall_l))
     
     # I think when -t parameter is set, it raises CalledProcessError
     #~ syscall_result = subprocess.check_output(syscall_l, 
@@ -697,7 +698,7 @@ def get_video_params(video_filename):
         frame_rate_l.append(frame_rate_float)
     
     if len(width_height_l) > 1:
-        print "warning: multiple video streams found, returning first"
+        print("warning: multiple video streams found, returning first")
     elif len(width_height_l) == 0:
         raise ValueError("no video streams found in %s" % video_filename)
     return width_height_l[0][0], width_height_l[0][1], frame_rate_l[0]
@@ -829,9 +830,9 @@ class WebcamController:
         self.set_stdout, self.set_stderr = self.set_proc.communicate()
 
         if self.set_proc.returncode != 0:
-            print "failed to set parameters"
-            print self.set_stdout
-            print self.set_stderr
+            print("failed to set parameters")
+            print(self.set_stdout)
+            print(self.set_stderr)
             raise IOError("failed to set parameters")
     
     def stop(self):
@@ -884,14 +885,14 @@ class WebcamControllerFFplay(WebcamController):
         get it to not block"""
         return
         #~ self.stdout_l.append(self.ffplay_proc.stdout.read())
-        print "update"
+        print("update")
         data = self.ffplay_proc.stderr.read(1000000)
-        print "got data"
-        print len(data)
+        print("got data")
+        print(len(data))
         while len(data) == 1000000:
             self.stderr_l.append(data)
             data = self.ffplay_proc.stderr.read(1000000)
-        print "done"
+        print("done")
     
     def __del__(self):
         try:

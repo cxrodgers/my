@@ -1,6 +1,7 @@
 """Module containing bootstrap methods for estimating differences between
 groups. Loosely based on Efron 1983.
 """
+from __future__ import print_function
 
 import numpy as np
 import matplotlib.mlab as mlab
@@ -91,8 +92,8 @@ def pvalue_of_distribution(data, compare=0, floor=True, verbose=True):
         p_at_value = 2 / float(len(data))
         
         if verbose:
-            print "warning: exactly zero p-value encountered in " + \
-                "pvalue_of_distribution, flooring"
+            print("warning: exactly zero p-value encountered in " + \
+                "pvalue_of_distribution, flooring")
     
     return p_at_value
 

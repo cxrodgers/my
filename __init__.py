@@ -1,10 +1,11 @@
 """This is a catchall module for the stuff that I'm working on that
 doesn't fit anywhere else."""
+from __future__ import absolute_import
 
-import bootstrap
-import misc
-import stats
-import video
+from . import bootstrap
+from . import misc
+from . import stats
+from . import video
 
 # shortcuts
-from misc import rint, pick, pick_rows, printnow, globjoin
+from .misc import rint, pick, pick_rows, printnow, globjoin

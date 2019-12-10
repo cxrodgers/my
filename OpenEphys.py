@@ -11,6 +11,7 @@ Usage:
     data = OpenEphys.load(pathToFile) # returns a dict with data, timestamps, etc.
 
 """
+from __future__ import print_function
 
 import warnings
 import os
@@ -61,8 +62,8 @@ def loadFolder(folderpath,**kwargs):
             data[f.replace('.continuous','')] = loadContinuous(os.path.join(folderpath, f))
             numFiles += 1
 
-    print ''.join(('Avg. Load Time: ', str((time.time() - t0)/numFiles),' sec'))
-    print ''.join(('Total Load Time: ', str((time.time() - t0)),' sec'))        
+    print(''.join(('Avg. Load Time: ', str((time.time() - t0)/numFiles),' sec')))
+    print(''.join(('Total Load Time: ', str((time.time() - t0)),' sec')))        
             
     return data
 
@@ -120,8 +121,8 @@ def loadFolderToArray(folderpath, channels='all', dtype=float,
     
     if verbose:
         time_taken = time.time() - t0
-        print 'Avg. Load Time: %0.3f sec' % (time_taken / len(filelist))
-        print 'Total Load Time: %0.3f sec' % time_taken
+        print('Avg. Load Time: %0.3f sec' % (time_taken / len(filelist)))
+        print('Total Load Time: %0.3f sec' % time_taken)
 
     return data_array
 
@@ -170,7 +171,7 @@ def loadContinuous(filepath, dtype=float, verbose=False,
         raise ValueError("Invalid data type. Must be float or np.int16")
 
     if verbose:
-        print "Loading continuous data from " + filepath
+        print("Loading continuous data from " + filepath)
 
     """Here is the OpenEphys file format:
     'each record contains one 64-bit timestamp, one 16-bit sample 
@@ -272,7 +273,7 @@ def loadSpikes(filepath):
     
     data = { }
     
-    print 'loading spikes...'
+    print('loading spikes...')
     
     f = open(filepath,'rb')
     header = readHeader(f)
@@ -336,7 +337,7 @@ def loadEvents(filepath):
 
     data = { }
     
-    print 'loading events...'
+    print('loading events...')
     
     f = open(filepath,'rb')
     header = readHeader(f)
@@ -500,11 +501,11 @@ def pack(folderpath, filename='openephys.dat', dref=None,
     if os.path.exists(filename):
         if if_exists == 'overwrite':
             if verbose:
-                print "overwriting %s" % filename
+                print("overwriting %s" % filename)
             os.remove(filename)
         elif if_exists == 'append':
             if verbose:
-                print "appending to %s" % filename
+                print("appending to %s" % filename)
         else:
             raise ValueError("'if_exists' must be 'append' or 'overwrite'")
     
@@ -513,7 +514,7 @@ def pack(folderpath, filename='openephys.dat', dref=None,
         # Determine where the chunk stops
         chunk_stop = np.min([stop_record, chunk_start + chunk_size])
         if verbose:
-            print "loading chunk from %d to %d" % (chunk_start, chunk_stop)
+            print("loading chunk from %d to %d" % (chunk_start, chunk_stop))
         
         # Load the chunk
         data_array = loadFolderToArray(folderpath, dtype=np.int16,
@@ -640,7 +641,7 @@ def get_number_of_records(filepath):
                 filepath
             )
             if msg not in issued_warnings:
-                print msg
+                print(msg)
                 issued_warnings.append(msg)
     
     return n_records

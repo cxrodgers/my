@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import my
 import glob
@@ -34,7 +35,7 @@ def _parse_tiffs_into_array(session_dir, session_root_path):
 
     trial_list = []
     for trial in file_df.trial.unique():
-        print "loading trial", trial
+        print("loading trial", trial)
         frame_list = []
         for frame in file_df.frame.unique():
             filename_rows = file_df[
@@ -47,7 +48,7 @@ def _parse_tiffs_into_array(session_dir, session_root_path):
         trial_list.append(frame_list)
 
     # ntrials, nframes, nrows (?), ncols
-    print "saving session", session_name
+    print("saving session", session_name)
     arr = np.asarray(trial_list)
     np.save(
         os.path.join(session_root_path, 'image_data_%s' % session_name), 
@@ -143,7 +144,7 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
 
     # Process each
     for session_name, session_filename in zip(session_names, session_filenames):
-        print "processing session", session_name
+        print("processing session", session_name)
         
         # Load data
         image_data = np.load(session_filename)
@@ -158,7 +159,7 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
                 n_trials = image_data.shape[0]
         
         # Rebin and convert to float
-        print "rebinning"
+        print("rebinning")
         rebinned_image_data = image_data.reshape(
             (n_trials, n_frames, 
                 n_rows / REBIN_FACTOR, REBIN_FACTOR,
@@ -177,7 +178,7 @@ def process_data_into_effect(session_root_path, REBIN_FACTOR=16,
             f.suptitle('trial average')
 
         # Compute average over all trials
-        print "baselining"
+        print("baselining")
         
         # Compute the mean baseline and mean stim for each trial separately
         baseline_period_by_trial = rebinned_image_data[:, 

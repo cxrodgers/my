@@ -1,4 +1,5 @@
 """Module for running code on remote server"""
+from __future__ import print_function
 import os
 import subprocess
 import spur
@@ -28,7 +29,7 @@ def run_rsync(src, dst, flags=None, announce_cmd=True, announce_stdout=True,
     
     # Announce command
     if announce_cmd:
-        print "command: %r" % cmd_list
+        print("command: %r" % cmd_list)
         sys.stdout.flush()
     
     # Call proc
@@ -41,11 +42,11 @@ def run_rsync(src, dst, flags=None, announce_cmd=True, announce_stdout=True,
         stderr = stderr.replace(LEGAL_BULLSHIT, '')
 
     if announce_stdout:
-        print "stdout: %s" % stdout
+        print("stdout: %s" % stdout)
         sys.stdout.flush()
 
     if announce_stderr:
-        print "stderr: %s" % stderr
+        print("stderr: %s" % stderr)
         sys.stdout.flush()    
     
     if error_on_nonzero_ret and returncode != 0:
@@ -142,7 +143,7 @@ def wait_until_job_completes(job_string, verbose=True):
             
             # Announce
             if verbose:
-                print "%s  Status: %s" % (get_now_as_string(), status)
+                print("%s  Status: %s" % (get_now_as_string(), status))
             
             # Either keep going, break, or fail
             if status in ['slurm error', 'RUNNING', '', 'PENDING']:

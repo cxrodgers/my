@@ -1,12 +1,14 @@
 """Wrapper functions with boilerplate code for making plots the way I like them
 """
+from __future__ import print_function
+from __future__ import absolute_import
 
 import matplotlib
 import numpy as np, warnings
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import scipy.stats
-import misc
+from . import misc
 import my
 import pandas
 
@@ -834,7 +836,7 @@ def harmonize_clim_in_subplots(fig=None, axa=None, clim=(None, None),
         if clim[1] is not None:
             new_clim[1] = clim[1]
     except IndexError:
-        print "warning: problem with provided clim"
+        print("warning: problem with provided clim")
     
     # Optionally center
     if center_clim:

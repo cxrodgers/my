@@ -1,4 +1,5 @@
 """Catchall module within the catchall module for really one-off stuff."""
+from __future__ import print_function
 
 import numpy as np
 import warnings
@@ -211,7 +212,7 @@ class Spectrogrammer:
         # Convert to nearest int and test if possible
         self.downsample_ratio = np.rint(self.downsample_ratio).astype(np.int)        
         if self.downsample_ratio == 0:
-            print "requested temporal resolution too high, using maximum"
+            print("requested temporal resolution too high, using maximum")
             self.downsample_ratio = 1
     
         # Default value for noverlap if still None
@@ -423,7 +424,7 @@ def is_nonstring_iter(val):
     res2 = hasattr(val, '__len__') and not isinstance(val, basestring)
     
     if res2 and not res1:
-        print "warning: check is_nonstring_iter"
+        print("warning: check is_nonstring_iter")
     
     return res2
 
@@ -558,13 +559,13 @@ def parse_by_block(lb_counts, pb_counts, lb_trial_numbers, pb_trial_numbers,
             # Should be in an LB block
             assert len(pb_this_block) == 0
             if len(lb_this_block) == 0:
-                print "warning: no trials around trial %d" % block_start
+                print("warning: no trials around trial %d" % block_start)
             res_by_block.append(lb_this_block)
         else:
             # Should be in a PB block
             assert len(lb_this_block) == 0
             if len(pb_this_block) == 0:
-                print "warning: no trials around trial %d" % block_start            
+                print("warning: no trials around trial %d" % block_start)            
             res_by_block.append(pb_this_block)
     
     # Error check that all counts were included and ordering maintained
@@ -629,14 +630,14 @@ def parse_folded_by_block(lb_folded, pb_folded, start_trial=1, last_trial=None,
             assert len(pb_this_block) == 0
             #assert len(lb_this_block) > 0
             if len(lb_this_block) == 0:
-                print "warning: no trials around trial %d" % block_start
+                print("warning: no trials around trial %d" % block_start)
             res_by_block.append(lb_this_block)
         else:
             # Should be in a PB block
             assert len(lb_this_block) == 0
             #assert len(pb_this_block) > 0
             if len(pb_this_block) == 0:
-                print "warning: no trials around trial %d" % block_start            
+                print("warning: no trials around trial %d" % block_start)            
             res_by_block.append(pb_this_block)
     
     return res_by_block 

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import scipy.stats
 
@@ -178,7 +179,7 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
     
     # Run the test
     if len(x) == 0 or len(y) == 0:
-        print "warning empty data in utest, returning p = 1.0"
+        print("warning empty data in utest, returning p = 1.0")
         U, p, auroc = 0.0, 1.0, 0.5
     else:
         res = r("wilcox.test(x, y, mu=%r, exact=%s, paired=%s)" % (mu, exact, paired))
@@ -191,12 +192,12 @@ def r_utest(x, y, mu=0, verbose=False, tol=1e-6, exact='FALSE',
     
     # debug
     if verbose:
-        print behavior
+        print(behavior)
         s_x = str(robjects.globalenv['x'])
-        print s_x[:1000] + '...'
+        print(s_x[:1000] + '...')
         s_y = str(robjects.globalenv['y'])
-        print s_y[:1000] + '...'
-        print res
+        print(s_y[:1000] + '...')
+        print(res)
     
     return {'U': U, 'p': p, 'auroc': auroc}
 

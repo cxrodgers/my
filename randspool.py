@@ -1,4 +1,5 @@
 import numpy as np
+from functools import reduce
 
 def order2prime(order):
     if order == 6:
