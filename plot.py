@@ -346,6 +346,16 @@ def figure_1x1_standard():
     f.subplots_adjust(bottom=.24, left=.26, right=.93, top=.89)
     return f, ax
 
+def figure_1x2_standard(**kwargs):
+    """Standard size f, ax for single panel with a slightly rectangular axis
+    
+    Room for xlabel, ylabel, and title in 16pt font
+    """
+    f, axa = plt.subplots(1, 2, figsize=(6, 2.5), **kwargs)
+    f.subplots_adjust(left=.15, right=.9, wspace=.2, bottom=.22, top=.85)
+
+    return f, axa
+    
 def rescue_tick(ax=None, f=None, x=3, y=3):
     # Determine what axes to process
     if ax is not None:
