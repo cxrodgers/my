@@ -603,7 +603,7 @@ def regex_capture(pattern, list_of_strings, take_index=0):
     
     return res_l
 
-def _get_sorted_channels(folderpath, recording=1):
+def _get_sorted_channels(folderpath, recording=1, source='100'):
     """Return a sorted list of the continuous channels in folderpath.
     
     folderpath : string, path to location of continuous files on disk
@@ -620,7 +620,7 @@ def _get_sorted_channels(folderpath, recording=1):
     
     # Form a regex pattern to be applied to each filename
     # We will capture the channel number: (\d+)
-    regex_pattern = '%s_CH(\d+)%s.continuous' % ('100', recording_s)
+    regex_pattern = '%s_CH(\d+)%s.continuous' % (source, recording_s)
     
     # Apply the pattern to each filename and return the captured channels
     channel_numbers_s = regex_capture(regex_pattern, os.listdir(folderpath))
@@ -667,7 +667,8 @@ def get_filelist(folderpath, source='100', channels='all', recording=None):
     """
     # Get all channels if requested
     if channels == 'all': 
-        channels = _get_sorted_channels(folderpath, recording=recording)    
+        channels = _get_sorted_channels(
+            folderpath, recording=recording, source=source)    
     
     # Get the list of continuous filenames
     if recording is None or recording == 1:
