@@ -1503,3 +1503,15 @@ def transform(data, transformation_df):
     
     # Return
     return res
+
+def fetch_columns_with_error_check(df, columns):
+    """Slice columns from df and error check that they all exist"""
+    # Extract
+    res = df.loc[:, columns].copy()
+    res.columns = res.columns.remove_unused_levels()
+
+    # Error check
+    # A missing label will be silently ignored above
+    assert list(res.columns.levels[0]) == sorted(columns)    
+    
+    return res
