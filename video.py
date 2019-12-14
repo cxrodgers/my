@@ -155,6 +155,12 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
 
         # Keep the leftover data and the error signal (ffmpeg output)
         stdout, stderr = pipe.communicate()    
+        
+        # Convert to string
+        if stdout is not None:
+            stdout = stdout.decode('utf-8')
+        if stderr is not None:
+            stderr = stderr.decode('utf-8')
     
     return frame, stdout, stderr
 
@@ -347,6 +353,10 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
 
         # Keep the leftover data and the error signal (ffmpeg output)
         stdout, stderr = pipe.communicate()
+        
+        # Convert to string
+        if stderr is not None:
+            stderr = stderr.decode('utf-8')
 
     if not np.isinf(n_frames) and frames_read != n_frames:
         # This usually happens when there's some rounding error in the frame
@@ -378,6 +388,10 @@ def get_video_aspect(video_filename):
     proc = subprocess.Popen(['ffprobe', video_filename],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     res = proc.communicate()[0]
+
+    # Convert to string
+    if res is not None:
+        res = res.decode('utf-8')
 
     # Check if ffprobe failed, probably on a bad file
     if 'Invalid data found when processing input' in res:
@@ -429,6 +443,10 @@ def get_video_duration(video_filename, return_as_timedelta=False):
         raise ValueError("bad video filename: %r" % video_filename)
     res = proc.communicate()[0]
 
+    # Convert to string
+    if res is not None:
+        res = res.decode('utf-8')
+
     # Check if ffprobe failed, probably on a bad file
     if 'Invalid data found when processing input' in res:
         raise ValueError(
@@ -472,6 +490,10 @@ def get_video_duration2(video_filename, return_as_timedelta=False):
     
     # Answer should be in stdout
     stdout, stderr = proc.communicate()
+    if stdout is not None:
+        stdout = stdout.decode('utf-8')
+    if stderr is not None:
+        stderr = stderr.decode('utf-8')
 
     # Convert to timedelta
     if stdout.strip() == '':
@@ -651,6 +673,10 @@ def get_video_params(video_filename):
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     res = proc.communicate()[0]
 
+    # Convert to string
+    if res is not None:
+        res = res.decode('utf-8')
+    
     # Check if ffprobe failed, probably on a bad file
     if 'Invalid data found when processing input' in res:
         raise ValueError("Invalid data found by ffprobe in %s" % video_filename)
@@ -904,6 +930,7 @@ class WebcamControllerFFplay(WebcamController):
     def __del__(self):
         try:
             if self.ffplay_proc.returncode is None:
-                self.ffplay_stdout, self.ffplay_stderr = self.ffplay_proc.communicate()        
+                self.ffplay_stdout, self.ffplay_stderr = (
+                    self.ffplay_proc.communicate())
         except AttributeError:
             pass
