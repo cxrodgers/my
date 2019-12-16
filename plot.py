@@ -832,7 +832,7 @@ def harmonize_clim_in_subplots(fig=None, axa=None, clim=(None, None),
         data_a = np.concatenate(data_l)
         
         # New clim
-        new_clim = list(mlab.prctile(data_a, (100.*(1-trim), 100.*trim)))
+        new_clim = list(np.percentile(data_a, (100.*(1-trim), 100.*trim)))
     
     # Take into account specified clim
     try:
