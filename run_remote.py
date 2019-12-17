@@ -37,6 +37,12 @@ def run_rsync(src, dst, flags=None, announce_cmd=True, announce_stdout=True,
         stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
     returncode = proc.returncode
+    
+    # Decode
+    if stdout is not None:
+        stdout = stdout.decode('utf-8')
+    if stderr is not None:
+        stderr = stderr.decode('utf-8')
 
     if remove_legal_bullshit:
         stderr = stderr.replace(LEGAL_BULLSHIT, '')
@@ -96,7 +102,7 @@ def submit_job(submission_script, verbose=True):
         # Try to extract the job id
         try:
             job_string = my.misc.regex_capture('Submitted batch job (\d+)', 
-                [start_job_result.output])[0]
+                [start_job_result.output.decode('utf-8')])[0]
         except IndexError:
             raise ValueError("cannot capture job id from %s" % job_string)
 
@@ -135,7 +141,7 @@ def wait_until_job_completes(job_string, verbose=True):
             if slurm_error:
                 status = 'slurm error'
             else:
-                pjr_lines = probe_job_result.output.split('\n')
+                pjr_lines = probe_job_result.output.decode('utf-8').split('\n')
                 try:
                     status = pjr_lines[2].strip()
                 except IndexError:
