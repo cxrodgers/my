@@ -194,13 +194,17 @@ def loadContinuous(filepath, dtype=float, verbose=False,
     samples_read = 0
     records_read = 0
     
+    # Read number of records
+    # This has to go outside the loop because it requires its own file
+    # handle and seems to be very slow to nest the two
+    n_records = get_number_of_records(filepath)
+    
     # Open the file
     with open(filepath, 'rb') as f:
         # Read header info, file length, and number of records
         header = readHeader(f)
         record_length_bytes = 2 * header['blockLength'] + 22
         fileLength = os.fstat(f.fileno()).st_size
-        n_records = get_number_of_records(filepath)
         
         # Use this to set start and stop records if not specified
         if start_record is None:
