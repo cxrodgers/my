@@ -412,7 +412,7 @@ def readHeader(f):
     # Remove newlines and redundant "header." prefixes
     # The result should be a series of "key = value" strings, separated
     # by semicolons.
-    header_string = f.read(1024).replace('\n','').replace('header.','')
+    header_string = f.read(1024).decode('utf-8').replace('\n','').replace('header.','')
     
     # Parse each key = value string separately
     for pair in header_string.split(';'):
@@ -715,7 +715,7 @@ def get_header_from_folder(folderpath, filelist=None, **kwargs):
     header_l = []
     for filename in filelist:
         full_filename = os.path.join(folderpath, filename)
-        with open(full_filename) as fi:
+        with open(full_filename, 'rb') as fi:
             header = readHeader(fi)
         header['n_records'] = get_number_of_records(full_filename)
         header_l.append(header)
