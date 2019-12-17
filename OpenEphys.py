@@ -195,7 +195,7 @@ def loadContinuous(filepath, dtype=float, verbose=False,
     records_read = 0
     
     # Open the file
-    with file(filepath, 'rb') as f:
+    with open(filepath, 'rb') as f:
         # Read header info, file length, and number of records
         header = readHeader(f)
         record_length_bytes = 2 * header['blockLength'] + 22
@@ -579,7 +579,7 @@ def pack(folderpath, filename='openephys.dat', dref=None,
             data_array -= np.rint(reference[:, None]).astype(np.int16)
         
         # Explicity open in append mode so we don't just overwrite
-        with file(os.path.join(folderpath, filename), 'ab') as fi:
+        with open(os.path.join(folderpath, filename), 'ab') as fi:
             data_array.tofile(fi)
 
 def regex_capture(pattern, list_of_strings, take_index=0):
@@ -630,7 +630,7 @@ def _get_sorted_channels(folderpath, recording=1, source='100'):
 issued_warnings = []
 def get_number_of_records(filepath):
     # Open the file
-    with file(filepath, 'rb') as f:
+    with open(filepath, 'rb') as f:
         # Read header info
         header = readHeader(f)
         
@@ -715,7 +715,7 @@ def get_header_from_folder(folderpath, filelist=None, **kwargs):
     header_l = []
     for filename in filelist:
         full_filename = os.path.join(folderpath, filename)
-        with file(full_filename) as fi:
+        with open(full_filename) as fi:
             header = readHeader(fi)
         header['n_records'] = get_number_of_records(full_filename)
         header_l.append(header)
