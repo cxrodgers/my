@@ -352,13 +352,13 @@ def get_file_time(filename, human=False):
 
 def pickle_load(filename):
     import pickle
-    with file(filename) as fi:
+    with open(filename, 'rb') as fi:
         res = pickle.load(fi)
     return res
 
 def pickle_dump(obj, filename):
     import pickle
-    with file(filename, 'w') as fi:
+    with open(filename, 'wb') as fi:
         pickle.dump(obj, fi)
 
 def invert_linear_poly(p):
