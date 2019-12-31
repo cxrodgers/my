@@ -277,12 +277,6 @@ def font_embed():
     # seems to work better
     matplotlib.rcParams['svg.fonttype'] = 'none'
 
-def publication_defaults():
-    """Set my defaults for font sizes, possibly more later"""
-    matplotlib.rcParams['axes.labelsize'] = 14
-    matplotlib.rcParams['font.sans-serif'] = 'Arial'
-    #matplotlib.rcParams['figure.facecolor'] = ''
-
 def manuscript_defaults():
     """For putting into a word document.
     
@@ -290,12 +284,12 @@ def manuscript_defaults():
     I think these defaults should be 14pt, actually.
     """
     matplotlib.rcParams['font.sans-serif'] = 'Arial'
-    matplotlib.rcParams['axes.labelsize'] = 16
-    matplotlib.rcParams['axes.titlesize'] = 16
-    matplotlib.rcParams['xtick.labelsize'] = 16
-    matplotlib.rcParams['ytick.labelsize'] = 16
-    matplotlib.rcParams['font.size'] = 16 # ax.text objects
-    matplotlib.rcParams['legend.fontsize'] = 16
+    matplotlib.rcParams['axes.labelsize'] = 14
+    matplotlib.rcParams['axes.titlesize'] = 14
+    matplotlib.rcParams['xtick.labelsize'] = 14
+    matplotlib.rcParams['ytick.labelsize'] = 14
+    matplotlib.rcParams['font.size'] = 14 # ax.text objects
+    matplotlib.rcParams['legend.fontsize'] = 14
 
 def poster_defaults():
     """For a poster
@@ -310,12 +304,12 @@ def poster_defaults():
     the size.
     """
     matplotlib.rcParams['font.sans-serif'] = 'Arial'
-    matplotlib.rcParams['axes.labelsize'] = 16
-    matplotlib.rcParams['axes.titlesize'] = 16
-    matplotlib.rcParams['xtick.labelsize'] = 16
-    matplotlib.rcParams['ytick.labelsize'] = 16
-    matplotlib.rcParams['font.size'] = 16 # ax.text objects
-    matplotlib.rcParams['legend.fontsize'] = 16
+    matplotlib.rcParams['axes.labelsize'] = 14
+    matplotlib.rcParams['axes.titlesize'] = 14
+    matplotlib.rcParams['xtick.labelsize'] = 14
+    matplotlib.rcParams['ytick.labelsize'] = 14
+    matplotlib.rcParams['font.size'] = 14 # ax.text objects
+    matplotlib.rcParams['legend.fontsize'] = 14
 
 def presentation_defaults():
     """For importing into presentation.
