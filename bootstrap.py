@@ -8,7 +8,6 @@ from builtins import object
 from past.utils import old_div
 
 import numpy as np
-import matplotlib.mlab as mlab
 
 def bootstrap_rms_distance(full_distribution, subset, n_boots=1000, seed=0):
     """Test whether subset of points comes from the larger set
@@ -147,12 +146,12 @@ class DiffBootstrapper(object):
         self.means2 = self.draws2.mean(axis=1)
         
         # CIs on group means
-        self.CI_1 = mlab.prctile(self.means1, (2.5, 97.5))
-        self.CI_2 = mlab.prctile(self.means2, (2.5, 97.5))
+        self.CI_1 = np.percentile(self.means1, (2.5, 97.5))
+        self.CI_2 = np.percentile(self.means2, (2.5, 97.5))
         
         # Bootstrapped difference between the groups
         self.diffs = self.means2 - self.means1
-        self.CI_diff = mlab.prctile(self.diffs, (2.5, 97.5))
+        self.CI_diff = np.percentile(self.diffs, (2.5, 97.5))
         
         # p-value
         self.p_from_dist = pvalue_of_distribution(self.diffs, 0)
@@ -211,14 +210,14 @@ def difference_CI_bootstrap_wrapper(data, **boot_kwargs):
 
     # Confidence intervals across the draw means for each condition
     condition_CIs = np.array([
-        mlab.prctile(dist, (2.5, 97.5)) for dist in means_of_all_draws.T])
+        np.percentile(dist, (2.5, 97.5)) for dist in means_of_all_draws.T])
 
     # Means of each ulabel (centers of the CIs, basically)
     condition_means = means_of_all_draws.mean(axis=0)
 
     # Now the CI on the *difference between conditions*
     difference_of_conditions = np.diff(means_of_all_draws).flatten()
-    difference_CI = mlab.prctile(difference_of_conditions, (2.5, 97.5)) 
+    difference_CI = np.percentile(difference_of_conditions, (2.5, 97.5)) 
 
     # p-value of 0. in the difference distribution
     cdf_at_value = old_div(np.sum(difference_of_conditions < 0.), \
@@ -347,7 +346,7 @@ def simple_bootstrap(data, n_boots=1000, min_bucket=20):
         draw = data[idxs]
         res.append(np.mean(draw))
     res = np.asarray(res)
-    CI = mlab.prctile(res, (2.5, 97.5))
+    CI = np.percentile(res, (2.5, 97.5))
     
     return res, res.mean(), CI
 
