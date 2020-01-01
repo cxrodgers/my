@@ -1066,7 +1066,7 @@ def index2label__shape_task(ser):
     return ' '.join([servo_pos, stim, outcome])
 
 
-def group_index2group_label(group_index):
+def group_index2group_label__rewside2shape(group_index):
     if group_index == 'left':
         group_label = 'concave'
     elif group_index == 'right':
@@ -1077,10 +1077,11 @@ def group_index2group_label(group_index):
     return group_label
 
 def grouped_bar_plot(df, 
-    index2plot_kwargs=index2plot_kwargs__shape_task, 
-    index2label=index2label, 
-    group_index2group_label=group_index2group_label, 
-    yerrlo=None, yerrhi=None, ax=None, 
+    index2plot_kwargs, 
+    index2label, 
+    group_index2group_label, 
+    yerrlo=None, yerrhi=None, 
+    ax=None, 
     xtls_kwargs=None, group_name_kwargs=None,
     datapoint_plot_kwargs=None,
     group_name_y_offset=None,
@@ -1092,35 +1093,61 @@ def grouped_bar_plot(df,
     df : DataFrame
         The columns are considered replicates to aggregate over
         The levels of the index determine the grouping
+        The columns will be plotted in exactly the order they are provided
+    
+    index2plot_kwargs : function
+        Takes one of the entries in df.index and returns plot_kwargs
+        Example: index2plot_kwargs__shape_task
     
     index2label : function
         Used to create the labels for the xticks.
         Applied to `df.index` if `df.index.nlevels == 1`, else the index 
         after dropping the top level (group name).
+        Example: index2label__shape_task        
+    
+    group_index2group_label : function taking a string
+        Used to label the groups
+        Example: group_index2group_label__rewside2shape
     
     group_name_fig_ypos : y-position of the group labels, in figure coordinates
+    
+    yerrlo, yerrhi : DataFrame or None
+        The index must match df.index exactly
     
     plot_error_bars_instead_of_points : bool
         If True, plot standard error bars instead of raw datapoints
     """
-    # Create figure handles if needed
+    ## Create figure handles if needed
     if ax is None:
         f, ax = plt.subplots()
     
-    # Default values
+    
+    ## Default values
     if xtls_kwargs is None:
         xtls_kwargs = {}
+    
     if group_name_kwargs is None:
         group_name_kwargs = {}
     
-    # Deal with error bars versus points
+    
+    ## Deal with error bars versus points
     if plot_error_bars_instead_of_points:
         assert df.ndim == 2
         yerrlo = df.mean(1) - df.sem(1)
         yerrhi = df.mean(1) + df.sem(1)
         df = df.mean(1)
     
-    # Datapoint plot kwargs
+    
+    ## Error check that indices of df and yerr are aligned
+    # Below they are just taken directly as arrays
+    if yerrlo is not None:
+        assert (df.index == yerrlo.index).all()
+    
+    if yerrhi is not None:
+        assert (df.index == yerrhi.index).all()
+
+
+    ## Datapoint plot kwargs
     default_datapoint_plot_kwargs = {
         'marker': 'o', 'color': 'k', 'mfc': 'none', 'ls': 'none', 
         'clip_on': False}
@@ -1128,14 +1155,31 @@ def grouped_bar_plot(df,
         default_datapoint_plot_kwargs.update(datapoint_plot_kwargs)
     datapoint_plot_kwargs = default_datapoint_plot_kwargs
     
-    # Generate xts and xt_group_centers by iterating over groups
+    
+    ## Generate xts and xt_group_centers by iterating over groups
     offset = 0
     xts_l = []
     xt_group_centers = []
     
-    #
+    # Depends on whether the index is a MultiIndex
     if df.index.nlevels > 1:
-        # Multi-level, group on first level
+        ## Multi-level, group on first level
+        # Take the order of the group names from the order they occur
+        # in level 0, which is not necessarily sorted, and not necessarily
+        # ordered like df.index.levels[0]
+        group_names = df.index.get_level_values(0).drop_duplicates()
+        
+        # Error check that the groups are contiguous
+        new_df = pandas.concat(
+            [df.xs(group_name, level=0, drop_level=False) 
+            for group_name in group_names]
+            )
+        try:
+            assert (df == new_df).all()
+        except ValueError:
+            raise ValueError('df must be contiguous on the first level')
+        
+        # Count the size of each group, and generate xticks within
         offset = 0
         for group_idx in df.index.levels[0]:
             group_len = len(df.loc[group_idx])
@@ -1147,23 +1191,27 @@ def grouped_bar_plot(df,
         xts = np.concatenate(xts_l)
     
     else:
-        # Single level
+        ## Single level
         xts = np.array(list(range(len(df))))
         xt_group_centers = None
     
-    # Plot bars    
+    
+    ## Plot bars    
+    # These are always plotted exactly in the order of `df`
     if df.ndim == 1:
         bars = ax.bar(xts, df.values)
     else:
         bars = ax.bar(xts, df.mean(1).values)
     
-    # Add errorbars if provided
+    
+    ## Add errorbars if provided
     if yerrlo is not None and yerrhi is not None:
+        # Above we've asserted that the indices match exactly
         yerr = np.array([
-            (df - yerrlo).values,
-            (yerrhi - df).values
+            (df.values - yerrlo.values),
+            (yerrhi.values - df.values),
             ])
-        ax.errorbar(xts, df.values, yerr=yerr, ls='none', ecolor='k')
+        ax.errorbar(xts, df.values, yerr=yerr, ls='none', ecolor='k', lw=1)
     
     # Set plot kwargs on each bar
     for bar, (iidx, idx_ser) in zip(bars, df.index.to_frame().iterrows()):
@@ -1207,7 +1255,8 @@ def grouped_bar_plot(df,
     ## The group labels
     if df.index.nlevels > 1:
         # Iterate over groups
-        for group_idx, group_center in zip(df.index.levels[0], xt_group_centers):
+        # `group_names` was already inferred above
+        for group_idx, group_center in zip(group_names, xt_group_centers):
             # Get the name of this group
             group_name = group_index2group_label(group_idx)
     
