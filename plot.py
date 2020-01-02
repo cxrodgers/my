@@ -68,7 +68,7 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
             sub_df.loc[:, 'Z_corrected'].values, 
             sub_df.loc[:, column].values,
             color=color, marker='o',  mfc='white',
-            ls='none', alpha=point_alpha, ms=point_ms,
+            ls='none', alpha=point_alpha, ms=point_ms, clip_on=False,
         )
 
         # Optionally aggregate
@@ -1078,8 +1078,8 @@ def group_index2group_label__rewside2shape(group_index):
 
 def grouped_bar_plot(df, 
     index2plot_kwargs, 
-    index2label, 
-    group_index2group_label, 
+    index2label=None, 
+    group_index2group_label=None, 
     yerrlo=None, yerrhi=None, 
     ax=None, 
     xtls_kwargs=None, group_name_kwargs=None,
@@ -1099,14 +1099,15 @@ def grouped_bar_plot(df,
         Takes one of the entries in df.index and returns plot_kwargs
         Example: index2plot_kwargs__shape_task
     
-    index2label : function
+    index2label : function or None
         Used to create the labels for the xticks.
         Applied to `df.index` if `df.index.nlevels == 1`, else the index 
         after dropping the top level (group name).
         Example: index2label__shape_task        
     
-    group_index2group_label : function taking a string
+    group_index2group_label : function taking a string, or None
         Used to label the groups
+        By default, the actual values in the index (the "levels") are used
         Example: group_index2group_label__rewside2shape
     
     group_name_fig_ypos : y-position of the group labels, in figure coordinates
@@ -1258,7 +1259,10 @@ def grouped_bar_plot(df,
         # `group_names` was already inferred above
         for group_idx, group_center in zip(group_names, xt_group_centers):
             # Get the name of this group
-            group_name = group_index2group_label(group_idx)
+            if group_index2group_label is None:
+                group_name = group_idx
+            else:
+                group_name = group_index2group_label(group_idx)
     
             # We want to place the text centered on the group name in x,
             # at a certain figure location in y.
