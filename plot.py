@@ -18,7 +18,8 @@ import my
 import pandas
 
 def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median',
-    ax=None, ylim=None, agg_plot_kwargs=None, point_alpha=.5, point_ms=3):
+    ax=None, ylim=None, agg_plot_kwargs=None, point_alpha=.5, point_ms=3,
+    layer_label_offset=-.1, agg_plot_meth='rectangle'):
     """Plot values by depth and layer
     
     df : DataFrame
@@ -41,8 +42,8 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
     # Layer boundaries
     layer_boundaries = [128, 419, 626, 1006, 1366]
     layer_names = ['L1', 'L2/3', 'L4', 'L5', 'L6', 'L6b']
-    layer_depth_bins = np.concatenate([[-50], layer_boundaries, [1500]])
-    layer_centers = old_div((layer_depth_bins[:-1] + layer_depth_bins[1:]), 2)
+    layer_depth_bins = np.concatenate([[-50], layer_boundaries, [1500]]).astype(np.float)
+    layer_centers = (layer_depth_bins[:-1] + layer_depth_bins[1:]) / 2.0
     
     # Make a copy
     df = df.copy()
@@ -57,7 +58,7 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
     if ax is None:
         f, ax = plt.subplots(figsize=(4.5, 3.5))
 
-    # Plot NS and RS separately
+    # Plot datapoints for NS and RS separately
     NS_l = [False, True]
     for NS, sub_df in df.groupby('NS'):
         # Color by NS
@@ -71,19 +72,27 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
             ls='none', alpha=point_alpha, ms=point_ms, clip_on=False,
         )
 
-        # Optionally aggregate
-        if aggregate is not None:
+    # Keep track of this
+    if ylim is None:
+        ylim = ax.get_ylim()
+
+    # Plot aggregates of NS and RS separately
+    if aggregate is not None:
+        for NS, sub_df in df.groupby('NS'):
+            # Color by NS
+            color = 'b' if NS else 'r' 
+            
             # Aggregate over bins
             gobj = sub_df.groupby('layer')[column]
             counts_by_bin = gobj.size()
         
             # Aggregate
-            if aggregate is 'median':
-                agg_by_bin = gobj.median()
+            if aggregate is 'mean':
+                agg_by_bin = gobj.mean()
             elif aggregate is 'median':
                 agg_by_bin = gobj.median()
             else:
-                old_div(1,0)
+                raise ValueError("unrecognized aggregated method: {}".format(aggregate))
             
             # Block out aggregates with too few data points
             agg_by_bin[counts_by_bin <= 3] = np.nan    
@@ -93,29 +102,47 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
             agg_by_bin = agg_by_bin.reindex(['1', '2/3', '4', '5', '6', '6b'])
             assert len(agg_by_bin) == len(layer_centers)
             
-            # Plot aggregates
-            ax.plot(    
-                layer_centers,
-                agg_by_bin.values, 
-                color=color, 
-                **agg_plot_kwargs
-            )
+            if agg_plot_meth == 'markers':
+                # Plot aggregates as individual markers
+                ax.plot(    
+                    layer_centers,
+                    agg_by_bin.values, 
+                    color=color, 
+                    **agg_plot_kwargs
+                )
+            
+            elif agg_plot_meth == 'rectangle':
+                # Plot aggregates as a rectangle
+                for n_layer, layer in enumerate(['2/3', '4', '5', '6']):
+                    lo_depth = layer_depth_bins[n_layer + 1]
+                    hi_depth = layer_depth_bins[n_layer + 2]
+                    value = agg_by_bin.loc[layer]
+                    
+                    #~ ax.plot([lo_depth, hi_depth], [value, value], 
+                        #~ color='k', ls='-', lw=2.5)
+                    #~ ax.plot([lo_depth, hi_depth], [value, value], 
+                        #~ color=color, ls='--', lw=2.5)
+                    
+                    # zorder brings the patch on top of the datapoints
+                    patch = plt.Rectangle(
+                        (lo_depth + .1 * (hi_depth - lo_depth), value), 
+                        width=((hi_depth-lo_depth) * .8), 
+                        height=(.03 * np.diff(ylim)), 
+                        ec='k', fc=color, alpha=.5, lw=1.5, zorder=20)
 
-    # Keep track of this
-    if ylim is None:
-        ylim = ax.get_ylim()
+                    ax.add_patch(patch)
 
     # Plot layer boundaries, skipping L1 and L6b
     for lb in layer_boundaries[1:-1]:
         ax.plot([lb, lb], [ylim[0], ylim[1]], color='gray', ls='-', lw=1)
 
     # Name the layers
-    text_ypos = ylim[1] - 0.1 * (ylim[1] - ylim[0])
+    text_ypos = ylim[1] + layer_label_offset * (ylim[1] - ylim[0])
     for layer_name, layer_center in zip(layer_names, layer_centers):
         if layer_name in ['L1', 'L6b']:
             continue
         ax.text(layer_center, text_ypos, layer_name[1:], ha='center', va='bottom', 
-            color='k', size='x-small')
+            color='k')
     
     # Reset the ylim
     ax.set_ylim(ylim)
