@@ -7,6 +7,7 @@ from past.utils import old_div
 import os
 import my
 import glob
+import imageio
 import pandas
 import scipy.ndimage
 import matplotlib
@@ -48,7 +49,8 @@ def _parse_tiffs_into_array(session_dir, session_root_path):
             assert len(filename_rows) == 1
             filename = filename_rows.iloc[0]['filename']
             
-            img = plt.imread(os.path.join(session_dir, filename))
+            img = np.asarray(imageio.imread(
+                os.path.join(session_dir, filename)))
             frame_list.append(img)
         trial_list.append(frame_list)
 
