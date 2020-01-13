@@ -487,7 +487,7 @@ def pick(df, isnotnull=None, **kwargs):
 
 def pick_rows(df, **kwargs):
     """Returns sliced DataFrame based on indexes from pick"""
-    return df.ix[pick(df, **kwargs)]
+    return df.loc[pick(df, **kwargs)]
 
 def no_warn_rs():
     warnings.filterwarnings('ignore', module='ns5_process.RecordingSession$')    
