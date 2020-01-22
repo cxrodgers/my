@@ -445,7 +445,7 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
     dataflow = dataflow.sort_values(by='Srt')
 
     # Drop the broken channels
-    dataflow_minus = dataflow.ix[~dataflow.Srt.isin(
+    dataflow_minus = dataflow.loc[~dataflow.Srt.isin(
         sorted_channels_to_remove)].copy()
     
     # Add Srt_wo_broken
