@@ -1515,3 +1515,7 @@ def fetch_columns_with_error_check(df, columns):
     assert list(res.columns.levels[0]) == sorted(columns)    
     
     return res
+
+def create_dir_if_does_not_exist(dirname):
+    if not os.path.exists(dirname):
+        os.mkdir(dirname)
