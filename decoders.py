@@ -1,7 +1,5 @@
-from __future__ import division
 from builtins import zip
 from builtins import range
-from past.utils import old_div
 import pandas
 import my.decoders
 import numpy as np
@@ -9,6 +7,10 @@ import my.plot
 import matplotlib.pyplot as plt
 import os
 import sklearn.linear_model
+
+class ConvergenceError(Exception):
+    """Raised when decoder fails to converge"""
+    pass
 
 def to_indicator_df(ser, bins=None, propagate_nan=True):
     """Bin series and convert to DataFrame of indicators
@@ -98,7 +100,7 @@ def normalize_features(session_features):
     
     # Scale, AFTER fillna, so that the scale is really 1
     normalizing_sigma = norm_session_features.std()
-    norm_session_features = old_div(norm_session_features, normalizing_sigma)
+    norm_session_features = norm_session_features / normalizing_sigma
     
     # Fillna again, in the case that every feature was the same
     # in which case it all became inf after scaling
@@ -122,7 +124,7 @@ def stratify_and_calculate_sample_weights(strats):
     strat_id2weight = {}
     for this_strat in np.unique(strats):
         n_this_strat = np.sum(strats == this_strat)
-        weight_this_strat = old_div(len(strats), float(n_this_strat))
+        weight_this_strat = len(strats) / float(n_this_strat)
         strat_id2weight[this_strat] = weight_this_strat
     
     # Sample weights
@@ -130,7 +132,7 @@ def stratify_and_calculate_sample_weights(strats):
         for strat_id in strats])
     
     # Make them mean 1
-    sample_weights = old_div(sample_weights, sample_weights.mean())
+    sample_weights = sample_weights / sample_weights.mean()
     
     # Return
     return strat_id2weight, sample_weights
@@ -238,13 +240,20 @@ def stratified_split_data(stratifications, n_splits=3,
 def logregress2(
     features, labels, train_indices, test_indices,
     sample_weights=None, strats=None, regularization=10**5,
-    testing_set_name='test',
+    testing_set_name='test', max_iter=10000, non_convergence_action='error',
+    solver='lbfgs',
     ):
     """Run cross-validated logistic regression 
        
     testing_set_name : this is used to set the values in the 'set' column
         of the per_row_df, and also in scores_df
         If this is a tuning set, pass 'tune'
+    
+    max_iter : passed to logreg
+    
+    non_convergence_action : string
+        if 'error': raise error when doesn't converge
+        if 'pass': do nothing
     
     Returns: dict
         'weights': logreg.coef_[0],
@@ -283,12 +292,25 @@ def logregress2(
     ## Fit
     # Initialize fitter
     logreg = sklearn.linear_model.LogisticRegression(
-        C=(old_div(1.0, regularization)),
+        C=(1.0 / regularization),
+        max_iter=max_iter, solver=solver
     )
 
     # Fit, applying the sample weights
-    logreg.fit(X_train, y_train, sample_weight=sample_weights_train)
+    logreg.fit(
+        X_train, y_train, sample_weight=sample_weights_train, 
+        )
     
+    # Deal with non-convergence
+    if logreg.n_iter_.item() >= logreg.max_iter:
+        if non_convergence_action == 'error':
+            raise ConvergenceError("non-convergence in decoder")
+        elif non_convergence_action == 'pass':
+            pass
+        else:
+            raise ValueError("unknown non_convergence_action: {}".format(
+                non_convergence_action))
+
     
     ## Extract results
     # The per-row predictions and scores
