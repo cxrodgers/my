@@ -1203,7 +1203,8 @@ def grouped_bar_plot(df,
             for group_name in group_names]
             )
         try:
-            assert (df == new_df).all()
+            # This will erroneously fail if either has a NaN
+            assert (new_df == df).all().all()
         except ValueError:
             raise ValueError('df must be contiguous on the first level')
         
