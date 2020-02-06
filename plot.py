@@ -1114,6 +1114,7 @@ def grouped_bar_plot(df,
     group_name_y_offset=None,
     group_name_fig_ypos=.1,
     plot_error_bars_instead_of_points=False,
+    elinewidth=.75,
     ):
     """Plot groups of bars
     
@@ -1124,6 +1125,7 @@ def grouped_bar_plot(df,
     
     index2plot_kwargs : function
         Takes one of the entries in df.index and returns plot_kwargs
+        Currently accepts only 'alpha', 'ec', 'fc', and 'lw'
         Example: index2plot_kwargs__shape_task
     
     index2label : function or None
@@ -1240,7 +1242,8 @@ def grouped_bar_plot(df,
             (df.values - yerrlo.values),
             (yerrhi.values - df.values),
             ])
-        ax.errorbar(xts, df.values, yerr=yerr, ls='none', ecolor='k', lw=1)
+        ax.errorbar(xts, df.values, yerr=yerr, ls='none', ecolor='k', lw=1,
+            elinewidth=elinewidth)
     
     # Set plot kwargs on each bar
     for bar, (iidx, idx_ser) in zip(bars, df.index.to_frame().iterrows()):
@@ -1251,6 +1254,8 @@ def grouped_bar_plot(df,
             bar.set_edgecolor(plot_kwargs['ec'])
         if 'fc' in plot_kwargs:
             bar.set_facecolor(plot_kwargs['fc'])
+        if 'lw' in plot_kwargs:
+            bar.set_linewidth(plot_kwargs['lw'])
 
     # Plot datapoints
     if df.ndim > 1:
