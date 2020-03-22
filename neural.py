@@ -34,7 +34,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     max_data_size=1e6, highpass=False, probename=None,
     spike_times=None, clusters=None, cluster_list=None, features_masks=None,
     cluster2color=None, legend_t_width=.010, apply_offset=None,
-    plot_kwargs=None):
+    plot_kwargs=None, legend_y_height=500):
     """Plot a vertical stack of channels in the same ax.
     
     The given time range and channel range is extracted. Optionally it
@@ -181,13 +181,22 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     ax.set_xticks([])
     ax.set_frame_on(False)
     
+    # Scale bars
     ax.plot(
         [t[0] + legend_t_offset, t[0] + legend_t_offset], 
-        [legend_y_offset, legend_y_offset + 200], 'k-')
+        [legend_y_offset, legend_y_offset + legend_y_height], 
+        'k-', lw=1, clip_on=False)
+    
     ax.plot(
         [t[0] + legend_t_offset, t[0] + legend_t_offset + legend_t_width], 
-        [legend_y_offset, legend_y_offset], 'k-')
-    ax.text(t[0] + legend_t_offset - .002, legend_y_offset + 100, '200 uV', 
+        [legend_y_offset, legend_y_offset], 
+        'k-', lw=1, clip_on=False)
+    
+    # Text by legend
+    ax.text(
+        t[0] + legend_t_offset - .002, 
+        legend_y_offset + legend_y_height / 2.0, 
+        '{} uV'.format(legend_y_height), 
         ha='right', va='center', size='small')
     ax.text(t[0] + legend_t_offset + .005, legend_y_offset - 25, 
         '%d ms' % int(legend_t_width * 1000), 
