@@ -69,18 +69,49 @@ def indicate_series(series):
     return df
     
 
-def intify_classes(session_classes):
-    ## Code the session classes
+def intify_classes(session_classes, ignore_missing=False):
+    """Return integer class label for each row in `session_classes`.
+    
+    session_classes : DataFrame with columns rewside, choice, servo_pos
+    
+    ignore_missing : if True, it's okay if session_classes is missing
+        some of those columns
+    
+    Returns : Series
+    """
+    # Replace each column with integers
     coded_session_classes = session_classes.replace({
         'rewside': {'left': 0, 'right': 1}, 
         'choice': {'left': 0, 'right': 1}, 
         'servo_pos': {1670: 0, 1760:1, 1850:2}
     })
-    intified_session_classes = (
-        coded_session_classes['rewside'] + 
-        2 * coded_session_classes['choice'] + 
-        4 * coded_session_classes['servo_pos']
-    )
+    
+    # Sum those integers
+    if ignore_missing:
+        # Initialize to zero
+        intified_session_classes = pandas.Series(
+            np.zeros(len(coded_session_classes), dtype=np.int),
+            index=coded_session_classes.index,
+            )
+        
+        # Add factor * each column
+        if 'rewside' in coded_session_classes.columns:
+            intified_session_classes += coded_session_classes['rewside']
+
+        if 'choice' in coded_session_classes.columns:
+            intified_session_classes += 2 * coded_session_classes['choice']
+        
+        if 'servo_pos' in coded_session_classes.columns:
+            intified_session_classes += 4 * coded_session_classes['servo_pos']
+
+    
+    else:
+        # Requires all present
+        intified_session_classes = (
+            coded_session_classes['rewside'] + 
+            2 * coded_session_classes['choice'] + 
+            4 * coded_session_classes['servo_pos']
+        )
     
     return intified_session_classes
 
@@ -154,6 +185,31 @@ def stratified_split_data(stratifications, n_splits=3,
     "testing splits". Each data point will be in exactly one testing split.
     For each testing split, the remaining (non-test) data are split equally
     into each group in `group_names` (e.g., tuning and training).
+    
+    stratifications : Series
+        index : however the data is indexed, e.g., session * trial
+        values : class of that row
+        If no stratification is desired, just provide the same value for each
+        pandas.Series(np.ones(len(big_tm)), index=big_tm.index)
+    
+    group_names : list
+        The names of the other datasets
+        Names can be repeated in order to vary the relative sizes
+        So for instance if n_splits = 5, and group_names is
+        ['train', 'train', 'train', 'tune']
+        Then there will be 3 parts training, 1 part tuning, and 1 part testing
+        The allocation is done by modding the indices, not randomly sampling,
+        so the results are always nearly exactly partitioned equally.
+    
+    Each row is in the testing set for exactly one split.
+    Each split will have exactly the same amount of tuning and training.
+    However, each row may be more or less common in the tuning and training
+    sets across splits.
+    
+    Returns : DataFrame
+        index : same as stratifications.index
+        columns : split number range(n_splits)
+        values : some string from [`test_name`] + group_names
     """
     # Set state
     if random_seed is not None:
@@ -570,3 +626,38 @@ def recalculate_decfun_partitioned(features, mu, sigma, weights, intercepts,
     )
     
     return features_part, weights_part, icpt_transformed, decfun
+
+def bin_features_into_analysis_bins(features_df, C2_whisk_cycles, BINS):
+    """Bin locked_t by BINS and add analysis_bin as level
+    
+    Drops rows that are not contained by a bin
+    """
+    # Make a copy
+    features_df = features_df.copy()
+    
+    # Get index as df
+    idxdf = features_df.index.to_frame().reset_index(drop=True)
+
+    # Join the peak frame
+    idxdf = idxdf.join(C2_whisk_cycles['locked_t'], 
+        on=['session', 'trial', 'cycle'])
+
+    # Cut the peak frame by the frame bins
+    idxdf['analysis_bin'] = pandas.cut(
+        idxdf['locked_t'],
+        bins=BINS['bin_edges_t'], labels=False, right=False)
+
+    # Mark null bins with -1 (they will later be dropped)
+    idxdf['analysis_bin'] = idxdf['analysis_bin'].fillna(-1).astype(np.int)
+        
+    # Reinsert this index
+    features_df.index = pandas.MultiIndex.from_frame(
+        idxdf[['session', 'trial', 'analysis_bin', 'cycle']])
+
+    # Drop frame_bin == -1, if any
+    features_df = features_df.drop(-1, level='analysis_bin')
+
+    # Sort
+    features_df = features_df.sort_index()
+    
+    return features_df
