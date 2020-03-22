@@ -702,3 +702,65 @@ def load_model_results(model_dir):
         'normalizing_sigma': normalizing_sigma,
     }
     return res
+
+def partition(model_features, model_results, raw_mask):
+    """Partition the features and weights into raw and standard
+    
+    model_features
+    
+    model_results
+    
+    raw_mask : array of bool
+        Indicates which columns (features) of the weights are raw
+    
+    """
+    # Check standard decfun
+    # Throughout, slightly different than the original decfun because we're using the 
+    # mean weights instead of the fold weights
+    decfun_standard = (
+        my.decoders.recalculate_decfun_standard(
+            model_features, 
+            model_results['normalizing_mu'], 
+            model_results['normalizing_sigma'], 
+            model_results['weights'], 
+            model_results['intercepts']
+        )
+    )
+
+    # Check raw
+    scaled_weights, icpt_transformed, decfun_raw = (
+        my.decoders.recalculate_decfun_raw(
+            model_features, 
+            model_results['normalizing_mu'], 
+            model_results['normalizing_sigma'], 
+            model_results['weights'], 
+            model_results['intercepts']
+        )
+    )
+
+    # Calculate partioned
+    features_part, weights_part, icpt_transformed_part, decfun_part = (
+        my.decoders.recalculate_decfun_partitioned(
+            model_features, 
+            model_results['normalizing_mu'], 
+            model_results['normalizing_sigma'], 
+            model_results['weights'], 
+            model_results['intercepts'],
+            raw_mask
+        )
+    )
+
+    # Error check
+    # TODO: get rid of the dropna(), there shouldn't be nulls here
+    assert np.allclose(decfun_raw.dropna().values, decfun_standard.dropna().values)
+    assert np.allclose(decfun_raw.dropna().values, decfun_part.dropna().values)    
+    
+    # Return
+    res = {
+        'raw_mask': raw_mask,
+        'features_part': features_part,
+        'weights_part': weights_part,
+        'icpt_transformed_part': icpt_transformed_part,
+        'decfun_part': decfun_part,
+    }
+    return res
