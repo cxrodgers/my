@@ -8,6 +8,7 @@ from builtins import object
 from past.utils import old_div
 
 import numpy as np
+import pandas
 
 def bootstrap_rms_distance(full_distribution, subset, n_boots=1000, seed=0):
     """Test whether subset of points comes from the larger set
@@ -353,3 +354,32 @@ def simple_bootstrap(data, n_boots=1000, min_bucket=20):
 class BootstrapError(BaseException):
     pass
 
+def bootstrap_CIs_on_dataframe(df):
+    """Returns CIs on the mean of each row
+    
+    Here's how to do it with a groupby:
+        res = gobj.apply(lambda df: my.bootstrap.bootstrap_CIs_on_dataframe(df.T))     
+    
+    Returns: DataFrame
+        Index will be the same as df.index
+        Columns will be ['lo', 'mean', 'hi', 'mpl_lo', 'mpl_hi']
+        matplotlib-style error bars can be extracted as:
+        np.array([res['mpl_lo'].values, res['mpl_hi'].values])
+    """
+    # CIs
+    CI_l = []
+    CI_keys_l = []
+    for idx, sub_data in df.iterrows():
+        CI = simple_bootstrap(sub_data)[2]
+        CI_l.append(CI)
+        CI_keys_l.append(idx)
+    agg_err = pandas.DataFrame(CI_l, columns=['lo', 'hi'], 
+        index=pandas.Index(CI_keys_l, names=df.index.names))
+    
+    # Mean
+    agg_err['mean'] = df.mean(1)
+    
+    # matplotlib error bars
+    agg_err['mpl_lo'] = agg_err['mean'] - agg_err['lo']
+    agg_err['mpl_hi'] = agg_err['hi'] - agg_err['mean']
+    return agg_err
