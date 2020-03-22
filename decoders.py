@@ -661,3 +661,44 @@ def bin_features_into_analysis_bins(features_df, C2_whisk_cycles, BINS):
     features_df = features_df.sort_index()
     
     return features_df
+
+def load_model_results(model_dir):
+    # Load results from this reduced model
+    preds = pandas.read_pickle(os.path.join(model_dir, 
+        'finalized_predictions')).sort_index()
+    weights = pandas.read_pickle(os.path.join(model_dir, 
+        'meaned_weights')).sort_index()
+    intercepts = pandas.read_pickle(os.path.join(model_dir, 
+        'meaned_intercepts')).sort_index()
+    normalizing_mu = pandas.read_pickle(os.path.join(model_dir, 
+        'normalizing_mu')).sort_index()
+    normalizing_sigma = pandas.read_pickle(os.path.join(model_dir, 
+        'normalizing_sigma')).sort_index()
+
+    # Fix the way mu and sigma were stored
+    # They have a redundant choice/rewside level
+    normalizing_mu = normalizing_mu.xs('rewside', level=1)
+    normalizing_sigma = normalizing_sigma.xs('rewside', level=1)
+
+    # Get only session on the index, to match features
+    normalizing_mu = normalizing_mu.unstack('session').T
+    normalizing_sigma = normalizing_sigma.unstack('session').T
+
+    # Also put session on the index of weights
+    weights = weights.T
+
+    # This isn't necessary
+    #~ normalizing_mu = normalizing_mu.loc[:, weights.columns]
+    #~ normalizing_sigma = normalizing_sigma.loc[:, weights.columns]
+    assert weights.shape[1] == normalizing_mu.shape[1]
+    assert weights.shape[1] == normalizing_sigma.shape[1]
+
+    # Return
+    res = {
+        'preds': preds,
+        'weights': weights,
+        'intercepts': intercepts,
+        'normalizing_mu': normalizing_mu,
+        'normalizing_sigma': normalizing_sigma,
+    }
+    return res
