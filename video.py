@@ -252,9 +252,6 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     bufsize : sent to subprocess.Popen
     image_w, image_h : width and height of video in pxels
     pix_fmt : Sent to ffmpeg
-    
-    TODO: 
-    get video params using ffprobe
     """
     if n_frames is None:
         n_frames = np.inf
@@ -381,7 +378,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     return res
 
 def get_video_aspect(video_filename):
-    """Returns width, height of video using ffprobe"""
+    """Returns width, height of video using ffmpeg-python"""
     if not os.path.exists(video_filename):
         raise ValueError("%s does not exist" % video_filename)
     
@@ -392,88 +389,68 @@ def get_video_aspect(video_filename):
     
     return width, height
 
-
-def get_video_duration(video_filename, return_as_timedelta=False):
-    """Return duration of video using ffprobe"""
-    # Video duration and hence start time
-    try:
-        proc = subprocess.Popen(['ffprobe', video_filename],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    except TypeError:
-        raise ValueError("bad video filename: %r" % video_filename)
-    res = proc.communicate()[0]
-
-    # Convert to string
-    if res is not None:
-        res = res.decode('utf-8')
-
-    # Check if ffprobe failed, probably on a bad file
-    if 'Invalid data found when processing input' in res:
-        raise ValueError(
-            "Invalid data found by ffprobe in %s" % video_filename)
-
-    # Parse out start time
-    duration_match = re.search("Duration: (\S+),", res)
-    assert duration_match is not None and len(duration_match.groups()) == 1
-    video_duration_temp = datetime.datetime.strptime(
-        duration_match.groups()[0], '%H:%M:%S.%f')
-    video_duration = datetime.timedelta(
-        hours=video_duration_temp.hour, 
-        minutes=video_duration_temp.minute, 
-        seconds=video_duration_temp.second,
-        microseconds=video_duration_temp.microsecond)    
+def get_video_frame_rate(video_filename):
+    """Returns frame rate of video using ffmpeg-python
     
-    if return_as_timedelta:
-        return video_duration
-    else:
-        return video_duration.total_seconds()
-
-def get_video_duration2(video_filename, return_as_timedelta=False):
-    """A version that relies on mediainfo instead of ffprobe
-    
-    mediainfo --Inform="General;%Duration/String3%" \
-        /home/mouse/compressed_eye/B4-20160311155612.mkv
-    00:38:20.200
+    https://video.stackexchange.com/questions/20789/ffmpeg-default-output-frame-rate
     """
-    try:
-        # Don't use quotation marks in arguments to Popen
-        proc = subprocess.Popen([
-            'mediainfo', 
-            '--Inform=General;%Duration/String3%',
-            video_filename],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    except TypeError:
-        # This also catches video_filename is None or np.nan
-        raise ValueError("bad video filename: %r" % video_filename)
-    except OSError:
-        raise OSError("can't run mediainfo, is it installed?")
+    if not os.path.exists(video_filename):
+        raise ValueError("%s does not exist" % video_filename)
     
-    # Answer should be in stdout
-    stdout, stderr = proc.communicate()
-    if stdout is not None:
-        stdout = stdout.decode('utf-8')
-    if stderr is not None:
-        stderr = stderr.decode('utf-8')
+    probe = ffmpeg.probe(video_filename)
+    assert len(probe['streams']) == 1
+    
+    # Seems to be two ways of coding, not sure which is better
+    avg_frame_rate = probe['streams'][0]['avg_frame_rate']
+    r_frame_rate = probe['streams'][0]['r_frame_rate']
+    assert avg_frame_rate == r_frame_rate
+    
+    # Convert fraction to number
+    num, den = avg_frame_rate.split('/')
+    frame_rate = float(num) / float(den)
+    
+    return frame_rate
 
-    # Convert to timedelta
-    if stdout.strip() == '':
-        raise ValueError("cannot extra duration info from %s" % video_filename)
+def get_video_params(video_filename):
+    """Returns width, height, frame_rate of video using ffmpeg-python"""
     
-    try:
-        video_duration_temp = datetime.datetime.strptime(
-            stdout.strip(), '%H:%M:%S.%f')
-    except ValueError:
-        raise ValueError("cannot strptime this: " + stdout)
-    video_duration = datetime.timedelta(
+    width, height = get_video_aspect(video_filename)
+    frame_rate = get_video_frame_rate(video_filename)
+    return width, height, frame_rate
+
+def get_video_duration3(video_filename):
+    if not os.path.exists(video_filename):
+        raise ValueError("%s does not exist" % video_filename)
+    
+    probe = ffmpeg.probe(video_filename)
+    assert len(probe['streams']) == 1
+    
+    # Container duration
+    container_duration = float(probe['format']['duration'])
+    
+    # Stream duration
+    stream_duration_s = probe['streams'][0]['tags']['DURATION']
+    
+    # For some reason this is in nanoseconds, convert to microseconds
+    stream_duration_s = stream_duration_s[:-3]
+    
+    # Match
+    video_duration_temp = datetime.datetime.strptime(
+        stream_duration_s, '%H:%M:%S.%f')
+    stream_duration_dt = datetime.timedelta(
         hours=video_duration_temp.hour, 
         minutes=video_duration_temp.minute, 
         seconds=video_duration_temp.second,
         microseconds=video_duration_temp.microsecond)    
     
-    if return_as_timedelta:
-        return video_duration
-    else:
-        return video_duration.total_seconds()
+    # Convert to seconds
+    stream_duration = stream_duration_dt.total_seconds()
+    
+    # Check they are the same
+    # Maybe to almost equal here
+    assert stream_duration == container_duration
+    
+    return stream_duration
 
 def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
     hints=None):
@@ -624,77 +601,6 @@ def crop(input_file, output_file, crop_x0, crop_x1,
 def split():
     # ffmpeg -i 150401_CR1_cropped.mp4 -f segment -vcodec copy -reset_timestamps 1 -map 0 -segment_time 1000 OUTPUT%d.mp4
     pass
-
-
-def get_video_params(video_filename):
-    """Returns width, height, frame_rate of video using ffprobe"""
-    # Video duration and hence start time
-    proc = subprocess.Popen(['ffprobe', video_filename],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    res = proc.communicate()[0]
-
-    # Convert to string
-    if res is not None:
-        res = res.decode('utf-8')
-    
-    # Check if ffprobe failed, probably on a bad file
-    if 'Invalid data found when processing input' in res:
-        raise ValueError("Invalid data found by ffprobe in %s" % video_filename)
-    
-    # Find the video stream
-    width_height_l = []
-    frame_rate_l = []
-    for line in res.split("\n"):
-        # Skip lines that aren't stream info
-        if not line.strip().startswith("Stream #"):
-            continue
-        
-        # Check that this is a video stream
-        comma_split = line.split(',')
-        if " Video: " not in comma_split[0]:
-            continue
-        
-        # The third group should contain the size and aspect ratio
-        if len(comma_split) < 3:
-            raise ValueError("malform video stream string:", line)
-        
-        # The third group should contain the size and aspect, separated
-        # by spaces
-        size_and_aspect = comma_split[2].split()        
-        if len(size_and_aspect) == 0:
-            raise ValueError("malformed size/aspect:", comma_split[2])
-        size_string = size_and_aspect[0]
-        
-        # The size should be two numbers separated by x
-        width_height = size_string.split('x')
-        if len(width_height) != 2:
-            raise ValueError("malformed size string:", size_string)
-        
-        # Cast to int
-        width_height_l.append(list(map(int, width_height)))
-    
-        # Either comma_split[4] is "%f fps"
-        # or comma_split[3] is "%f fps"
-        # or comma_split[3] is "%f tbr"
-        cs4spl = comma_split[4].split()
-        cs3spl = comma_split[3].split()
-        if len(cs4spl) == 2 and cs4spl[1] == 'fps':
-            frame_rate_float = float(cs4spl[0])
-        elif len(cs3spl) == 2 and cs3spl[1] == 'fps':
-            frame_rate_float = float(cs3spl[0])
-        elif len(cs3spl) == 2 and cs3spl[1] == 'tbr':
-            frame_rate_float = float(cs3spl[0])
-        else:
-            raise ValueError("cannot interpret frame rate from %r" %
-                comma_split)
-
-        frame_rate_l.append(frame_rate_float)
-    
-    if len(width_height_l) > 1:
-        print("warning: multiple video streams found, returning first")
-    elif len(width_height_l) == 0:
-        raise ValueError("no video streams found in %s" % video_filename)
-    return width_height_l[0][0], width_height_l[0][1], frame_rate_l[0]
 
 
 class WebcamController(object):
