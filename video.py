@@ -12,6 +12,7 @@ import subprocess
 import re
 import datetime
 import os
+import ffmpeg
 
 class OutOfFrames(BaseException):
     """Exception raised when more frames cannot be extracted from a video"""
@@ -384,53 +385,12 @@ def get_video_aspect(video_filename):
     if not os.path.exists(video_filename):
         raise ValueError("%s does not exist" % video_filename)
     
-    # Video duration and hence start time
-    proc = subprocess.Popen(['ffprobe', video_filename],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    res = proc.communicate()[0]
-
-    # Convert to string
-    if res is not None:
-        res = res.decode('utf-8')
-
-    # Check if ffprobe failed, probably on a bad file
-    if 'Invalid data found when processing input' in res:
-        raise ValueError("Invalid data found by ffprobe in %s" % video_filename)
+    probe = ffmpeg.probe(video_filename)
+    assert len(probe['streams']) == 1
+    width = probe['streams'][0]['width']
+    height = probe['streams'][0]['height']
     
-    # Find the video stream
-    width_height_l = []
-    for line in res.split("\n"):
-        # Skip lines that aren't stream info
-        if not line.strip().startswith("Stream #"):
-            continue
-        
-        # Check that this is a video stream
-        comma_split = line.split(',')
-        if " Video: " not in comma_split[0]:
-            continue
-        
-        # The third group should contain the size and aspect ratio
-        if len(comma_split) < 3:
-            raise ValueError("malform video stream string:", line)
-        
-        # The third group should contain the size and aspect, separated
-        # by spaces
-        size_and_aspect = comma_split[2].split()        
-        if len(size_and_aspect) == 0:
-            raise ValueError("malformed size/aspect:", comma_split[2])
-        size_string = size_and_aspect[0]
-        
-        # The size should be two numbers separated by x
-        width_height = size_string.split('x')
-        if len(width_height) != 2:
-            raise ValueError("malformed size string:", size_string)
-        
-        # Cast to int
-        width_height_l.append(list(map(int, width_height)))
-    
-    if len(width_height_l) > 1:
-        print("warning: multiple video streams found, returning first")
-    return width_height_l[0]
+    return width, height
 
 
 def get_video_duration(video_filename, return_as_timedelta=False):
