@@ -373,8 +373,13 @@ def bootstrap_CIs_on_dataframe(df):
         CI = simple_bootstrap(sub_data)[2]
         CI_l.append(CI)
         CI_keys_l.append(idx)
+
+    #~ agg_err = pandas.DataFrame(CI_l, columns=['lo', 'hi'], 
+        #~ index=pandas.Index(CI_keys_l, names=df.index.names))
+    
+    # The index should be the same as df.index
     agg_err = pandas.DataFrame(CI_l, columns=['lo', 'hi'], 
-        index=pandas.Index(CI_keys_l, names=df.index.names))
+        index=df.index)
     
     # Mean
     agg_err['mean'] = df.mean(1)
