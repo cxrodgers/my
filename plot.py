@@ -356,6 +356,16 @@ def presentation_defaults():
     matplotlib.rcParams['font.size'] = 18 # ax.text objects
     matplotlib.rcParams['legend.fontsize'] = 18
 
+def figure_1x1_small():
+    """Smaller f, ax for single panel with a nearly square axis
+
+    """
+    f, ax = plt.subplots(figsize=(2.2, 2))
+    
+    # left = .3 is for the case of yticklabels with two signif digits
+    f.subplots_adjust(bottom=.28, left=.3, right=.95, top=.95)
+    return f, ax
+    
 def figure_1x1_square():
     """Standard size f, ax for single panel with a square axis
     
