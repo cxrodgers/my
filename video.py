@@ -418,7 +418,7 @@ def get_video_params(video_filename):
     frame_rate = get_video_frame_rate(video_filename)
     return width, height, frame_rate
 
-def get_video_duration3(video_filename):
+def get_video_duration(video_filename):
     if not os.path.exists(video_filename):
         raise ValueError("%s does not exist" % video_filename)
     
