@@ -445,7 +445,7 @@ def get_dataflow_accounting_for_missing(sorted_channels_to_remove,
         dataflow = Adapters.dataflow.dataflow_helen_64ch_df
     elif adapter == 'ON4' and probe.lower() == 'janelia':
         dataflow = Adapters.dataflow.dataflow_janelia_64ch_ON4_df
-    elif adapter == 'ON4' and probe.lower() in ['h3', '4253', '2892']:
+    elif adapter == 'ON4' and probe.lower() in ['h3', '4253', '2892', '5830', '5852']:
         dataflow = Adapters.dataflow.dataflow_h3_ON4_df
     else:
         raise ValueError("unknown probe or adapter")    
