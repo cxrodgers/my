@@ -165,28 +165,70 @@ def stratify_and_calculate_sample_weights(strats):
     return strat_id2weight, sample_weights
 
 def stratified_split_data(stratifications, n_splits=3, 
-    shuffle=False, random_seed=None, return_arr=False, test_name='test',
-    group_names=['train', 'tune']):
+    shuffle=False, random_seed=None, n_tune_splits=1,
+    ):
     """Stratify data into different groups, equalizing by class.
     
-    Typically this is for splitting into "train", "tune", and "test" groups,
-    while equalizing the number of rows from each stratification in each 
-    group. We always want each row to occur in exactly one "test" group,
-    but the relative sizes of the tune and train groups are a free parameter.
+    This defines `n_splits` "splits" of the data. Within each split, each
+    row is assigned to "train", "test", or (optionally) "tune" sets. Care
+    is taken to equalize the representation of each stratification in each
+    set of each split, as much as possible.
     
-    The data is stratified by the values in stratifications. Each
-    stratification is considered separately, and concatenated at the end.
+    This is an example of the results applied to a small dataset.
     
-    Within each stratification: the data are split into `n_splits` 
-    "testing splits". Each data point will be in exactly one testing split.
-    For each testing split, the remaining (non-test) data are split equally
-    into each group in `group_names` (e.g., tuning and training).
+    split            0      1      2      3      4      5      6
+    strat trial                                                 
+    0     57     train  train  train  train   test   tune  train
+          80     train  train  train  train  train   test   tune
+          90      tune  train  train  train  train  train   test
+    3     61     train  train   test   tune  train  train  train
+          64     train  train  train   test   tune  train  train
+          98     train  train  train  train   test   tune  train
+          109    train  train  train  train  train   test   tune
+          117     tune  train  train  train  train  train   test
+
+    Because there are only 3 trials in stratification 0, some splits will
+    have no representatives of this stratification in the testing set.
+    If there are at least `n_splits` examples of each stratification, then
+    each split will have at least one example in the test set.
+    
+    If all of the stratifications are smaller than `n_splits`, then it is
+    possible that one of the splits will have no testing or tuning set at all.
+    
+    Everything is implemented with circular shifts to equalize representation
+    as much as possible.
+    
+    Each row is in the test set on exactly one split, and in the tuning
+    set on exactly `n_tune_splits` splits. It is in the training set on
+    the remaining splits. `n_tune_splits` can be zero.
+    
+    Each stratification is handled completely separately from the others.
+    To break symmetry, the first example in each stratification is assigned
+    to be in the test set on a random split, and from then on the shift
+    is circular. Without this randomness, split 0 would tend to have larger
+    test sets than the remaining splits.
+    
     
     stratifications : Series
         index : however the data is indexed, e.g., session * trial
         values : class of that row
         If no stratification is desired, just provide the same value for each
         pandas.Series(np.ones(len(big_tm)), index=big_tm.index)
+    
+    n_splits : int
+        Number of splits, and number of columns in the result.
+    
+    n_tune_splits : int
+        Number of splits each row should be in the tuning set.
+        Must be in the range [0, n_splits - 2].
+    
+    shuffle : bool
+        If True, randomize the order of the trials within each stratification
+        before applying the circular shift.
+    
+    random_seed : int, or None
+        If not None, call np.random.seed(random_seed)
+        If None, do not change random seed.
     
     group_names : list
         The names of the other datasets
@@ -197,95 +239,98 @@ def stratified_split_data(stratifications, n_splits=3,
         The allocation is done by modding the indices, not randomly sampling,
         so the results are always nearly exactly partitioned equally.
     
-    Each row is in the testing set for exactly one split.
-    Each split will have exactly the same amount of tuning and training.
-    However, each row may be more or less common in the tuning and training
-    sets across splits.
     
     Returns : DataFrame
         index : same as stratifications.index
-        columns : split number range(n_splits)
-        values : some string from [`test_name`] + group_names
+        columns : range(n_splits)
+        values : 'test', 'tune', or 'train'
     """
+    ## Initialize
     # Set state
     if random_seed is not None:
         np.random.seed(random_seed)
     
+    # Set group_names
+    # This determines the relative prevalence of each set
+    # And the relationship between adjacent splits
+    n_train_splits = n_splits - n_tune_splits - 1
+    assert n_train_splits > 0
+    assert n_tune_splits >= 0
+    group_names = (
+        ['test'] + 
+        n_tune_splits * ['tune'] + 
+        n_train_splits * ['train'])
+    
     # Identify the unique values of `stratifications`
     unique_strats = np.sort(np.unique(stratifications))
     
-    # These will be of length n_splits
-    test_indices_by_split = [[] for n_split in range(n_splits)]
     
-    # These will be of length n_splits, each of length n_groups
-    group_indices_by_split = [
-        [[] for n_group in range(len(group_names))]
-        for n_split in range(n_splits)
-    ]
-    
+    ## Generate the group_shift of each entry in stratifications
     # Consider each stratification separately
+    group_shift_of_each_index_l = []
+    group_shift_of_each_index_keys_l = []
     for strat in unique_strats:
         # Find the corresponding indices into stratifications
+        # Note: raw indices, not values in stratifications.index
         indices = np.where(stratifications == strat)[0]
         
         # Shufle them
         if shuffle:
             np.random.shuffle(indices)
         
-        # Equal size test splits
-        split_indices = np.mod(np.arange(len(indices), dtype=np.int), n_splits)
+        # Randomly choose a group_shift_offset
+        # Otherwise the first row in this stratification always gets assigned
+        # to the test set on split 0, which is a problem because split 0 will
+        # thus always have the largest test set.
+        group_shift_offset = np.random.randint(n_splits)
         
-        # For each test set, split the rest into groups
-        for n_split in range(n_splits):
-            # Get the test_indices and the rest_indices
-            test_indices = indices[split_indices == n_split]
-            rest_indices = indices[split_indices != n_split]
-
-            # Split the rest_indices into groups of the appropriate sizes
-            rest_indices_modded = np.mod(
-                n_split + np.arange(len(rest_indices), dtype=np.int), 
-                len(group_names))
-
-            # Store the test indices
-            test_indices_by_split[n_split].append(test_indices)
-            
-            # Store the groups
-            for n_group in range(len(group_names)):
-                group_indices_by_split[n_split][n_group].append(
-                    rest_indices[rest_indices_modded == n_group])
-
-    # Concatenate over strats
-    for n_split in range(n_splits):
-        test_indices_by_split[n_split] = np.sort(np.concatenate(
-            test_indices_by_split[n_split]))
+        # Assign each value in `indices` a "shift"
+        # This is the split on which that row will be in the test set
+        # It can also be interpreted as the circular shift to apply
+        # to `group_names` to get the set for each split for this row.
+        # This works because 'test' is always first in 'group_names'. 
+        group_shift_of_each_index = np.mod(
+            group_shift_offset + np.arange(len(indices), dtype=np.int), 
+            n_splits)
         
-        for n_group in range(len(group_names)):
-            group_indices_by_split[n_split][n_group] = np.sort(np.concatenate(
-                group_indices_by_split[n_split][n_group]))
+        # Convert to Series and store
+        group_shift_of_each_index_l.append(
+            pandas.Series(group_shift_of_each_index, 
+            index=stratifications.iloc[indices].index))
+        group_shift_of_each_index_keys_l.append(strat)
     
-    if return_arr:
-        return test_indices_by_split, group_indices_by_split
+    # Concat
+    # Indexed now by strat * trial; no longer in order of `stratifications`
+    group_shift_ser = pandas.concat(
+        group_shift_of_each_index_l, 
+        keys=group_shift_of_each_index_keys_l, names=['strat'],
+        ).sort_index()
+
+
+    ## Use group_shift to assign each row its groups
+    # Columns: splits
+    # Index: strat * trial
+    # Values: name of set (test, tune, train)
+    # Each row is just a circular shift of group_names
+    set_by_split_strat_and_trial = pandas.DataFrame(
+        [np.roll(group_names, shift) for shift in group_shift_ser.values], 
+        index=group_shift_ser.index, 
+        columns=pandas.Series(range(n_splits), name='split')
+        )
     
-    # DataFrame it
-    split_ser_l = []
-    for n_split in range(n_splits):
-        # Generate a series for this split
-        split_ser = pandas.Series([''] * len(stratifications), 
-            index=stratifications.index, name=n_split)
-        
-        # Set the test indices
-        split_ser.iloc[test_indices_by_split[n_split]] = test_name
-        
-        # Set each group indices
-        zobj = list(zip(group_names, group_indices_by_split[n_split]))
-        for group_name, group_indices in zobj:
-            split_ser.iloc[group_indices] = group_name
-        
-        # Store
-        split_ser_l.append(split_ser)
+    # Debugging: count set sizes
+    # For stratifications with fewer examples than `n_splits`,
+    # any given split may have no examples in one of the sets.
+    # In principle, if all the stratifications are smaller than `n_splits`,
+    # it's possible that some split may have no training or tuning examples
+    # for all stratifications
+    # Check: set_sizes.sum(level='split')
+    set_sizes = set_by_split_strat_and_trial.stack().groupby(
+        ['strat', 'split']).value_counts().unstack().fillna(0).astype(np.int)
     
-    res = pandas.concat(split_ser_l, axis=1)
-    res.columns.name = 'split'
+    # Drop the 'strat' level and sort by trial to return
+    res = set_by_split_strat_and_trial.droplevel('strat').sort_index()
+    assert res.index.equals(stratifications.index)
 
     return res
 
@@ -859,8 +904,9 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
 
             # Stratified splits into folds
             folds = stratified_split_data(
-                intified_session_classes, n_splits=n_splits,
-                group_names=splits_group_names,
+                intified_session_classes, 
+                n_splits=n_splits,
+                n_tune_splits=1,
                 )
             
             # Check that each trial is used for testing on exactly one split
