@@ -337,7 +337,7 @@ def stratified_split_data(stratifications, n_splits=3,
 def logregress2(
     features, labels, train_indices, test_indices,
     sample_weights=None, strats=None, regularization=10**5,
-    testing_set_name='test', max_iter=10000, non_convergence_action='error',
+    testing_set_name='test', max_iter=1000000, non_convergence_action='error',
     solver='lbfgs', min_training_points=10,
     ):
     """Run cross-validated logistic regression 
@@ -716,10 +716,17 @@ def load_model_results(model_dir):
         'meaned_weights')).sort_index()
     intercepts = pandas.read_pickle(os.path.join(model_dir, 
         'meaned_intercepts')).sort_index()
-    normalizing_mu = pandas.read_pickle(os.path.join(model_dir, 
-        'normalizing_mu')).sort_index()
-    normalizing_sigma = pandas.read_pickle(os.path.join(model_dir, 
-        'normalizing_sigma')).sort_index()
+    try:
+        normalizing_mu = pandas.read_pickle(os.path.join(model_dir, 
+            'big_normalizing_mu')).sort_index()
+        normalizing_sigma = pandas.read_pickle(os.path.join(model_dir, 
+            'big_normalizing_sigma')).sort_index()
+    except FileNotFoundError:
+        print("warning: obsolete filenames")
+        normalizing_mu = pandas.read_pickle(os.path.join(model_dir, 
+            'normalizing_mu')).sort_index()
+        normalizing_sigma = pandas.read_pickle(os.path.join(model_dir, 
+            'normalizing_sigma')).sort_index()        
 
     # Fix the way mu and sigma were stored
     # They have a redundant choice/rewside level
