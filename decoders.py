@@ -73,41 +73,54 @@ def intify_classes(session_classes, by=('rewside', 'choice')):
     
     session_classes : DataFrame with columns rewside, choice, servo_pos
     
-    by : tuple
-        ('rewside', 'choice') or ('rewside', 'choice', 'servo_pos')
+    by : tuple or None
+        ('rewside', 'choice') or ('rewside', 'choice', 'servo_pos') or None
     
     Returns : Series
+        index: same as session_classes.index
+        values: int
+            if by is None, all values are zero
+            Otherwise, it will be the class id, which varies from 
+            0-3 if by is ('rewside', 'choice') or 
+            0-11 if by is ('rewside', 'choice', 'servo_pos')
     """
     # Error check
-    assert by in [('rewside', 'choice'), ('rewside', 'choice', 'servo_pos')]
-    
-    # Replace each column with integers
-    replacing_dict = {
-        'rewside': {'left': 0, 'right': 1}, 
-        'choice': {'left': 0, 'right': 1}, 
-        'servo_pos': {1670: 0, 1760: 1, 1850: 2}
-    }
-    coded_session_classes = session_classes.replace(replacing_dict)
+    assert by in [
+        None,
+        ('rewside', 'choice'), 
+        ('rewside', 'choice', 'servo_pos'),
+        ]
     
     # Initialize to zero
     intified_session_classes = pandas.Series(
-        np.zeros(len(coded_session_classes), dtype=np.int),
-        index=coded_session_classes.index,
+        np.zeros(len(session_classes), dtype=np.int),
+        index=session_classes.index,
         )
     
-    # Add factor * each column
-    if 'rewside' in by:
-        # Least significant bit
-        intified_session_classes += coded_session_classes['rewside']
+    # If by is None we just return zeros
+    # Otherwise do this
+    if by is not None:
+        # Replace each column with integers
+        replacing_dict = {
+            'rewside': {'left': 0, 'right': 1}, 
+            'choice': {'left': 0, 'right': 1}, 
+            'servo_pos': {1670: 0, 1760: 1, 1850: 2}
+        }
+        coded_session_classes = session_classes.replace(replacing_dict)
 
-    if 'choice' in by:
-        # Middle (or most significant)
-        intified_session_classes += 2 * coded_session_classes['choice']
-    
-    if 'servo_pos' in by:
-        # Multiply by 4 because 4 possible values for each servo_pos
-        # Slowest-changing bit
-        intified_session_classes += 4 * coded_session_classes['servo_pos']
+        # Add factor * each column
+        if 'rewside' in by:
+            # Least significant bit
+            intified_session_classes += coded_session_classes['rewside']
+
+        if 'choice' in by:
+            # Middle (or most significant)
+            intified_session_classes += 2 * coded_session_classes['choice']
+        
+        if 'servo_pos' in by:
+            # Multiply by 4 because 4 possible values for each servo_pos
+            # Slowest-changing bit
+            intified_session_classes += 4 * coded_session_classes['servo_pos']
 
     return intified_session_classes
 
@@ -824,7 +837,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
     reg_l,
     to_optimize,
     n_splits,
-    stratify_by=('rewside', 'choice'),
+    stratify_by,
     verbose=True,
     ):
     """Runs behavioral classifier on all targets and sessions
@@ -929,6 +942,9 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
             elif stratify_by == ('rewside', 'choice', 'servo_pos'):
                 size_of_each_class = size_of_each_class.reindex(
                     range(12)).fillna(0).astype(np.int)
+            elif stratify_by is None:
+                size_of_each_class = size_of_each_class.reindex(
+                    [0]).fillna(0).astype(np.int)
             
             if size_of_each_class.min() < 2:
                 print("warning: some classes have <2 examples")
