@@ -1,7 +1,6 @@
 from builtins import zip
 from builtins import range
 import pandas
-import my.decoders
 import numpy as np
 import my.plot 
 import matplotlib.pyplot as plt
@@ -69,50 +68,47 @@ def indicate_series(series):
     return df
     
 
-def intify_classes(session_classes, ignore_missing=False):
+def intify_classes(session_classes, by=('rewside', 'choice')):
     """Return integer class label for each row in `session_classes`.
     
     session_classes : DataFrame with columns rewside, choice, servo_pos
     
-    ignore_missing : if True, it's okay if session_classes is missing
-        some of those columns
+    by : tuple
+        ('rewside', 'choice') or ('rewside', 'choice', 'servo_pos')
     
     Returns : Series
     """
+    # Error check
+    assert by in [('rewside', 'choice'), ('rewside', 'choice', 'servo_pos')]
+    
     # Replace each column with integers
-    coded_session_classes = session_classes.replace({
+    replacing_dict = {
         'rewside': {'left': 0, 'right': 1}, 
         'choice': {'left': 0, 'right': 1}, 
-        'servo_pos': {1670: 0, 1760:1, 1850:2}
-    })
+        'servo_pos': {1670: 0, 1760: 1, 1850: 2}
+    }
+    coded_session_classes = session_classes.replace(replacing_dict)
     
-    # Sum those integers
-    if ignore_missing:
-        # Initialize to zero
-        intified_session_classes = pandas.Series(
-            np.zeros(len(coded_session_classes), dtype=np.int),
-            index=coded_session_classes.index,
-            )
-        
-        # Add factor * each column
-        if 'rewside' in coded_session_classes.columns:
-            intified_session_classes += coded_session_classes['rewside']
-
-        if 'choice' in coded_session_classes.columns:
-            intified_session_classes += 2 * coded_session_classes['choice']
-        
-        if 'servo_pos' in coded_session_classes.columns:
-            intified_session_classes += 4 * coded_session_classes['servo_pos']
-
-    
-    else:
-        # Requires all present
-        intified_session_classes = (
-            coded_session_classes['rewside'] + 
-            2 * coded_session_classes['choice'] + 
-            4 * coded_session_classes['servo_pos']
+    # Initialize to zero
+    intified_session_classes = pandas.Series(
+        np.zeros(len(coded_session_classes), dtype=np.int),
+        index=coded_session_classes.index,
         )
     
+    # Add factor * each column
+    if 'rewside' in by:
+        # Least significant bit
+        intified_session_classes += coded_session_classes['rewside']
+
+    if 'choice' in by:
+        # Middle (or most significant)
+        intified_session_classes += 2 * coded_session_classes['choice']
+    
+    if 'servo_pos' in by:
+        # Multiply by 4 because 4 possible values for each servo_pos
+        # Slowest-changing bit
+        intified_session_classes += 4 * coded_session_classes['servo_pos']
+
     return intified_session_classes
 
 def normalize_features(session_features):
@@ -290,14 +286,14 @@ def stratified_split_data(stratifications, n_splits=3,
     
     res = pandas.concat(split_ser_l, axis=1)
     res.columns.name = 'split'
-    
+
     return res
 
 def logregress2(
     features, labels, train_indices, test_indices,
     sample_weights=None, strats=None, regularization=10**5,
     testing_set_name='test', max_iter=10000, non_convergence_action='error',
-    solver='lbfgs',
+    solver='lbfgs', min_training_points=10,
     ):
     """Run cross-validated logistic regression 
        
@@ -317,10 +313,15 @@ def logregress2(
         'scores_df': scores_df,
         'per_row_df': res_df,       
     """
-    if len(train_indices) == 1:
-        raise ValueError("must provide more than one training example")
-    if len(np.unique(test_indices)) == 1:
+    ## Error check
+    if len(train_indices) < min_training_points:
+        raise ValueError(   
+            "must provide at least {} training examples, I got {}".format(
+            min_training_points, len(train_indices)))
+
+    if len(np.unique(test_indices)) <= 1:
         raise ValueError("must provide more than one label type")
+    
     
     ## Split out test and train sets
     X_train = features[train_indices]
@@ -349,7 +350,7 @@ def logregress2(
     # Initialize fitter
     logreg = sklearn.linear_model.LogisticRegression(
         C=(1.0 / regularization),
-        max_iter=max_iter, solver=solver
+        max_iter=max_iter, solver=solver,
     )
 
     # Fit, applying the sample weights
@@ -718,7 +719,7 @@ def partition(model_features, model_results, raw_mask):
     # Throughout, slightly different than the original decfun because we're using the 
     # mean weights instead of the fold weights
     decfun_standard = (
-        my.decoders.recalculate_decfun_standard(
+        recalculate_decfun_standard(
             model_features, 
             model_results['normalizing_mu'], 
             model_results['normalizing_sigma'], 
@@ -729,7 +730,7 @@ def partition(model_features, model_results, raw_mask):
 
     # Check raw
     scaled_weights, icpt_transformed, decfun_raw = (
-        my.decoders.recalculate_decfun_raw(
+        recalculate_decfun_raw(
             model_features, 
             model_results['normalizing_mu'], 
             model_results['normalizing_sigma'], 
@@ -740,7 +741,7 @@ def partition(model_features, model_results, raw_mask):
 
     # Calculate partioned
     features_part, weights_part, icpt_transformed_part, decfun_part = (
-        my.decoders.recalculate_decfun_partitioned(
+        recalculate_decfun_partitioned(
             model_features, 
             model_results['normalizing_mu'], 
             model_results['normalizing_sigma'], 
@@ -764,3 +765,258 @@ def partition(model_features, model_results, raw_mask):
         'decfun_part': decfun_part,
     }
     return res
+
+def iterate_behavioral_classifiers_over_targets_and_sessions(
+    feature_set,
+    labels,
+    reg_l,
+    to_optimize,
+    n_splits,
+    stratify_by=('rewside', 'choice'),
+    verbose=True,
+    ):
+    """Runs behavioral classifier on all targets and sessions
+    
+    Procedure
+    * For each target * session:
+    *   Intifies the classes (using `intify_classes`)
+    *   Stratifies (using `stratify_and_calculate_sample_weights` and
+        `stratified_split_data`)
+    *   Normalizes features (using `normalize_features`)
+        Errors if any feature becomes >25 z-scores
+    *   Checks for size of training and tuning data
+    *   Runs classifier (using `tuned_logregress`)
+    * Extracts the scores on the tuning set and choose best reg
+    * Extracts predictions
+    * Concatenates over all target and sesions
+    
+    Returns: dict
+        'best_reg_by_split' 
+        'scores_by_reg_and_split'
+        'tuning_scores'
+        'finalized_predictions'
+        'best_per_row_results_by_split'
+        'best_weights_by_split'
+        'best_intercepts_by_split'
+        'meaned_weights'
+        'meaned_intercepts'
+        'big_norm_session_features'
+        'big_normalizing_mu'
+        'big_normalizing_sigma'
+    """
+    # Enforce each datapoint used for tuning and testing exactly once
+    # Actually this is only approximate for tuning due to complexities
+    # of stratification
+    splits_group_names = ['train'] * (n_splits - 2) + ['tune']
+    
+    
+    ## Iterate over targets
+    # Store results here
+    # Everything is jointly optimized over all targets and sessions
+    keys_l = []
+    norm_session_features_l = []
+    normalizing_mu_l = []
+    normalizing_sigma_l = []
+    tuning_keys_l = []
+    tuning_results_l = []
+
+
+    ## Iterate over sessions
+    for session in list(feature_set.index.levels[0]):
+        # Verbose
+        if verbose:
+            print(session)
+
+
+        ## Iterate over targets
+        for target in ['rewside', 'choice']:
+        
+        
+            ## Select data
+            # Get data for just this session, or for all sessions
+            if session == 'global':
+                # All sessions
+                session_features = feature_set
+                session_labels = labels.loc[:, target]
+                session_classes = labels.loc[:, :]
+            else:
+                # Just this session
+                session_features = feature_set.loc[session]
+                session_labels = labels.loc[session, target]
+                session_classes = labels.loc[session, :]
+
+
+            ## Set up cross-validation
+            # Code and intify classes
+            intified_session_classes = intify_classes(
+                session_classes, by=stratify_by)
+            
+            # Calculate sample weights from strats
+            strat_id2weight, sample_weights = (
+                stratify_and_calculate_sample_weights(
+                intified_session_classes.values)
+            )
+
+            # Stratified splits into folds
+            folds = stratified_split_data(
+                intified_session_classes, n_splits=n_splits,
+                group_names=splits_group_names,
+                )
+            
+            # Check that each trial is used for testing on exactly one split
+            assert ((folds == 'test').sum(1) == 1).all()
+
+
+            ## Warn if too little data from any class
+            size_of_each_class = intified_session_classes.value_counts().sort_index()
+            
+            if stratify_by == ('rewside', 'choice'):
+                size_of_each_class = size_of_each_class.reindex(
+                    range(4)).fillna(0).astype(np.int)
+            elif stratify_by == ('rewside', 'choice', 'servo_pos'):
+                size_of_each_class = size_of_each_class.reindex(
+                    range(12)).fillna(0).astype(np.int)
+            
+            if size_of_each_class.min() < 2:
+                print("warning: some classes have <2 examples")
+
+            
+            ## Set up features and labels
+            # Normalize features
+            norm_session_features, normalizing_mu, normalizing_sigma = (
+                normalize_features(session_features))
+
+            # Check for very large values
+            if norm_session_features.abs().max().max() > 25:
+                raise ValueError("feature got normalized too hard")
+
+            # Intify targets
+            intified_labels = (session_labels == 'right').astype(np.int)
+
+
+            ## Tune and run
+            session_tuning_keys_l, session_tuning_results_l = (
+                tuned_logregress(
+                folds, 
+                norm_session_features, 
+                intified_labels,
+                sample_weights, 
+                reg_l,
+            ))
+            session_tuning_keys_l = [tuple([session, target] + list(tup))
+                for tup in session_tuning_keys_l]
+            
+            
+            ## Store
+            norm_session_features_l.append(norm_session_features)
+            normalizing_mu_l.append(normalizing_mu)
+            normalizing_sigma_l.append(normalizing_sigma)
+            keys_l.append((session, target))
+
+            tuning_keys_l += session_tuning_keys_l
+            tuning_results_l += session_tuning_results_l
+    
+    
+    ## Extract scores on the tuning set
+    tuning_scores_l = [tuning_result['scores_df'].loc['tune', :]
+        for tuning_result in tuning_results_l]
+    tuning_scores = pandas.concat(tuning_scores_l, keys=tuning_keys_l, 
+        axis=1, names=['session', 'decode_label', 'split', 'reg']).T    
+    
+    # Add a mouse column
+    tuning_scores = tuning_scores.reset_index()
+    tuning_scores['mouse'] = tuning_scores['session'].map(
+        lambda s: s.split('_')[1])
+    
+    
+    ## Choose the best regularization
+    # For each split, choose the reg that optimizes over mouse * decode_label
+    scores_by_reg_and_split = tuning_scores.groupby(
+        ['mouse', 'reg', 'split'])[to_optimize].mean().mean(
+        level=['reg', 'split']).unstack('split')
+
+    # Choose best reg
+    best_reg_by_split = scores_by_reg_and_split.idxmax()
+
+    
+    ## Now extract just the best reg from each split
+    best_per_row_results_by_split_l = []
+    best_weights_by_split_l = []
+    best_intercepts_by_split_l = []
+    best_keys_l = []
+    
+    # Iterate over all results and keep just the ones corresponding to 
+    # the best_reg for that split
+    for n_key, key in enumerate(tuning_keys_l):
+        # Split the key
+        session, decode_label, split, reg = key
+        
+        # Check whether this result is with the best_reg on this split
+        if reg == best_reg_by_split.loc[split]:
+            # Extract those results
+            best_split_results = tuning_results_l[n_key]
+            
+            # Store
+            best_per_row_results_by_split_l.append(
+                best_split_results['per_row_df'])
+            best_weights_by_split_l.append(
+                best_split_results['weights'])
+            best_intercepts_by_split_l.append(
+                best_split_results['intercept'])
+            best_keys_l.append((session, decode_label, split))
+    
+    # Concat over session, decode_label, split
+    best_per_row_results_by_split = pandas.concat(
+        best_per_row_results_by_split_l,
+        keys=best_keys_l, 
+        names=['session', 'decode_label', 'split']).sort_index()
+    
+    best_weights_by_split = pandas.concat(best_weights_by_split_l, 
+        keys=best_keys_l, axis=1, names=['session', 'decode_label', 'split']
+        ).sort_index(axis=1)
+
+    best_intercepts_by_split = pandas.Series(best_intercepts_by_split_l,
+        index=pandas.MultiIndex.from_tuples(best_keys_l, 
+        names=['session', 'decode_label', 'split'])).sort_index()
+    
+    
+    ## Finalize predictions by taking only the ones on the test set
+    # Take the prediction for each row from the split where that
+    # row was in the test set
+    finalized_predictions = best_per_row_results_by_split.loc[
+        best_per_row_results_by_split['set'] == 'test'].reset_index(
+        'split').sort_index()
+
+    # Mean the weights and intercepts over splits
+    meaned_weights = best_weights_by_split.mean(
+        level=['session', 'decode_label'], axis=1)
+    meaned_intercepts = best_intercepts_by_split.mean(
+        level=['session', 'decode_label'])
+    
+    
+    ## Concat normalizing over sessions and decode_labels
+    big_norm_session_features = pandas.concat(norm_session_features_l,
+        keys=keys_l, names=['session', 'decode_label'])
+
+    big_normalizing_mu = pandas.concat(normalizing_mu_l,
+        keys=keys_l, names=['session', 'decode_label'])
+
+    big_normalizing_sigma = pandas.concat(normalizing_sigma_l,
+        keys=keys_l, names=['session', 'decode_label'])
+
+
+    ## Return
+    return {
+        'best_reg_by_split': best_reg_by_split,
+        'scores_by_reg_and_split': scores_by_reg_and_split,
+        'tuning_scores': tuning_scores,
+        'finalized_predictions': finalized_predictions,
+        'best_per_row_results_by_split': best_per_row_results_by_split,
+        'best_weights_by_split': best_weights_by_split,
+        'best_intercepts_by_split': best_intercepts_by_split,
+        'meaned_weights': meaned_weights,
+        'meaned_intercepts': meaned_intercepts,
+        'big_norm_session_features': big_norm_session_features,
+        'big_normalizing_mu': big_normalizing_mu,
+        'big_normalizing_sigma': big_normalizing_sigma,
+        }
