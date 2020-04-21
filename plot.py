@@ -393,6 +393,12 @@ def figure_1x2_standard(**kwargs):
     f.subplots_adjust(left=.15, right=.9, wspace=.2, bottom=.22, top=.85)
 
     return f, axa
+
+def figure_1x2_small(**kwargs):
+    f, axa = plt.subplots(1, 2, figsize=(4, 2), **kwargs)
+    f.subplots_adjust(left=.2, right=.975, wspace=.3, bottom=.225, top=.8)
+
+    return f, axa
     
 def rescue_tick(ax=None, f=None, x=3, y=3):
     # Determine what axes to process
