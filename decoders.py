@@ -278,11 +278,26 @@ def stratified_split_data(stratifications, n_splits=3,
     unique_strats = np.sort(np.unique(stratifications))
     
     
+    ## Define a random strat_offset for each stratification
+    # Choose a value in range(n_splits) for each value in unique_strats
+    # Use permutations to avoid repeating too frequently
+    # This many runs through range(n_splits)
+    n_perms = int(np.ceil(len(unique_strats) / n_splits))
+    
+    # Concatenate each run
+    strat_offsets = np.concatenate([
+        np.random.permutation(range(n_splits))
+        for n_perm in range(n_perms)])
+    
+    # Truncate to same length
+    strat_offsets = strat_offsets[:len(unique_strats)]
+    
+    
     ## Generate the group_shift of each entry in stratifications
     # Consider each stratification separately
     group_shift_of_each_index_l = []
     group_shift_of_each_index_keys_l = []
-    for strat in unique_strats:
+    for strat, strat_offset in zip(unique_strats, strat_offsets):
         # Find the corresponding indices into stratifications
         # Note: raw indices, not values in stratifications.index
         indices = np.where(stratifications == strat)[0]
@@ -291,19 +306,18 @@ def stratified_split_data(stratifications, n_splits=3,
         if shuffle:
             np.random.shuffle(indices)
         
-        # Randomly choose a group_shift_offset
-        # Otherwise the first row in this stratification always gets assigned
-        # to the test set on split 0, which is a problem because split 0 will
-        # thus always have the largest test set.
-        group_shift_offset = np.random.randint(n_splits)
-        
         # Assign each value in `indices` a "shift"
         # This is the split on which that row will be in the test set
         # It can also be interpreted as the circular shift to apply
         # to `group_names` to get the set for each split for this row.
         # This works because 'test' is always first in 'group_names'. 
+        #
+        # Also use strat_offset here to uniformly shift all rows
+        # Otherwise the first row in this stratification always gets assigned
+        # to the test set on split 0, which is a problem because split 0 will
+        # thus always have the largest test set.
         group_shift_of_each_index = np.mod(
-            group_shift_offset + np.arange(len(indices), dtype=np.int), 
+            strat_offset + np.arange(len(indices), dtype=np.int), 
             n_splits)
         
         # Convert to Series and store
@@ -350,8 +364,8 @@ def stratified_split_data(stratifications, n_splits=3,
 def logregress2(
     features, labels, train_indices, test_indices,
     sample_weights=None, strats=None, regularization=10**5,
-    testing_set_name='test', max_iter=1000000, non_convergence_action='error',
-    solver='lbfgs', min_training_points=10,
+    testing_set_name='test', max_iter=10000, non_convergence_action='error',
+    solver='liblinear', tol=1e-6, min_training_points=10,
     ):
     """Run cross-validated logistic regression 
        
@@ -359,7 +373,9 @@ def logregress2(
         of the per_row_df, and also in scores_df
         If this is a tuning set, pass 'tune'
     
-    max_iter : passed to logreg
+    solver, max_iter, tol : passed to sklearn.linear_model.LogisticRegression
+        With solver == 'lbfgs', I had to use huge n_iter (1e6) and even
+        then sometimes got gradient errors. Going back to 'liblinear'.
     
     non_convergence_action : string
         if 'error': raise error when doesn't converge
@@ -408,7 +424,7 @@ def logregress2(
     # Initialize fitter
     logreg = sklearn.linear_model.LogisticRegression(
         C=(1.0 / regularization),
-        max_iter=max_iter, solver=solver,
+        max_iter=max_iter, solver=solver, tol=tol,
     )
 
     # Fit, applying the sample weights
@@ -839,6 +855,8 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
     n_splits,
     stratify_by,
     verbose=True,
+    min_class_size_warn_thresh=2,
+    random_seed=None,
     ):
     """Runs behavioral classifier on all targets and sessions
     
@@ -854,6 +872,14 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
     * Extracts the scores on the tuning set and choose best reg
     * Extracts predictions
     * Concatenates over all target and sesions
+    
+    verbose : bool
+        If True, print each session name as it is analyzed. Also, 
+        print warnings about min class ize.
+    
+    min_class_size_warn_thresh : int
+        If `verbose` and the size of any stratification is less than
+        this value, print a warning.
     
     Returns: dict
         'best_reg_by_split' 
@@ -927,6 +953,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
                 intified_session_classes, 
                 n_splits=n_splits,
                 n_tune_splits=1,
+                random_seed=random_seed,
                 )
             
             # Check that each trial is used for testing on exactly one split
@@ -934,7 +961,8 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
 
 
             ## Warn if too little data from any class
-            size_of_each_class = intified_session_classes.value_counts().sort_index()
+            size_of_each_class = (
+                intified_session_classes.value_counts().sort_index())
             
             if stratify_by == ('rewside', 'choice'):
                 size_of_each_class = size_of_each_class.reindex(
@@ -946,8 +974,10 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
                 size_of_each_class = size_of_each_class.reindex(
                     [0]).fillna(0).astype(np.int)
             
-            if size_of_each_class.min() < 2:
-                print("warning: some classes have <2 examples")
+            if verbose and size_of_each_class.min() < min_class_size_warn_thresh:
+                print(
+                    "warning: some classes have less than {} examples".format(
+                    min_class_size_warn_thresh))
 
             
             ## Set up features and labels
