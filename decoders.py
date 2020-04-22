@@ -375,11 +375,17 @@ def logregress2(
     
     solver, max_iter, tol : passed to sklearn.linear_model.LogisticRegression
         With solver == 'lbfgs', I had to use huge n_iter (1e6) and even
-        then sometimes got gradient errors. Going back to 'liblinear'.
+        then sometimes got gradient errors (LNSRCH). Going back to 'liblinear'.
     
     non_convergence_action : string
         if 'error': raise error when doesn't converge
         if 'pass': do nothing
+        
+        This doesn't catch all ConvergenceWarning, like LNSRCH
+        For that, do this:
+        import warnings
+        from sklearn.exceptions import ConvergenceWarning
+        warnings.simplefilter("error", ConvergenceWarning)        
     
     Returns: dict
         'weights': logreg.coef_[0],
