@@ -74,19 +74,25 @@ def intify_classes(session_classes, by=('rewside', 'choice')):
     session_classes : DataFrame with columns rewside, choice, servo_pos
     
     by : tuple or None
-        ('rewside', 'choice') or ('rewside', 'choice', 'servo_pos') or None
+        Acceptable values:
+        ('shape',)
+        ('rewside', 'choice') 
+        ('rewside', 'choice', 'servo_pos') 
+        None
     
     Returns : Series
         index: same as session_classes.index
         values: int
             if by is None, all values are zero
             Otherwise, it will be the class id, which varies from 
+            0-1 if by is ('shape',) or 
             0-3 if by is ('rewside', 'choice') or 
             0-11 if by is ('rewside', 'choice', 'servo_pos')
     """
     # Error check
     assert by in [
         None,
+        ('shape',),
         ('rewside', 'choice'), 
         ('rewside', 'choice', 'servo_pos'),
         ]
@@ -102,6 +108,7 @@ def intify_classes(session_classes, by=('rewside', 'choice')):
     if by is not None:
         # Replace each column with integers
         replacing_dict = {
+            'shape': {'concave': 0, 'convex': 1},
             'rewside': {'left': 0, 'right': 1}, 
             'choice': {'left': 0, 'right': 1}, 
             'servo_pos': {1670: 0, 1760: 1, 1850: 2}
@@ -109,6 +116,10 @@ def intify_classes(session_classes, by=('rewside', 'choice')):
         coded_session_classes = session_classes.replace(replacing_dict)
 
         # Add factor * each column
+        if 'shape' in by:
+            # Also least significant bit
+            intified_session_classes += coded_session_classes['shape']
+        
         if 'rewside' in by:
             # Least significant bit
             intified_session_classes += coded_session_classes['rewside']
@@ -860,6 +871,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
     to_optimize,
     n_splits,
     stratify_by,
+    decode_targets=('rewside', 'choice'),
     verbose=True,
     min_class_size_warn_thresh=2,
     random_seed=None,
@@ -926,7 +938,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
 
 
         ## Iterate over targets
-        for target in ['rewside', 'choice']:
+        for target in decode_targets:
         
         
             ## Select data
@@ -973,6 +985,9 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
             if stratify_by == ('rewside', 'choice'):
                 size_of_each_class = size_of_each_class.reindex(
                     range(4)).fillna(0).astype(np.int)
+            elif stratify_by == ('shape',):
+                size_of_each_class = size_of_each_class.reindex(
+                    range(2)).fillna(0).astype(np.int)
             elif stratify_by == ('rewside', 'choice', 'servo_pos'):
                 size_of_each_class = size_of_each_class.reindex(
                     range(12)).fillna(0).astype(np.int)
@@ -996,8 +1011,10 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
                 raise ValueError("feature got normalized too hard")
 
             # Intify targets
-            intified_labels = (session_labels == 'right').astype(np.int)
-
+            if target == 'shape':
+                intified_labels = (session_labels == 'convex').astype(np.int)
+            elif target in ['rewside', 'choice']:
+                intified_labels = (session_labels == 'right').astype(np.int)
 
             ## Tune and run
             session_tuning_keys_l, session_tuning_results_l = (
