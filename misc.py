@@ -1519,3 +1519,83 @@ def fetch_columns_with_error_check(df, columns):
 def create_dir_if_does_not_exist(dirname):
     if not os.path.exists(dirname):
         os.mkdir(dirname)
+
+def gaussian_sum_smooth(xdata, ydata, xeval, sigma, null_thresh=0.6):
+    """Apply gaussian sum filter to data.
+    
+    xdata, ydata : array
+        Arrays of x- and y-coordinates of data. 
+        Must be 1d and have the same length.
+    
+    xeval : array
+        Array of x-coordinates at which to evaluate the smoothed result
+    
+    sigma : float
+        Standard deviation of the Gaussian to apply to each data point
+        Larger values yield a smoother curve.
+    
+    null_thresh : float
+        For evaluation points far from data points, the estimate will be
+        based on very little data. If the total weight is below this threshold,
+        return np.nan at this location. Zero means always return an estimate.
+        The default of 0.6 corresponds to approximately one sigma away 
+        from the nearest datapoint.
+    """
+    # Distance between every combination of xdata and xeval
+    # each row corresponds to a value in xeval
+    # each col corresponds to a value in xdata
+    delta_x = xeval[:, None] - xdata
+
+    # Calculate weight of every value in delta_x using Gaussian
+    # Maximum weight is 1.0 where delta_x is 0
+    weights = np.exp(-0.5 * ((delta_x / sigma) ** 2))
+
+    # Multiply each weight by every data point, and sum over data points
+    smoothed = np.dot(weights, ydata)
+
+    # Nullify the result when the total weight is below threshold
+    # This happens at evaluation points far from any data
+    # 1-sigma away from a data point has a weight of ~0.6
+    nan_mask = weights.sum(1) < .6
+    smoothed[nan_mask] = np.nan
+    
+    # Normalize by dividing by the total weight at each evaluation point
+    # Nullification above avoids divide by zero warning shere
+    smoothed = smoothed / weights.sum(1)
+
+    
+    return smoothed
+    
+def gaussian_sum_smooth_pandas(data, evaluation_index, sigma, 
+    null_thresh=0.6, drop_null=False):
+    """Apply gaussian sum filter to Series.
+    
+    data : Series
+    
+    evaluation_index : array-like or index
+        Points at which to evaluate the smoothed result.
+    
+    sigma, null_thresh : See gaussian_sum_smooth
+    
+    drop_null : if True, drop null values before returning
+    
+    
+    Returns: Series
+        The index are `evaluation_index`
+        The values are the smoothed data
+    """
+    # Parse into arrays
+    arr = gaussian_sum_smooth(
+        data.index.values, data.values, 
+        np.asarray(evaluation_index), 
+        sigma=sigma, null_thresh=null_thresh,
+        )
+    
+    # Convert to Series
+    ser = pandas.Series(arr, index=evaluation_index)
+    
+    # Optionally drop null
+    if drop_null:
+        ser = ser.dropna()
+    
+    return ser
