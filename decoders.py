@@ -93,6 +93,8 @@ def intify_classes(session_classes, by=('rewside', 'choice')):
     assert by in [
         None,
         ('shape',),
+        ('rewside',),
+        ('choice',),
         ('rewside', 'choice'), 
         ('rewside', 'choice', 'servo_pos'),
         ]
@@ -985,7 +987,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
             if stratify_by == ('rewside', 'choice'):
                 size_of_each_class = size_of_each_class.reindex(
                     range(4)).fillna(0).astype(np.int)
-            elif stratify_by == ('shape',):
+            elif stratify_by in [('shape',), ('rewside',), ('choice',),]:
                 size_of_each_class = size_of_each_class.reindex(
                     range(2)).fillna(0).astype(np.int)
             elif stratify_by == ('rewside', 'choice', 'servo_pos'):
