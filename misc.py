@@ -1599,3 +1599,64 @@ def gaussian_sum_smooth_pandas(data, evaluation_index, sigma,
         ser = ser.dropna()
     
     return ser
+
+def load_bwid(params):
+    """Load big_waveform_info_df
+    
+    Loads from params['unit_db_dir']
+    Adds stratum
+    Drops 1 and 6b
+    Load recording_locations_table from params['unit_db_dir']
+    Add location_is_strict
+    Joins recording_location, crow_recording_location, location_is_strict
+    on big_waveform_info_df
+    
+    Returns: DataFrame
+        big_waveform_info_df
+    """
+    
+    ## Load waveform info stuff
+    big_waveform_info_df = pandas.read_pickle(
+        os.path.join(params['unit_db_dir'], 'big_waveform_info_df'))
+    big_waveform_info_df['stratum'] = 'deep'
+    big_waveform_info_df.loc[
+        big_waveform_info_df.layer.isin(['2/3', '4']), 'stratum'
+        ] = 'superficial'
+
+    # Drop 1 and 6b
+    big_waveform_info_df = big_waveform_info_df.loc[
+        ~big_waveform_info_df['layer'].isin(['1', '6b'])
+        ].copy()
+    
+    # Remove those levels
+    big_waveform_info_df.index = (
+        big_waveform_info_df.index.remove_unused_levels())
+
+
+    ## Join recording location
+    # Load and rename
+    recording_locations_table = pandas.read_csv(
+        os.path.join(params['unit_db_dir'], 
+        '20191007 electrode locations - Sheet1.csv')).rename(columns={
+        'Session': 'session', 'Closest column': 'recording_location', 
+        'Closest C-row column': 'crow_recording_location', 
+        }).set_index('session').sort_index()
+
+    # fillna the really off-target ones
+    recording_locations_table['crow_recording_location'] = (
+        recording_locations_table['crow_recording_location'].fillna('off'))
+
+    # Add a "strict" column where the recording was bona fide C-row
+    recording_locations_table['location_is_strict'] = (
+        recording_locations_table['recording_location'] ==
+        recording_locations_table['crow_recording_location'])
+
+    # Join onto bwid
+    big_waveform_info_df = big_waveform_info_df.join(recording_locations_table[
+        ['recording_location', 'crow_recording_location', 'location_is_strict']
+        ], on='session')
+    
+    # Error check
+    assert not big_waveform_info_df.isnull().any().any()
+    
+    return big_waveform_info_df
