@@ -1184,6 +1184,15 @@ def grouped_bar_plot(df,
         df = df.mean(1)
     
     
+    ## Remove levels
+    df = df.copy()
+    df.index = df.index.remove_unused_levels()
+    try:
+        df.columns = df.columns.remove_unused_levels()
+    except AttributeError:
+        pass
+    
+    
     ## Error check that indices of df and yerr are aligned
     # Below they are just taken directly as arrays
     if yerrlo is not None:
