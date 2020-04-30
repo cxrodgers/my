@@ -1361,7 +1361,10 @@ def grouped_bar_plot(df,
     
     ## Remove levels
     df = df.copy()
-    df.index = df.index.remove_unused_levels()
+    try:
+        df.index = df.index.remove_unused_levels()
+    except AttributeError:
+        pass
     try:
         df.columns = df.columns.remove_unused_levels()
     except AttributeError:
