@@ -9,6 +9,7 @@ from builtins import range
 from past.utils import old_div
 
 import matplotlib
+import matplotlib.patheffects as pe
 import numpy as np, warnings
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
@@ -16,6 +17,178 @@ import scipy.stats
 from . import misc
 import my
 import pandas
+
+
+def smooth_and_plot_versus_depth(
+    data, 
+    colname,
+    ax=None,
+    NS_sigma=40,
+    RS_sigma=20,
+    n_depth_bins=101,
+    depth_min=0,
+    depth_max=1600,
+    datapoint_plot_kwargs=None,
+    smoothed_plot_kwargs=None,
+    plot_layer_boundaries=True,
+    layer_boundaries_ylim=None,
+    ):
+    """Plot individual datapoints and smoothed versus depth.
+    
+    data : DataFrame
+        Must have columns "Z_corrected", "NS", and `colname`, which become
+        x- and y- coordinates.
+    
+    colname : string
+        Name of column containing data
+    
+    ax : Axis, or None
+        if None, creates ax
+    
+    NS_sigma, RS_sigma : float
+        The standard deviation of the smoothing kernel to apply to each
+    
+    depth_min, depth_max, n_depth_bins : float, float, int
+        The x-coordinates at which the smoothed results are evaluated
+    
+    datapoint_plot_kwargs : dict
+        Plot kwargs for individual data points.
+        Defaults: 
+        'marker': 'o', 'ls': 'none', 'ms': 1.5, 'mew': 0, 'alpha': .25,
+    
+    smoothed_plot_kwargs : dict
+        Plot kwargs for individual data points.
+        Defaults: 'lw': 2,
+    
+    plot_layer_boundaries: bool
+        If True, plot layer boundaries
+    
+    layer_boundaries_ylim : tuple of length 2, or None
+        If not None, layer boundaries are plotted to these ylim
+        If None, ax.get_ylim() is used after plotting everything else
+    
+    
+    Returns: ax
+    """
+    ## Set up defaults
+    # Bins at which to evaluate smoothed
+    depth_bins = np.linspace(depth_min, depth_max, n_depth_bins)
+    
+    # datapoint_plot_kwargs
+    default_datapoint_plot_kwargs = {
+        'marker': 'o', 'ls': 'none', 'ms': 1, 'mew': 1, 
+        'alpha': .3, 'mfc': 'none',
+        }
+    
+    if datapoint_plot_kwargs is not None:
+        default_datapoint_plot_kwargs.update(datapoint_plot_kwargs)
+    
+    use_datapoint_plot_kwargs = default_datapoint_plot_kwargs
+    
+    # smoothed_plot_kwargs
+    path_effects = [pe.Stroke(linewidth=3, foreground='k'), pe.Normal()]
+    default_smoothed_plot_kwargs = {
+        'lw': 1.5,
+        'path_effects': path_effects,
+        }
+    
+    if smoothed_plot_kwargs is not None:
+        default_smoothed_plot_kwargs.update(smoothed_plot_kwargs)
+    
+    use_smoothed_plot_kwargs = default_smoothed_plot_kwargs        
+    
+    
+    ## Plot versus depth
+    if ax is None:
+        f, ax = plt.subplots()
+
+    # Iterate over NS
+    for NS, sub_data in data.groupby('NS'):
+        if NS:
+            color = 'b'
+            sigma = 40
+        else:
+            color = 'r'
+            sigma = 20
+        
+        # Get the data to smooth
+        to_smooth = sub_data.set_index('Z_corrected')['ll_per_whisk']
+        
+        # Smooth
+        smoothed = my.misc.gaussian_sum_smooth_pandas(
+            to_smooth, depth_bins, sigma=sigma)
+        
+        # Plot the individual data points
+        ax.plot(
+            to_smooth.index,
+            to_smooth.values, 
+            color=color,
+            zorder=0,
+            **use_datapoint_plot_kwargs,
+            )
+        
+        # Plot the smoothed
+        ax.plot(
+            smoothed, color=color, 
+            **use_smoothed_plot_kwargs)
+    
+    
+    ## Pretty
+    my.plot.despine(ax)
+
+    ax.set_xticks((0, 500, 1000, 1500))
+    ax.set_xlim((0, 1500))
+    ax.set_xticklabels(('0.0', '0.5', '1.0', '1.5'))
+    ax.set_xlabel('depth in cortex (mm)')
+    
+    
+    ## Add layer boundaries
+    if plot_layer_boundaries:
+        # ylim for the boundaries
+        if layer_boundaries_ylim is None:
+            layer_boundaries_ylim = ax.get_ylim()
+        
+        # Layer boundaries
+        layer_boundaries = [128, 419, 626, 1006, 1366]
+        layer_names = ['L1', 'L2/3', 'L4', 'L5', 'L6', 'L6b']
+        
+        # Centers of layers (for naming)
+        layer_depth_bins = np.concatenate(
+            [[-50], layer_boundaries, [1500]]).astype(np.float)
+        layer_centers = (layer_depth_bins[:-1] + layer_depth_bins[1:]) / 2.0
+
+        # Adjust position of L2/3 and L6 slightly
+        layer_centers[1] = layer_centers[1] - 50
+        layer_centers[2] = layer_centers[2] + 10
+        layer_centers[3] = layer_centers[3] + 25
+        layer_centers[-2] = layer_centers[-2] + 50
+        
+
+        # Plot each (but not top of L1 or bottom of L6)
+        for lb in layer_boundaries[1:-1]:
+            ax.plot(
+                [lb, lb], layer_boundaries_ylim, 
+                color='gray', lw=.8, zorder=-1)
+    
+        # Set the boundaries tight
+        ax.set_ylim(layer_boundaries_ylim)
+        
+        # Label the layer names
+        # x in data, y in figure
+        blended_transform = matplotlib.transforms.blended_transform_factory(
+            ax.transData, ax.figure.transFigure)
+        
+        # Name each (but not L1 or L6b)
+        zobj = zip(layer_names[1:-1], layer_centers[1:-1])
+        for layer_name, layer_center in zobj:
+            ax.text(
+                layer_center, .98, layer_name, 
+                ha='center', va='center', size=12, transform=blended_transform)
+
+    
+    ## Return ax
+    return ax
+
 
 def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median',
     ax=None, ylim=None, agg_plot_kwargs=None, point_alpha=.5, point_ms=3,
@@ -1162,6 +1335,8 @@ def grouped_bar_plot(df,
     
     plot_error_bars_instead_of_points : bool
         If True, plot standard error bars instead of raw datapoints
+    
+    Returns: ax, bar_container
     """
     ## Create figure handles if needed
     if ax is None:
@@ -1269,7 +1444,8 @@ def grouped_bar_plot(df,
             (df.values - yerrlo.values),
             (yerrhi.values - df.values),
             ])
-        ax.errorbar(xts, df.values, yerr=yerr, ls='none', ecolor='k', lw=1,
+        bar_container = ax.errorbar(
+            xts, df.values, yerr=yerr, ls='none', ecolor='k', lw=1,
             elinewidth=elinewidth)
     
     # Set plot kwargs on each bar
@@ -1348,4 +1524,4 @@ def grouped_bar_plot(df,
                     ha='center', va='center',
                     **group_name_kwargs)
     
-    return ax
+    return ax, bar_container
