@@ -1600,7 +1600,7 @@ def gaussian_sum_smooth_pandas(data, evaluation_index, sigma,
     
     return ser
 
-def load_bwid(params):
+def load_bwid(params, drop_1_and_6b=True):
     """Load big_waveform_info_df
     
     Loads from params['unit_db_dir']
@@ -1624,9 +1624,10 @@ def load_bwid(params):
         ] = 'superficial'
 
     # Drop 1 and 6b
-    big_waveform_info_df = big_waveform_info_df.loc[
-        ~big_waveform_info_df['layer'].isin(['1', '6b'])
-        ].copy()
+    if drop_1_and_6b:
+        big_waveform_info_df = big_waveform_info_df.loc[
+            ~big_waveform_info_df['layer'].isin(['1', '6b'])
+            ].copy()
     
     # Remove those levels
     big_waveform_info_df.index = (
