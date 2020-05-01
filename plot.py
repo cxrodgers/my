@@ -112,7 +112,7 @@ def smooth_and_plot_versus_depth(
             sigma = 20
         
         # Get the data to smooth
-        to_smooth = sub_data.set_index('Z_corrected')['ll_per_whisk']
+        to_smooth = sub_data.set_index('Z_corrected')[colname]
         
         # Smooth
         smoothed = my.misc.gaussian_sum_smooth_pandas(
