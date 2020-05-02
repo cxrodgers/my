@@ -173,6 +173,16 @@ def smooth_and_plot_versus_depth(
         # Set the boundaries tight
         ax.set_ylim(layer_boundaries_ylim)
         
+        # Warn
+        if data[colname].max() > layer_boundaries_ylim[1]:
+            print(
+                "warning: max datapoint {} ".format(data[colname].max()) +
+                "greater than layer_boundaries_ylim[1]")
+        if data[colname].min() < layer_boundaries_ylim[0]:
+            print(
+                "warning: min datapoint {} ".format(data[colname].min()) +
+                "less than layer_boundaries_ylim[0]")
+        
         # Label the layer names
         # x in data, y in figure
         blended_transform = matplotlib.transforms.blended_transform_factory(
