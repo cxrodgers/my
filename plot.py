@@ -106,10 +106,10 @@ def smooth_and_plot_versus_depth(
     for NS, sub_data in data.groupby('NS'):
         if NS:
             color = 'b'
-            sigma = 40
+            sigma = NS_sigma
         else:
             color = 'r'
-            sigma = 20
+            sigma = RS_sigma
         
         # Get the data to smooth
         to_smooth = sub_data.set_index('Z_corrected')[colname]
