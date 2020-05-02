@@ -1304,6 +1304,7 @@ def grouped_bar_plot(df,
     group_name_fig_ypos=.1,
     plot_error_bars_instead_of_points=False,
     elinewidth=.75,
+    unclip_error_bars=True,
     ):
     """Plot groups of bars
     
@@ -1450,6 +1451,12 @@ def grouped_bar_plot(df,
         bar_container = ax.errorbar(
             xts, df.values, yerr=yerr, ls='none', ecolor='k', lw=1,
             elinewidth=elinewidth)
+    
+        if unclip_error_bars:
+            lc = bar_container.lines[2][0]
+            lc.set_clip_on(False)
+    else:
+        bar_container = None
     
     # Set plot kwargs on each bar
     for bar, (iidx, idx_ser) in zip(bars, df.index.to_frame().iterrows()):
