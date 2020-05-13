@@ -13,6 +13,18 @@ except ImportError:
     # it's all good
     pass
 
+
+def pvalue_to_significance_string(pvalue):
+    """Return significance string like '*' based on pvalue"""
+    if pvalue < .001:
+        return '***'
+    elif pvalue < .01:
+        return '**'
+    elif pvalue < .05:
+        return '*'
+    else:
+        return 'n.s.'
+
 def mad_1d(arr1d):
     """My implementation of MAD.
     
