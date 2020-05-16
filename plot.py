@@ -18,7 +18,94 @@ from . import misc
 import my
 import pandas
 
+def alpha_blend_with_mask(rgb0, rgb1, alpha0, mask0):
+    """Alpha-blend two RGB images, masking out one image.
+    
+    rgb0 : first image, to be masked
+        Must be 3-dimensional, and rgb0.shape[-1] must be 3 or 4
+        If rgb0.shape[-1] == 4, the 4th channel will be dropped
+    
+    rgb1 : second image, wil not be masked
+        Must be 3-dimensional, and rgb1.shape[-1] must be 3 or 4
+        If rgb1.shape[-1] == 4, the 4th channel will be dropped
+        Then, must have same shape as rgb0
+    
+    alpha0 : the alpha to apply to rgb0. (1 - alpha) will be applied to
+    
+    mask0 : True where to ignore rgb0
+        Must have dimension 2 or 3
+        If 2-dimensional, will be replicated along the channel dimension
+        Then, must have same shape as rgb0
+    
+    Returns : array of same shape as rgb0 and rgb1
+        Where mask0 is True, the result is the same as rgb1
+        Where mask1 is False, the result is rgb0 * alpha0 + rgb1 * (1 - alpha0)
+    """
+    # Replicate mask along color channel if necessary
+    if mask0.ndim == 2:
+        mask0 = np.stack([mask0] * 3, axis=-1)
+        
+    # Check 3-dimensional
+    assert mask0.ndim == 3
+    assert rgb0.ndim == 3
+    assert rgb1.ndim == 3
 
+    # Drop alpha if present
+    if rgb0.shape[-1] == 4:
+        rgb0 = rgb0[:, :, :3]
+    
+    if rgb1.shape[-1] == 4:
+        rgb1 = rgb1[:, :, :3]
+    
+    if mask0.shape[-1] == 4:
+        mask0 = mask0[:, :, :3]
+    
+    # Error check
+    assert rgb0.shape == rgb1.shape
+    assert mask0.shape == rgb0.shape
+    
+    # Blend
+    blended = alpha0 * rgb0 + (1 - alpha0) * rgb1
+    
+    # Flatten to apply mask
+    blended_flat = blended.flatten()
+    mask_flat = mask0.flatten()
+    replace_with = rgb1.flatten()
+    
+    # Masked replace
+    blended_flat[mask_flat] = replace_with[mask_flat]
+    
+    # Reshape to original
+    replaced_blended = blended_flat.reshape(blended.shape)
+    
+    # Return
+    return replaced_blended
+    
+def custom_RdBu_r():
+    """Custom RdBu_r colormap with true white at center"""
+    # Copied from matplotlib source: lib/matplotlib/_cm.py
+    # And adjusted to go to true white at center
+    _RdBu_data = (
+        (0.40392156862745099,  0.0                ,  0.12156862745098039),
+        (0.69803921568627447,  0.09411764705882353,  0.16862745098039217),
+        (0.83921568627450982,  0.37647058823529411,  0.30196078431372547),
+        (0.95686274509803926,  0.6470588235294118 ,  0.50980392156862742),
+        (0.99215686274509807,  0.85882352941176465,  0.7803921568627451 ),
+        (1,1,1),#(0.96862745098039216,  0.96862745098039216,  0.96862745098039216),
+        (0.81960784313725488,  0.89803921568627454,  0.94117647058823528),
+        (0.5725490196078431 ,  0.77254901960784317,  0.87058823529411766),
+        (0.2627450980392157 ,  0.57647058823529407,  0.76470588235294112),
+        (0.12941176470588237,  0.4                ,  0.67450980392156867),
+        (0.0196078431372549 ,  0.18823529411764706,  0.38039215686274508)
+        )
+
+    # Copied from matplotlib source: lib/matplotlib/cm.py
+    myrdbu = matplotlib.colors.LinearSegmentedColormap.from_list(
+        'myrdbu', _RdBu_data[::-1], matplotlib.rcParams['image.lut'])
+
+    # Return
+    return myrdbu
+    
 def smooth_and_plot_versus_depth(
     data, 
     colname,
