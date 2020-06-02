@@ -424,6 +424,8 @@ def logregress2(
     
     
     ## Set up sample weights
+    ## Note that this doesn't know about missing stratifications, so
+    ## if there's a strat missing, it just will be ignored
     # Get them if they don't exist
     if sample_weights is None:
         # Use strat if available, otherwise use 1
@@ -438,7 +440,7 @@ def logregress2(
     sample_weights_train = sample_weights[train_indices]
     sample_weights_test = sample_weights[test_indices]    
     
-    
+
     ## Fit
     # Initialize fitter
     logreg = sklearn.linear_model.LogisticRegression(
@@ -501,6 +503,15 @@ def tuned_logregress(folds, norm_session_features, intified_labels,
     sample_weights, reg_l):
     """Train over all splits and all regularizations, evaluate on the tuning set
 
+    If some stratifications are very small, they will be missing from the
+    test, tune, or train set on some splits. When it's missing from
+    test set or tune set, it's not so bad, because in the end we combine
+    data from the split where each trial was in the test/tune set, so
+    they're all included. It's bad when it's missing from the training set,
+    because it won't affect the coefficients, but also because the weights
+    are wrong (ill-posed) with a missing stratification. The use of high-fold
+    cross-validation helps: in the limit with leave-one-out, it will only
+    be missing from the training set once.
     """
     ## Iterate over splits
     tuning_results_l = []
@@ -981,6 +992,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
 
 
             ## Warn if too little data from any class
+            # See notes in tuned_logregress about the effect of this
             size_of_each_class = (
                 intified_session_classes.value_counts().sort_index())
             
@@ -999,7 +1011,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
             
             if verbose and size_of_each_class.min() < min_class_size_warn_thresh:
                 print(
-                    "warning: some classes have less than {} examples".format(
+                    "warning: some classes have fewer than {} examples".format(
                     min_class_size_warn_thresh))
 
             
