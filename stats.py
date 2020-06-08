@@ -5,6 +5,7 @@ from builtins import range
 from past.utils import old_div
 import numpy as np
 import scipy.stats
+import pandas
 
 try:
     import rpy2.robjects as robjects
@@ -13,6 +14,22 @@ except ImportError:
     # it's all good
     pass
 
+
+def z2p(zvals):
+    """Return the two-tailed p-value corresponding to a z-stat"""
+    norm_rv = scipy.stats.norm()
+    res = 2 * (1 - norm_rv.cdf(np.abs(zvals)))
+    
+    try:
+        # If zvals is dataframe
+        return pandas.DataFrame(res, index=zvals.index, columns=zvals.columns)
+    except AttributeError:
+        try:
+            # If zvals is Series
+            return pandas.Series(res, index=zvals.index)
+        except AttributeError:
+            # If zvals is anything else, like a float
+            return res
 
 def pvalue_to_significance_string(pvalue):
     """Return significance string like '*' based on pvalue"""
