@@ -3,6 +3,68 @@ import pandas
 import os
 import my
 
+def load_bwid(params, drop_1_and_6b=True):
+    """Load big_waveform_info_df
+    
+    Loads from params['unit_db_dir']
+    Adds stratum
+    Drops 1 and 6b
+    Load recording_locations_table from params['unit_db_dir']
+    Add location_is_strict
+    Joins recording_location, crow_recording_location, location_is_strict
+    on big_waveform_info_df
+    
+    Returns: DataFrame
+        big_waveform_info_df
+    """
+    
+    ## Load waveform info stuff
+    big_waveform_info_df = pandas.read_pickle(
+        os.path.join(params['unit_db_dir'], 'big_waveform_info_df'))
+    big_waveform_info_df['stratum'] = 'deep'
+    big_waveform_info_df.loc[
+        big_waveform_info_df.layer.isin(['2/3', '4']), 'stratum'
+        ] = 'superficial'
+
+    # Drop 1 and 6b
+    if drop_1_and_6b:
+        big_waveform_info_df = big_waveform_info_df.loc[
+            ~big_waveform_info_df['layer'].isin(['1', '6b'])
+            ].copy()
+    
+    # Remove those levels
+    big_waveform_info_df.index = (
+        big_waveform_info_df.index.remove_unused_levels())
+
+
+    ## Join recording location
+    # Load and rename
+    recording_locations_table = pandas.read_csv(
+        os.path.join(params['unit_db_dir'], 
+        '20191007 electrode locations - Sheet1.csv')).rename(columns={
+        'Session': 'session', 'Closest column': 'recording_location', 
+        'Closest C-row column': 'crow_recording_location', 
+        }).set_index('session').sort_index()
+
+    # fillna the really off-target ones
+    recording_locations_table['crow_recording_location'] = (
+        recording_locations_table['crow_recording_location'].fillna('off'))
+
+    # Add a "strict" column where the recording was bona fide C-row
+    recording_locations_table['location_is_strict'] = (
+        recording_locations_table['recording_location'] ==
+        recording_locations_table['crow_recording_location'])
+
+    # Join onto bwid
+    big_waveform_info_df = big_waveform_info_df.join(recording_locations_table[
+        ['recording_location', 'crow_recording_location', 'location_is_strict']
+        ], on='session')
+    
+    # Error check
+    assert not big_waveform_info_df.isnull().any().any()
+    
+    return big_waveform_info_df
+    
 def load_session_metadata(params):
     """Load metadata about sessions, tasks, and mice.
     
@@ -68,6 +130,12 @@ def load_data_from_patterns(params, filename, dataset='no_opto',
             big_cycle_features
             big_touching_df
             big_tip_pos
+            big_grasp_df
+
+        These are unsupported, because they aren't indexed the same:
+            big_ccs_df
+            kappa_parameterized
+            peri_contact_kappa
     
     params : parameters from json file
 
@@ -117,36 +185,53 @@ def load_data_from_logreg(params, filename, dataset='no_opto', mouse2task=None):
     filename : string
         These are the valid options:
             unobliviated_unaggregated_features
-    
+            unobliviated_unaggregated_features_with_bin
+            obliviated_aggregated_features
+            obliviated_unaggregated_features_with_bin
+        
+        These are unsupported:
+            BINS
+        
     params : parameters from json file
 
     dataset : string or None
         If string, loads corresponding dataset, and includes only those
         trials in the result.
-        If None, returns original big_tm.
+        If None, returns without filtering.
+        
+        If filename == 'obliviated_aggregated_features' and dataset is not None,
+        then the pre-sliced version is loaded from the dataset directory.
     
-    mouse2task : Series, or None
+    mouse2task : Series or None
         If Series (from load_session_metadat), then adds mouse and task
-        levels to big_tm index.
+        levels to index.
         If None, does nothing.
     
     Returns: DataFrame
         The requested data.    
     """
-    # Load
-    full_filename = os.path.join(params['logreg_dir'], filename)
-    res = pandas.read_pickle(full_filename)
+    # Load, depending on filename
+    if filename == 'oblivated_aggregated_features' and dataset is not None:
+        # Special case: this was already sliced and dumped in the dataset dir
+        full_filename = os.path.join(
+            params['logreg_dir'], 'datasets', dataset, 'features')
+        res = pandas.read_pickle(full_filename)
+    
+    else:
+        # Load
+        full_filename = os.path.join(params['logreg_dir'], filename)
+        res = pandas.read_pickle(full_filename)
 
-    # Slice out the trials of this dataset (no_opto)
-    if dataset is not None:
-        # Load trials
-        included_trials = pandas.read_pickle(
-            os.path.join(params['logreg_dir'], 'datasets', dataset, 'labels')
-            ).index
-        
-        # Apply mask
-        res = my.misc.slice_df_by_some_levels(res, included_trials)
-        res.index = res.index.remove_unused_levels()
+        # Slice out the trials of this dataset (no_opto)
+        if dataset is not None:
+            # Load trials
+            included_trials = pandas.read_pickle(os.path.join(
+                params['logreg_dir'], 'datasets', dataset, 'labels')
+                ).index
+            
+            # Apply mask
+            res = my.misc.slice_df_by_some_levels(res, included_trials)
+            res.index = res.index.remove_unused_levels()
 
     # Insert mouse and task levels
     if mouse2task is not None:
