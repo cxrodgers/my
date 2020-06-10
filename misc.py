@@ -1604,3 +1604,11 @@ def load_bwid(*args, **kwargs):
     print("warning: replace my.misc.load_bwid with my.dataload.load_bwid")
     return my.dataload.load_bwid(*args, **kwargs)
     
+def stack_df_to_series(df):
+    """Stack DataFrame until it becomes a series"""
+
+    res = df.copy()
+    for n_stack in range(data.columns.nlevels):
+        res = res.stack()
+    
+    return res
