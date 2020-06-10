@@ -6,6 +6,7 @@ from past.utils import old_div
 import numpy as np
 import scipy.stats
 import pandas
+import statsmodels.stats.multitest
 
 try:
     import rpy2.robjects as robjects
@@ -14,7 +15,12 @@ except ImportError:
     # it's all good
     pass
 
-
+def adjust_pval(ser, method='fdr_bh'):
+    arr = statsmodels.stats.multitest.multipletests(
+        ser.values, method=method)[1]
+    res = pandas.Series(arr, index=ser.index)
+    return res
+    
 def z2p(zvals):
     """Return the two-tailed p-value corresponding to a z-stat"""
     norm_rv = scipy.stats.norm()
