@@ -144,8 +144,8 @@ def smooth_and_plot_versus_depth(
         'marker': 'o', 'ls': 'none', 'ms': 1.5, 'mew': 0, 'alpha': .25,
     
     smoothed_plot_kwargs : dict
-        Plot kwargs for individual data points.
-        Defaults: 'lw': 2,
+        Plot kwargs for smoothed line.
+        Defaults: 'lw': 1.5, 'path_effects': path_effects
     
     plot_layer_boundaries: bool
         If True, plot layer boundaries
