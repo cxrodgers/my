@@ -945,9 +945,6 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
 
     ## Iterate over sessions
     for session in list(feature_set.index.levels[0]):
-        # Verbose
-        if verbose:
-            print(session)
 
 
         ## Iterate over targets
