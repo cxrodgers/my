@@ -1566,6 +1566,8 @@ def grouped_bar_plot(df,
             bar.set_facecolor(plot_kwargs['fc'])
         if 'lw' in plot_kwargs:
             bar.set_linewidth(plot_kwargs['lw'])
+        if 'ls' in plot_kwargs:
+            bar.set_linestyle(plot_kwargs['ls'])
 
     # Plot datapoints
     if df.ndim > 1:
