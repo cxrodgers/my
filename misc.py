@@ -1512,7 +1512,7 @@ def fetch_columns_with_error_check(df, columns):
 
     # Error check
     # A missing label will be silently ignored above
-    assert list(res.columns.levels[0]) == sorted(columns)    
+    assert sorted(res.columns.levels[0]) == sorted(columns)    
     
     return res
 
