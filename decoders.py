@@ -376,12 +376,29 @@ def stratified_split_data(stratifications, n_splits=3,
 
 def logregress2(
     features, labels, train_indices, test_indices,
-    sample_weights=None, strats=None, regularization=10**5,
+    sample_weights, strats=None, regularization=10**5,
     testing_set_name='test', max_iter=10000, non_convergence_action='error',
     solver='liblinear', tol=1e-6, min_training_points=10,
+    balancing_method=None,
     ):
     """Run cross-validated logistic regression 
-       
+    
+    sample_weights : the weight of each sample
+        This is now required, even if it's supposed to be 1 for
+        all of the rows.
+    
+    strats : the class id of each sample
+    
+    balancing_method : string
+        If 'class weighting' or None:
+            Does nothing special, uses the `sample_weights` provided,
+            which should already have been balanced if desired.
+        If 'subsampling', then subsamples the training set.
+            In this case strats must be provided
+        In either case, if a strat is totally missing from the training
+        set, this will probably have undesired results by ignoring
+        that strat completely.
+    
     testing_set_name : this is used to set the values in the 'set' column
         of the per_row_df, and also in scores_df
         If this is a tuning set, pass 'tune'
@@ -398,7 +415,7 @@ def logregress2(
         For that, do this:
         import warnings
         from sklearn.exceptions import ConvergenceWarning
-        warnings.simplefilter("error", ConvergenceWarning)        
+        warnings.simplefilter("error", ConvergenceWarning)               
     
     Returns: dict
         'weights': logreg.coef_[0],
@@ -421,26 +438,50 @@ def logregress2(
     X_test = features[test_indices]
     y_train = labels[train_indices]
     y_test = labels[test_indices]
-    
-    
-    ## Set up sample weights
-    ## Note that this doesn't know about missing stratifications, so
-    ## if there's a strat missing, it just will be ignored
-    # Get them if they don't exist
-    if sample_weights is None:
-        # Use strat if available, otherwise use 1
-        if strats is None:
-            sample_weights = np.ones(len(features))
-        else:
-            strat_id2weight, sample_weights = (
-                stratify_and_calculate_sample_weights(strats)
-            )
-    
-    # Split
     sample_weights_train = sample_weights[train_indices]
     sample_weights_test = sample_weights[test_indices]    
     
-
+    if strats is not None:
+        strats_train = strats[train_indices]
+        strats_test = strats[test_indices]
+    
+    
+    ## Sub-sample the training set
+    ## TODO: repeat this sub-sampling many times and average the results
+    if balancing_method == 'subsampling':
+        # Double-check that sample weights were NOT provided
+        assert (sample_weights == 1).all()
+        
+        # Double-check that strats were provided
+        assert strats is not None
+        
+        # Size of the minimal class
+        rownum2strat = pandas.Series(strats_train)
+        strat2n_rows = rownum2strat.value_counts().sort_index()
+        new_groupsize = strat2n_rows.min()
+        
+        # Choose new_groupsize rows from each strat
+        chosen_rows_l = []
+        for strat in rownum2strat.unique():
+            strat_rows = rownum2strat[rownum2strat == strat]
+            chosen_rows = np.random.choice(
+                strat_rows.index.values, new_groupsize, replace=False)
+            chosen_rows_l.append(chosen_rows)
+        
+        # Select only chosen rows
+        all_chosen_rows = np.sort(np.concatenate(chosen_rows_l))
+        
+        # Error check
+        assert (
+            rownum2strat.loc[all_chosen_rows].value_counts() == new_groupsize
+            ).all()
+        
+        # Apply
+        X_train = X_train[all_chosen_rows]
+        y_train = y_train[all_chosen_rows]
+        sample_weights_train = sample_weights_train[all_chosen_rows]
+    
+    
     ## Fit
     # Initialize fitter
     logreg = sklearn.linear_model.LogisticRegression(
@@ -487,7 +528,7 @@ def logregress2(
         res_df['set'].isin([testing_set_name, 'train']),
         ['set', 'pred_correct', 'weighted_correct']
         ].groupby('set').mean()
-    
+
     
     ## Return
     output = {
@@ -500,8 +541,12 @@ def logregress2(
 
 
 def tuned_logregress(folds, norm_session_features, intified_labels,
-    sample_weights, reg_l):
+    sample_weights, reg_l, intified_session_classes=None,
+    balancing_method=None):
     """Train over all splits and all regularizations, evaluate on the tuning set
+
+    balancing_method : string, or None
+        Simply passed to logregress2
 
     If some stratifications are very small, they will be missing from the
     test, tune, or train set on some splits. When it's missing from
@@ -540,6 +585,8 @@ def tuned_logregress(folds, norm_session_features, intified_labels,
                 sample_weights=sample_weights,
                 regularization=10 ** reg,
                 testing_set_name='tune',
+                strats=intified_session_classes.values,
+                balancing_method=balancing_method,
                 )                    
             
             # Rename the sets, because  the unused rows marked with 
@@ -888,6 +935,7 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
     verbose=True,
     min_class_size_warn_thresh=2,
     random_seed=None,
+    balancing_method='sample weighting',
     ):
     """Runs behavioral classifier on all targets and sessions
     
@@ -911,6 +959,10 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
     min_class_size_warn_thresh : int
         If `verbose` and the size of any stratification is less than
         this value, print a warning.
+    
+    balancing_method : string
+        If 'sample weighting': Calculates sample_weight based on stratificatinos
+        If 'subsampling': Subsamples by stratification
     
     Returns: dict
         'best_reg_by_split' 
@@ -970,11 +1022,18 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
             intified_session_classes = intify_classes(
                 session_classes, by=stratify_by)
             
-            # Calculate sample weights from strats
-            strat_id2weight, sample_weights = (
-                stratify_and_calculate_sample_weights(
-                intified_session_classes.values)
-            )
+            # Determine sample weighting
+            if balancing_method == 'sample weighting':
+                # Calculate sample weights from intified_session_classes
+                strat_id2weight, sample_weights = (
+                    stratify_and_calculate_sample_weights(
+                    intified_session_classes.values)
+                )
+            elif balancing_method == 'subsampling':
+                strat_id2weight = dict([
+                    (class_idx, 1.0) 
+                    for class_idx in intified_session_classes.unique()])
+                sample_weights = np.ones(len(intified_session_classes))
 
             # Stratified splits into folds
             folds = stratified_split_data(
@@ -1026,7 +1085,8 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
                 intified_labels = (session_labels == 'convex').astype(np.int)
             elif target in ['rewside', 'choice']:
                 intified_labels = (session_labels == 'right').astype(np.int)
-
+            
+            
             ## Tune and run
             session_tuning_keys_l, session_tuning_results_l = (
                 tuned_logregress(
@@ -1035,6 +1095,8 @@ def iterate_behavioral_classifiers_over_targets_and_sessions(
                 intified_labels,
                 sample_weights, 
                 reg_l,
+                intified_session_classes=intified_session_classes,
+                balancing_method=balancing_method,
             ))
             session_tuning_keys_l = [tuple([session, target] + list(tup))
                 for tup in session_tuning_keys_l]
