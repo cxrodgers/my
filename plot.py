@@ -357,9 +357,9 @@ def plot_by_depth_and_layer(df, column, combine_layer_5=True, aggregate='median'
             counts_by_bin = gobj.size()
         
             # Aggregate
-            if aggregate is 'mean':
+            if aggregate == 'mean':
                 agg_by_bin = gobj.mean()
-            elif aggregate is 'median':
+            elif aggregate == 'median':
                 agg_by_bin = gobj.median()
             else:
                 raise ValueError("unrecognized aggregated method: {}".format(aggregate))
