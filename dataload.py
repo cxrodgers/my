@@ -72,7 +72,7 @@ def load_session_metadata(params):
         session_df, task2mouse, mouse2task
     """
     session_df = pandas.read_pickle(
-        os.path.join(params['pipeline_output_dir'], 'session_df'))
+        os.path.join(params['pipeline_input_dir'], 'session_df'))
     task2mouse = session_df.groupby('task')['mouse'].unique()
     mouse2task = session_df[
         ['task', 'mouse']].drop_duplicates().set_index('mouse')['task']
