@@ -15,7 +15,10 @@ import MCwatch.behavior
 import ArduFSM
 import tables
 import kkpandas
-import Adapters
+try:
+    import Adapters
+except ImportError:
+    pass
 import os
 import pandas
 import scipy.io
