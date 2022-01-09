@@ -1347,13 +1347,17 @@ def insert_mouse_and_task_levels(df, mouse2task, level=0, sort=True):
     
     return df
 
-def slice_df_by_some_levels(df, slicing_midx):
+def slice_df_by_some_levels(df, slicing_midx, drop=False):
     """Slice DataFrame by a subset of the levels in its index.
     
     df : DataFrame
     
     slicing_midx : a MultiIndex to slice it with
     
+    drop : bool
+        If True, then invert the mask before slicing, so it returns everything
+        except for the indices in slicing_midx.
+        
     Returns : DataFrame
     """
     # The levels to slice on, in sorted order
@@ -1373,12 +1377,21 @@ def slice_df_by_some_levels(df, slicing_midx):
     # Drop duplicates on the slicing midx (otherwise merging makes it too big)
     df1 = df1.drop_duplicates()
     
+    # Merge
     df2 = df.index.to_frame().reset_index(drop=True)
     df1['key'] = 1
     mask = ~pandas.merge(
         df2, df1, on=slicing_levels, how='left')[
         'key'].isnull()
-    return df.loc[mask.values]    
+    
+    # Optionally invert
+    if drop:
+        mask = ~mask
+    
+    # Slice
+    res = df.loc[mask.values]
+    
+    return res
 
 def assert_index_equal_on_levels(df1, df2, levels):
     """Check that the indexes of df1 and df2 are equal, considering only levels
