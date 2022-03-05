@@ -904,7 +904,10 @@ def load_timestamps_of_syncing_signal(data_folder, recording_number,
 
     # Error check
     n_records = len(timestamps)
-    assert n_records == my.OpenEphys.get_number_of_records(full_sync_filename)
+    if ignore_last_record:
+        assert n_records == (my.OpenEphys.get_number_of_records(full_sync_filename) - 1)
+    else:
+        assert n_records == my.OpenEphys.get_number_of_records(full_sync_filename)
 
     return timestamps
 
