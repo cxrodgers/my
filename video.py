@@ -12,7 +12,10 @@ import subprocess
 import re
 import datetime
 import os
-import ffmpeg
+try:
+    import ffmpeg
+except ImportError:
+    pass
 
 class OutOfFrames(BaseException):
     """Exception raised when more frames cannot be extracted from a video"""
