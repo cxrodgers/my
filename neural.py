@@ -115,7 +115,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     # Optionally highpass
     if highpass not in [None, False]:
         # Default value is 300 Hz
-        if highpass == True:
+        if highpass is True:
             highpass = 300.
         
         # Generate filter
