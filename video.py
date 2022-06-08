@@ -639,6 +639,18 @@ class WebcamController(object):
             'gain_automatic': 0,
             'auto_exposure': 1, # flipped
             }
+        
+        # Above are for the PS3 Eye
+        # This is for C270
+        self.image_controls = {
+            'gain': 3,
+            'exposure_absolute': 1000,
+            'brightness': 40,
+            'contrast': 30,
+            'saturation': 69,
+            'white_balance_temperature_auto': 0,
+            'exposure_auto': 1,
+            }            
         if image_controls is not None:
             self.image_controls.update(image_controls)
         
