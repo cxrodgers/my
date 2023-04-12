@@ -800,3 +800,192 @@ class WebcamControllerFFplay(WebcamController):
                     self.ffplay_proc.communicate())
         except AttributeError:
             pass
+
+
+## These were copied in from WhiskiWrap, use these from now on
+class FFmpegReader(object):
+    """Reads frames from a video file using ffmpeg process"""
+    def __init__(self, input_filename, pix_fmt='gray', bufsize=10**9,
+        duration=None, start_frame_time=None, start_frame_number=None,
+        write_stderr_to_screen=False, vsync='drop'):
+        """Initialize a new reader
+        
+        input_filename : name of file
+        pix_fmt : used to format the raw data coming from ffmpeg into
+            a numpy array
+        bufsize : probably not necessary because we read one frame at a time
+        duration : duration of video to read (-t parameter)
+        start_frame_time, start_frame_number : -ss parameter
+            Parsed using my.video.ffmpeg_frame_string
+        write_stderr_to_screen : if True, writes to screen, otherwise to
+            /dev/null
+        """
+        self.input_filename = input_filename
+    
+        # Get params
+        self.frame_width, self.frame_height, self.frame_rate = \
+            my.video.get_video_params(input_filename)
+        
+        # Set up pix_fmt
+        if pix_fmt == 'gray':
+            self.bytes_per_pixel = 1
+        elif pix_fmt == 'rgb24':
+            self.bytes_per_pixel = 3
+        else:
+            raise ValueError("can't handle pix_fmt:", pix_fmt)
+        self.read_size_per_frame = self.bytes_per_pixel * \
+            self.frame_width * self.frame_height
+        
+        # Create the command
+        command = ['ffmpeg']
+        
+        # Add ss string
+        if start_frame_time is not None or start_frame_number is not None:
+            ss_string = my.video.ffmpeg_frame_string(input_filename,
+                frame_time=start_frame_time, frame_number=start_frame_number)
+            command += [
+                '-ss', ss_string]
+        
+        command += [
+            '-i', input_filename,
+            '-vsync', vsync,
+            '-f', 'image2pipe',
+            '-pix_fmt', pix_fmt]
+        
+        # Add duration string
+        if duration is not None:
+            command += [
+                '-t', str(duration),]
+        
+        # Add vcodec for pipe
+        command += [
+            '-vcodec', 'rawvideo', '-']
+        
+        # To store result
+        self.n_frames_read = 0
+
+        # stderr
+        if write_stderr_to_screen:
+            stderr = None
+        else:
+            stderr = open(os.devnull, 'w')
+
+        # Init the pipe
+        # We set stderr to null so it doesn't fill up screen or buffers
+        # And we set stdin to PIPE to keep it from breaking our STDIN
+        self.ffmpeg_proc = subprocess.Popen(command, 
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=stderr, 
+            bufsize=bufsize)
+
+    def iter_frames(self):
+        """Yields one frame at a time
+        
+        When done: terminates ffmpeg process, and stores any remaining
+        results in self.leftover_bytes and self.stdout and self.stderr
+        
+        It might be worth writing this as a chunked reader if this is too
+        slow. Also we need to be able to seek through the file.
+        """
+        # Read this_chunk, or as much as we can
+        while(True):
+            raw_image = self.ffmpeg_proc.stdout.read(self.read_size_per_frame)
+
+            # check if we ran out of frames
+            if len(raw_image) != self.read_size_per_frame:
+                self.leftover_bytes = raw_image
+                self.close()
+                return
+        
+            # Convert to array
+            flattened_im = np.fromstring(raw_image, dtype='uint8')
+            if self.bytes_per_pixel == 1:
+                frame = flattened_im.reshape(
+                    (self.frame_height, self.frame_width))
+            else:
+                frame = flattened_im.reshape(
+                    (self.frame_height, self.frame_width, self.bytes_per_pixel))
+
+            # Update
+            self.n_frames_read = self.n_frames_read + 1
+
+            # Yield
+            yield frame
+    
+    def close(self):
+        """Closes the process"""
+        # Need to terminate in case there is more data but we don't
+        # care about it
+        # But if it's already terminated, don't try to terminate again
+        if self.ffmpeg_proc.returncode is None:
+            self.ffmpeg_proc.terminate()
+        
+            # Extract the leftover bits
+            self.stdout, self.stderr = self.ffmpeg_proc.communicate()
+        
+        return self.ffmpeg_proc.returncode
+    
+    def isclosed(self):
+        if hasattr(self.ffmpeg_proc, 'returncode'):
+            return self.ffmpeg_proc.returncode is not None
+        else:
+            # Never even ran? I guess this counts as closed.
+            return True
+
+class FFmpegWriter(object):
+    """Writes frames to an ffmpeg compression process"""
+    def __init__(self, output_filename, frame_width, frame_height,
+        output_fps=30, vcodec='libx264', qp=15, preset='medium',
+        input_pix_fmt='gray', output_pix_fmt='yuv420p', 
+        write_stderr_to_screen=False):
+        """Initialize the ffmpeg writer
+        
+        output_filename : name of output file
+        frame_width, frame_height : Used to inform ffmpeg how to interpret
+            the data coming in the stdin pipe
+        output_fps : frame rate
+        input_pix_fmt : Tell ffmpeg how to interpret the raw data on the pipe
+            This should match the output generated by frame.tostring()
+        output_pix_fmt : pix_fmt of the output
+        crf : quality. 0 means lossless
+        preset : speed/compression tradeoff
+        write_stderr_to_screen :
+            If True, writes ffmpeg's updates to screen
+            If False, writes to /dev/null
+        
+        With old versions of ffmpeg (jon-severinsson) I was not able to get
+        truly lossless encoding with libx264. It was clamping the luminances to
+        16..235. Some weird YUV conversion? 
+        '-vf', 'scale=in_range=full:out_range=full' seems to help with this
+        In any case it works with new ffmpeg. Also the codec ffv1 will work
+        but is slightly larger filesize.
+        """
+        # Open an ffmpeg process
+        cmdstring = ('ffmpeg', 
+            '-y', '-r', '%d' % output_fps,
+            '-s', '%dx%d' % (frame_width, frame_height), # size of image string
+            '-pix_fmt', input_pix_fmt,
+            '-f', 'rawvideo',  '-i', '-', # raw video from the pipe
+            '-pix_fmt', output_pix_fmt,
+            '-vcodec', vcodec,
+            '-qp', str(qp), 
+            '-preset', preset,
+            output_filename) # output encoding
+        
+        if write_stderr_to_screen:
+            self.ffmpeg_proc = subprocess.Popen(cmdstring, stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE)
+        else:
+            self.ffmpeg_proc = subprocess.Popen(cmdstring, stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=open('/dev/null', 'w'))       
+    
+    def write(self, frame):
+        """Write a frame to the ffmpeg process"""
+        self.ffmpeg_proc.stdin.write(frame.tostring())
+    
+    def write_bytes(self, bytestring):
+        self.ffmpeg_proc.stdin.write(bytestring)
+    
+    def close(self):
+        """Closes the ffmpeg process and returns stdout, stderr"""
+        return self.ffmpeg_proc.communicate()
