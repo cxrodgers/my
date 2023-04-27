@@ -13,6 +13,8 @@ import re
 import datetime
 import os
 import ffmpeg
+import matplotlib.pyplot as plt
+import my.plot
 
 class OutOfFrames(BaseException):
     """Exception raised when more frames cannot be extracted from a video"""
@@ -989,3 +991,298 @@ class FFmpegWriter(object):
     def close(self):
         """Closes the ffmpeg process and returns stdout, stderr"""
         return self.ffmpeg_proc.communicate()
+
+
+## Functions for creating output videos with overlays
+def frame_update(
+    ax, nframe, frame, plot_handles, node_positions, edge_names, im2, d_spatial, 
+    d_temporal, node_plot_kwargs=None, edge_plot_kwargs=None,
+    ):
+    """Helper function to plot each frame.
+    
+    ax : the axis to plot in
+    
+    nframe : number of frame
+        This is used to determine which whiskers and which contacts to plot
+    
+    frame : the image data
+    
+    plot_handles : list
+        This contains handles to existing plots (lines, markers, etc) in the 
+        current axis. First, all of these handles will be removed from the
+        plot and from this list. Then, new handles will be created for data
+        from this frame, plotted into the axis, and stored in this list.
+    
+    node_positions : DataFrame or None
+        If not None, this contains the coordinates of named nodes.
+        index : frame
+        columns : (node_name, coord)
+            'coord' has two values: 'x' and 'y'
+    
+    edge_names : list-like of 2-tuple-like
+        A list of edges
+        Each item is a pair of node names to be connected with an edge
+    
+    im2
+    
+    d_spatial
+    
+    d_temporal
+    
+    node_plot_kwargs : dict or None
+        How to plot the nodes
+    
+    edge_plot_kwargs : dict
+        How to plot the edges
+    
+    Returns: plot_handles
+        These are returned so that they can be deleted next time
+    """
+    # set defaults
+    if node_plot_kwargs is None:
+        node_plot_kwargs = {
+            'lw': 0,
+            'marker': 'o',
+            'ms': 6,
+            'mfc': 'none',
+            'color': 'yellow',
+        }
+    
+    if edge_plot_kwargs is None:
+        edge_plot_kwargs = {
+            'marker': None,
+            'lw': 1,
+            'color': 'yellow',
+            }
+    
+    # Get the frame
+    im2.set_data(frame[::d_spatial, ::d_spatial])
+    
+    # Get the whiskers for this frame
+    if node_positions is not None:
+        # Remove old whiskers
+        for handle in plot_handles:
+            handle.remove()
+        plot_handles = []            
+        
+        # Select out whiskers from this frame
+        try:
+            # This will become node_name on index and coord on columns
+            frame_node_positions = node_positions.loc[nframe].unstack('coord')
+        except KeyError:
+            frame_node_positions = None
+        
+        if frame_node_positions is not None:
+            # Plot all nodes
+            handle, = ax.plot(
+                frame_node_positions['x'].values,
+                frame_node_positions['y'].values,
+                **node_plot_kwargs,
+                )
+            
+            # Store the handle to the nodes
+            plot_handles.append(handle)
+
+            # Plot edges
+            # This ends up taking a bunch of time, try to optimize this
+            if edge_names is not None:
+                for edge_name in edge_names:
+                    # Plot this edge
+                    handle, = ax.plot(
+                        frame_node_positions['x'].loc[edge_name],
+                        frame_node_positions['y'].loc[edge_name],
+                        **edge_plot_kwargs,
+                        )
+                    
+                    # Store this edge
+                    plot_handles.append(handle)
+    
+    return plot_handles
+
+def write_video_with_overlays_from_data(output_filename, 
+    input_reader, input_width, input_height,
+    verbose=True,
+    frame_triggers=None, trigger_dstart=-250, trigger_dstop=50,
+    plot_trial_numbers=True,
+    d_temporal=5, d_spatial=1,
+    dpi=50, output_fps=30,
+    input_video_alpha=1,
+    node_positions=None,
+    edge_names=None,
+    write_stderr_to_screen=True,
+    input_frame_offset=0,
+    get_extra_text=None,
+    text_size=10,
+    ffmpeg_writer_kwargs=None,
+    f=None, ax=None,
+    func_update_figure=None,
+    ):
+    """Creating a video overlaid with whiskers, contacts, etc.
+    
+    The overall dataflow is this:
+    1. Load chunks of frames from the input
+    2. One by one, plot the frame with matplotlib. Overlay whiskers, edges,
+        contacts, whatever.
+    3. Dump the frame to an ffmpeg writer.
+    
+    # Input and output
+    output_filename : file to create
+    input_reader : PFReader or input video
+    
+    # Timing and spatial parameters
+    frame_triggers : Only plot frames within (trigger_dstart, trigger_dstop)
+        of a value in this array.
+    trigger_dstart, trigger_dstop : number of frames
+    d_temporal : Save time by plotting every Nth frame
+    d_spatial : Save time by spatially undersampling the image
+        The bottleneck is typically plotting the raw image in matplotlib
+    
+    # Video parameters
+    dpi : The output video will always be pixel by pixel the same as the
+        input (keeping d_spatial in mind). But this dpi value affects font
+        and marker size.
+    output_fps : set the frame rate of the output video (ffmpeg -r)
+    input_video_alpha : alpha of image
+    input_frame_offset : If you already seeked this many frames in the
+        input_reader. Thus, now we know that the first frame to be read is
+        actually frame `input_frame_offset` in the source (and thus, in
+        the edge_a, contacts_table, etc.). This is the only parameter you
+        need to adjust in this case, not frame_triggers or anything else.
+    ffmpeg_writer_kwargs : other parameters for FFmpegWriter
+    
+    # Other sources of input
+    edge_alpha : alpha of edge
+    post_contact_linger : How long to leave the contact displayed    
+        This is the total duration, so 0 will display nothing, and 1 is minimal.
+    
+    # Misc
+    get_extra_text : if not None, should be a function that accepts a frame
+        number and returns some text to add to the display. This is a 
+        "real" frame number after accounting for any offset.
+    text_size : size of the text
+    contact_colors : list of color specs to use
+    func_update_figure : optional, function that takes the frame number
+        as input and updates the figure
+    """
+    # Parse the arguments
+    frame_triggers = np.asarray(frame_triggers).astype(np.int)
+    announced_frame_trigger = 0
+    input_width = int(input_width)
+    input_height = int(input_height)
+
+    if ffmpeg_writer_kwargs is None:
+        ffmpeg_writer_kwargs = {}
+
+
+    ## Set up the graphical handles
+    if verbose:
+        print("setting up handles")
+
+    if ax is None:
+        # Create a figure with an image that fills it
+        # We want the figsize to be in inches, so divide by dpi
+        # And we want one invisible axis containing an image that fills the whole figure
+        figsize = (input_width / float(dpi), input_height / float(dpi))
+        f = plt.figure(frameon=False, dpi=(dpi / d_spatial), figsize=figsize)
+        ax = f.add_axes([0, 0, 1, 1])
+        ax.axis('off')
+    
+        # This return results in pixels, so should be the same as input width
+        # and height. If not, probably rounding error above
+        canvas_width, canvas_height = f.canvas.get_width_height()
+        if (
+            (input_width / d_spatial != canvas_width) or
+            (input_height / d_spatial != canvas_height)
+            ):
+            raise ValueError("canvas size is not the same as input size")        
+    else:
+        assert f is not None
+        
+        # This is used later in creating the writer
+        canvas_width, canvas_height = f.canvas.get_width_height()
+
+    # Plot input video frames
+    in_image = np.zeros((input_height, input_width))
+    im2 = my.plot.imshow(in_image[::d_spatial, ::d_spatial], ax=ax, 
+        axis_call='image', cmap=plt.cm.gray, 
+        extent=(0, input_width, input_height, 0))
+    im2.set_alpha(input_video_alpha)
+    im2.set_clim((0, 255))
+
+    # Text of trial
+    if plot_trial_numbers:
+        # Generate a handle to text
+        txt = ax.text(
+            .02, .02, 'waiting for text data',
+            transform=ax.transAxes, # relative to axis size
+            size=text_size, ha='left', va='bottom', color='w', 
+            )
+    
+    # This will hold whisker objects
+    whisker_handles = []
+    
+    # Create the writer
+    writer = FFmpegWriter(
+        output_filename=output_filename,
+        frame_width=canvas_width,
+        frame_height=canvas_height,
+        output_fps=output_fps,
+        input_pix_fmt='argb',
+        write_stderr_to_screen=write_stderr_to_screen,
+        **ffmpeg_writer_kwargs
+        )
+    
+    ## Loop until input frames exhausted
+    for nnframe, frame in enumerate(input_reader.iter_frames()):
+        # Account for the fact that we skipped the first input_frame_offset frames
+        nframe = nnframe + input_frame_offset
+        
+        # Break if we're past the last trigger
+        if nframe > np.max(frame_triggers) + trigger_dstop:
+            break
+        
+        # Skip if we're not on a dframe
+        if np.mod(nframe, d_temporal) != 0:
+            continue
+        
+        # Skip if we're not near a trial
+        nearest_choice_idx = np.nanargmin(np.abs(frame_triggers - nframe))
+        nearest_choice = frame_triggers[nearest_choice_idx]
+        if not (nframe > nearest_choice + trigger_dstart and 
+            nframe < nearest_choice + trigger_dstop):
+            continue
+
+        # Announce
+        if ((announced_frame_trigger < len(frame_triggers)) and 
+            (nframe > frame_triggers[announced_frame_trigger] + trigger_dstart)):
+            print("Reached trigger for frame", frame_triggers[announced_frame_trigger])
+            announced_frame_trigger += 1
+
+        # Update the trial text
+        if plot_trial_numbers:
+            if get_extra_text is not None:
+                extra_text = get_extra_text(nframe)
+            else:
+                extra_text = ''
+            txt.set_text('frame %d %s' % (nframe, extra_text))
+
+        # Update the frame
+        whisker_handles = frame_update(
+            ax, nframe, frame, whisker_handles, node_positions, edge_names,
+            im2, 
+            d_spatial, d_temporal,
+            )
+        
+        if func_update_figure is not None:
+            func_update_figure(nframe)
+        
+        # Write to pipe
+        f.canvas.draw()
+        string_bytes = f.canvas.tostring_argb()
+        writer.write_bytes(string_bytes)
+    
+    ## Clean up
+    if not input_reader.isclosed():
+        input_reader.close()
+    writer.close()
+    plt.close(f)    
