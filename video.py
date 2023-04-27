@@ -824,7 +824,7 @@ class FFmpegReader(object):
     
         # Get params
         self.frame_width, self.frame_height, self.frame_rate = \
-            my.video.get_video_params(input_filename)
+            get_video_params(input_filename)
         
         # Set up pix_fmt
         if pix_fmt == 'gray':
@@ -841,7 +841,7 @@ class FFmpegReader(object):
         
         # Add ss string
         if start_frame_time is not None or start_frame_number is not None:
-            ss_string = my.video.ffmpeg_frame_string(input_filename,
+            ss_string = ffmpeg_frame_string(input_filename,
                 frame_time=start_frame_time, frame_number=start_frame_number)
             command += [
                 '-ss', ss_string]
