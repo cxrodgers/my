@@ -23,29 +23,6 @@ import glob
 import my
 import pandas
 
-## Deprecated stuff
-from my.video import OutOfFrames
-
-def frame_dump(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.frame_dump(*args, **kwargs)
-
-def frame_dump_pipe(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.get_frame(*args, **kwargs)
-    
-def process_chunks_of_video(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.process_chunks_of_video(*args, **kwargs)
-
-def get_video_aspect(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.get_video_aspect(*args, **kwargs)
-
-def get_video_duration(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.get_video_duration(*args, **kwargs)
-##
 
 def globjoin(dirname, pattern, normalize=True):
     """Join dirname to pattern, and glob it
