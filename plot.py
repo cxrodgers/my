@@ -573,6 +573,11 @@ def font_embed():
     
     # seems to work better
     matplotlib.rcParams['svg.fonttype'] = 'none'
+    
+    # This explicitly sets the font.family as Arial
+    # Otherwise it is the default (sans-serif) which was interpreted as 
+    # Arial by AI, but as something else by Inkscape.
+    matplotlib.rcParams['font.family'] = 'Arial'
 
 def manuscript_defaults():
     """For putting into a word document.
