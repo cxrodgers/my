@@ -736,42 +736,32 @@ def interp_nans(signal, axis=1, left=None, right=None, dtype=np.float):
 
 
 # Correlation and coherence functions
-def correlate(v0, v1, mode='valid', normalize=True, auto=False):
+def correlate(v0, v1, mode='same', auto=False):
     """Wrapper around np.correlate to calculate the timepoints
 
-    'full' : all possible overlaps, from last of first and beginning of
-        second, to vice versa. Total length: 2*N - 1
-    'same' : Slice out the central 'N' of 'full'. There will be one more
-        negative than positive timepoint.
-    'valid' : only overlaps where all of both arrays are included
+    See scipy.signal.correlate for details on `mode`. I like to use 'same'
+    because it avoids the very large lags, but note that the length of the
+    returned data will be equal to the length of `v1`. 
+    'valid' avoid zero-padding but can only be used when one signal is 
+    longer than the other.
     
-    normalize: accounts for the amount of data in each bin
     auto: sets the center peak to zero
     
     Positive peaks (latter half of the array) mean that the second array
     leads the first array.
    
+    Return: counts, corrn
+        counts: the counts
+        corrn: the offset
     """
-    counts = np.correlate(v0, v1, mode=mode)
-    
-    if len(v0) != len(v1):
-        raise ValueError('not tested')
-    
-    if mode == 'full':
-        corrn = np.arange(-len(v0) + 1, len(v0), dtype=np.int)
-    elif mode == 'same':
-        corrn = np.arange(old_div(-len(v0), 2), len(v0) - (old_div(len(v0), 2)), 
-            dtype=np.int)
-    else:
-        raise ValueError('mode not tested')
-    
-    if normalize:
-        counts = old_div(counts, (len(v0) - np.abs(corrn)).astype(np.float))
+    # Calculate the correlation and the lags
+    corr_vals = scipy.signal.correlate(v0, v1, mode=mode, method='auto')
+    corr_lags = scipy.signal.correlation_lags(len(v0), len(v1), mode=mode)
     
     if auto:
-        counts[corrn == 0] = 0
+        corr_vals[corr_lags == 0] = 0
     
-    return counts, corrn
+    return corr_vals, corr_lags
 
 def binned_pair2cxy(binned0, binned1, Fs=1000., NFFT=256, noverlap=None,
     windw=mlab.window_hanning, detrend=mlab.detrend_mean, freq_high=100,
