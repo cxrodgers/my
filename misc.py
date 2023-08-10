@@ -363,7 +363,7 @@ def pickle_dump(obj, filename):
 
 def invert_linear_poly(p):
     """Helper function for inverting fit.coeffs"""
-    return old_div(np.array([1, -p[1]]).astype(np.float), p[0])
+    return old_div(np.array([1, -p[1]]).astype(float), p[0])
 
 def apply_and_filter_by_regex(pattern, list_of_strings, sort=True):
     """Apply regex pattern to each string and return result.
@@ -720,7 +720,7 @@ def gaussian_smooth(signal, gstd=100, glen=None, axis=1, **filtfilt_kwargs):
     
     return res
 
-def interp_nans(signal, axis=1, left=None, right=None, dtype=np.float):
+def interp_nans(signal, axis=1, left=None, right=None, dtype=float):
     """Replaces nans in signal by interpolation along axis
     
     signal : array-like, containing NaNs
@@ -731,7 +731,7 @@ def interp_nans(signal, axis=1, left=None, right=None, dtype=np.float):
         conversion to np.object
     """
     # Convert to array
-    res = np.asarray(signal, dtype=np.float).copy()
+    res = np.asarray(signal, dtype=float).copy()
 
     # 1d or 2d behavior
     if res.ndim == 1:
@@ -789,7 +789,7 @@ def correlate(v0, v1, mode='valid', normalize=True, auto=False):
         raise ValueError('mode not tested')
     
     if normalize:
-        counts = old_div(counts, (len(v0) - np.abs(corrn)).astype(np.float))
+        counts = old_div(counts, (len(v0) - np.abs(corrn)).astype(float))
     
     if auto:
         counts[corrn == 0] = 0
@@ -1114,7 +1114,7 @@ def find_interval(event_times, interval_starts, interval_stops,
     contained_mask = start_idx == stop_idx
     
     # Blank out interval where not contained
-    res = start_idx.astype(np.float)
+    res = start_idx.astype(float)
     res[~contained_mask] = np.nan
     
     return res
