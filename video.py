@@ -346,7 +346,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
             
             # check if we ran out of frames
             if len(raw_image) < read_size_per_frame * this_chunk:
-                print("warning: ran out of frames")
+                #print("warning: ran out of frames")
                 out_of_frames = True
                 this_chunk = old_div(len(raw_image), read_size_per_frame)
                 assert this_chunk * read_size_per_frame == len(raw_image)
@@ -387,7 +387,11 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     if not np.isinf(n_frames) and frames_read != n_frames:
         # This usually happens when there's some rounding error in the frame
         # times
-        raise ValueError("did not read the correct number of frames")
+        # But it can also happen if more frames are requested than length
+        # of video
+        # So just warn, not error
+        print("warning: requested {} frames but only read {}".format(
+            n_frames, frames_read))
 
     # Stick chunks together
     if len(res_l) == 0:
