@@ -79,13 +79,22 @@ def ffmpeg_frame_string(filename, frame_time=None, frame_number=None):
     return use_frame_string
 
 def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
-    pix_fmt='gray', bufsize=10**9, path_to_ffmpeg='ffmpeg', vsync='drop'):
+    pix_fmt='gray', bufsize=10**9, path_to_ffmpeg='ffmpeg', vsync='drop',
+    n_frames=1):
     """Returns a single frame from a video as an array.
     
     This creates an ffmpeg process and extracts data from it with a pipe.
 
+    This syntax is used to seek with ffmpeg:
+        ffmpeg -ss %frametime% -i %filename% ...
+    This is supposed to be relatively fast while still accurate.
+    
+    Parameters
+    ----------
     filename : video filename
+    
     frame_string : to pass to -ss
+    
     frametime, frame_number:
         If frame_string is None, then these are passed to 
         ffmpeg_frame_string to generate a frame string.
@@ -94,26 +103,29 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
         currently only gray and rgb24 are accepted, because I need to 
         know how to reshape the result.
     
-    This syntax is used to seek with ffmpeg:
-        ffmpeg -ss %frametime% -i %filename% -vframes 1 ...
-    This is supposed to be relatively fast while still accurate.
+    n_frames : int
+        How many frames to get
     
-    TODO: Get this to return multiple frames from the same instance
     
-    Returns:
-        frame, stdout, stderr
-        frame : 2d array, of shape (height, width)
+    Returns
+    -------
+    tuple: (frame_data, stdout, stderr)
+        frame : numpy array
+            Generally the shape is (n_frames, height, width, n_channels)
+            Dimensions of size 1 are squeezed out
+        
         stdout : typically blank
+        
         stderr : ffmpeg's text output
     """
     v_width, v_height = get_video_aspect(filename)
     
     if pix_fmt == 'gray':
         bytes_per_pixel = 1
-        reshape_size = (v_height, v_width)
+        reshape_size = (n_frames, v_height, v_width)
     elif pix_fmt == 'rgb24':
         bytes_per_pixel = 3
-        reshape_size = (v_height, v_width, 3)
+        reshape_size = (n_frames, v_height, v_width, 3)
     else:
         raise ValueError("can't handle pix_fmt:", pix_fmt)
     
@@ -127,7 +139,7 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
         '-ss', frame_string,
         '-i', filename,
         '-vsync', vsync,
-        '-vframes', '1',       
+        '-vframes', str(n_frames),
         '-f', 'image2pipe',
         '-pix_fmt', pix_fmt,
         '-vcodec', 'rawvideo', '-']
@@ -144,16 +156,27 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
         bufsize=bufsize)
 
     try:
-        read_size = bytes_per_pixel * v_width * v_height
+        # Read
+        read_size = bytes_per_pixel * v_width * v_height * n_frames
         raw_image = pipe.stdout.read(read_size)    
+        
+        # Raise if not enough data
         if len(raw_image) < read_size:
             raise OutOfFrames        
+        
+        # Convert to numpy
         flattened_im = np.fromstring(raw_image, dtype='uint8')
-        frame = flattened_im.reshape(reshape_size)    
+        
+        # Reshape
+        frame_data = flattened_im.reshape(reshape_size)    
+        
+        # Squeeze if n_frames == 1
+        if n_frames == 1:
+            frame_data = frame_data[0]
     
     except OutOfFrames:
         print("warning: cannot get frame")
-        frame = None
+        frame_data = None
     
     finally:
         # Restore stdout
@@ -168,7 +191,7 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
         if stderr is not None:
             stderr = stderr.decode('utf-8')
     
-    return frame, stdout, stderr
+    return frame_data, stdout, stderr
 
 
 def frame_dump(filename, frametime, output_filename='out.png', 
