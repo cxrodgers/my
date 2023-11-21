@@ -192,12 +192,12 @@ class Spectrogrammer(object):
                 Fs * new_bin_width_sec / float(NFFT - noverlap)
             
             # If this is not achievable, then try again with minimal downsampling
-            if np.rint(self.downsample_ratio).astype(np.int) < 1:
+            if np.rint(self.downsample_ratio).astype(int) < 1:
                 self.downsample_ratio = 1
-                noverlap = np.rint(NFFT - Fs * new_bin_width_sec).astype(np.int)
+                noverlap = np.rint(NFFT - Fs * new_bin_width_sec).astype(int)
             
         # Convert to nearest int and test if possible
-        self.downsample_ratio = np.rint(self.downsample_ratio).astype(np.int)        
+        self.downsample_ratio = np.rint(self.downsample_ratio).astype(int)        
         if self.downsample_ratio == 0:
             print("requested temporal resolution too high, using maximum")
             self.downsample_ratio = 1
@@ -393,7 +393,7 @@ def rint(arr):
     """
     if np.any(np.isnan(np.asarray(arr))):
         raise ValueError("cannot convert arrays containing NaN to int")
-    return np.rint(arr).astype(np.int)
+    return np.rint(arr).astype(int)
 
 def is_nonstring_iter(val):
     """Check if the input is iterable, but not a string.
@@ -442,7 +442,7 @@ def pick(df, isnotnull=None, **kwargs):
     add flags for string behavior, AND/OR behavior, error if item not found,
     return unique, ....
     """
-    msk = np.ones(len(df), dtype=np.bool)
+    msk = np.ones(len(df), dtype=bool)
     for key, val in list(kwargs.items()):
         if val is None:
             continue
@@ -911,11 +911,11 @@ def define_integer_bin_edges(start, stop, n_bins=None, binwidth=None,
             
             # Do float and then round off
             fres = np.linspace(start, stop, n_bins)
-            res = np.round(fres).astype(np.int)
+            res = np.round(fres).astype(int)
         else:
             # Divides evenly so use arange
             binwidth = (stop - start) // n_bins
-            res = np.arange(start, stop + 1, binwidth, dtype=np.int)
+            res = np.arange(start, stop + 1, binwidth, dtype=int)
         
     elif binwidth is not None and n_bins is None:
         # bin width was provided
@@ -924,7 +924,7 @@ def define_integer_bin_edges(start, stop, n_bins=None, binwidth=None,
         if int(binwidth) != binwidth:
             raise ValueError("binwidth must be integer")
         
-        res = np.arange(start, stop + 1, binwidth, dtype=np.int)
+        res = np.arange(start, stop + 1, binwidth, dtype=int)
         if res[-1] != stop:
             raise ValueError("specified bin width does not divide evenly")
     
@@ -1109,7 +1109,7 @@ def cut_dataframe(df, column, edges, new_column='bin', dropna=True, **kwargs):
     # Drop outside range
     if dropna:
         df = df[~df[new_column].isnull()]
-        df[new_column] = df[new_column].astype(np.int)
+        df[new_column] = df[new_column].astype(int)
     
     return df
 
