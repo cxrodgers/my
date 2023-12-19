@@ -17,6 +17,9 @@ import scipy.stats
 from . import misc
 import my
 import pandas
+import itertools
+import collections
+
 
 def alpha_blend_with_mask(rgb0, rgb1, alpha0, mask0):
     """Alpha-blend two RGB images, masking out one image.
@@ -1639,3 +1642,33 @@ def grouped_bar_plot(df,
                     **group_name_kwargs)
     
     return ax, bar_container
+
+def color_gradient(x, y, cmap):
+    # https://stackoverflow.com/a/73914475/1676378
+    """
+    Creates a line collection with a gradient from colors c1 to c2,
+    from data x and y.
+    """
+
+    def sliding_window(iterable, n):
+        # https://stackoverflow.com/a/73914475/1676378
+        """
+        sliding_window('ABCDEFG', 4) -> ABCD BCDE CDEF DEFG
+
+        recipe from python docs
+        """
+        it = iter(iterable)
+        window = collections.deque(itertools.islice(it, n), maxlen=n)
+        if len(window) == n:
+            yield tuple(window)
+        for x in it:
+            window.append(x)
+            yield tuple(window)
+    
+    n = len(x)
+    if len(y) != n:
+        raise ValueError('x and y data lengths differ')
+    return matplotlib.collections.LineCollection(
+        sliding_window(zip(x, y), 2),
+        colors=cmap.resampled(n).colors,
+        )

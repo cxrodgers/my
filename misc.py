@@ -1592,3 +1592,43 @@ def stack_df_to_series(df):
         res = res.stack()
     
     return res
+
+def join_level_onto_index(df, to_join, join_on=None, put_joined_first=True, 
+    sort=True):
+    """Join the columns of `to_join` onto the index of `df`.
+    
+    df : DataFrame
+        The result is a copy of this, plus some new levels on the index.
+    to_join : Series or DataFrame
+        All columns in to_join will be added to the index of the result.
+    join_on : IndexLabel or None
+        Passed to the `on` keyword of `join`
+    put_joined_first : bool
+        If True, all the columns of `to_join` will be first on the
+        resulting index. If False, they will be last.
+    sort : bool
+        If True, call sort_index() on the result
+    
+    Returns: DataFrame
+        The shape and the values are the same as `df`.
+        The index will have new levels on it.
+    """
+    res = df.copy()
+    midx = df.index.to_frame()
+    midx = midx.join(to_join, on=join_on)
+    
+    if put_joined_first:
+        if to_join.ndim == 1:
+            join_cols = [to_join.name]
+        else:
+            join_cols = list(to_join.columns)
+        
+        other_cols = [col for col in midx.columns if col not in join_cols]
+        midx = midx.loc[:, join_cols + other_cols]
+    
+    res.index = pandas.MultiIndex.from_frame(midx)
+    
+    if sort:
+        res = res.sort_index()
+    
+    return res
