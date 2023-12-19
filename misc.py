@@ -23,29 +23,6 @@ import glob
 import my
 import pandas
 
-## Deprecated stuff
-from my.video import OutOfFrames
-
-def frame_dump(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.frame_dump(*args, **kwargs)
-
-def frame_dump_pipe(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.get_frame(*args, **kwargs)
-    
-def process_chunks_of_video(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.process_chunks_of_video(*args, **kwargs)
-
-def get_video_aspect(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.get_video_aspect(*args, **kwargs)
-
-def get_video_duration(*args, **kwargs):
-    warnings.warn("use my.video instead of my.misc", stacklevel=2)
-    return my.video.get_video_duration(*args, **kwargs)
-##
 
 def globjoin(dirname, pattern, normalize=True):
     """Join dirname to pattern, and glob it
@@ -215,12 +192,12 @@ class Spectrogrammer(object):
                 Fs * new_bin_width_sec / float(NFFT - noverlap)
             
             # If this is not achievable, then try again with minimal downsampling
-            if np.rint(self.downsample_ratio).astype(np.int) < 1:
+            if np.rint(self.downsample_ratio).astype(int) < 1:
                 self.downsample_ratio = 1
-                noverlap = np.rint(NFFT - Fs * new_bin_width_sec).astype(np.int)
+                noverlap = np.rint(NFFT - Fs * new_bin_width_sec).astype(int)
             
         # Convert to nearest int and test if possible
-        self.downsample_ratio = np.rint(self.downsample_ratio).astype(np.int)        
+        self.downsample_ratio = np.rint(self.downsample_ratio).astype(int)        
         if self.downsample_ratio == 0:
             print("requested temporal resolution too high, using maximum")
             self.downsample_ratio = 1
@@ -416,7 +393,7 @@ def rint(arr):
     """
     if np.any(np.isnan(np.asarray(arr))):
         raise ValueError("cannot convert arrays containing NaN to int")
-    return np.rint(arr).astype(np.int)
+    return np.rint(arr).astype(int)
 
 def is_nonstring_iter(val):
     """Check if the input is iterable, but not a string.
@@ -465,7 +442,7 @@ def pick(df, isnotnull=None, **kwargs):
     add flags for string behavior, AND/OR behavior, error if item not found,
     return unique, ....
     """
-    msk = np.ones(len(df), dtype=np.bool)
+    msk = np.ones(len(df), dtype=bool)
     for key, val in list(kwargs.items()):
         if val is None:
             continue
@@ -759,42 +736,32 @@ def interp_nans(signal, axis=1, left=None, right=None, dtype=float):
 
 
 # Correlation and coherence functions
-def correlate(v0, v1, mode='valid', normalize=True, auto=False):
+def correlate(v0, v1, mode='same', auto=False):
     """Wrapper around np.correlate to calculate the timepoints
 
-    'full' : all possible overlaps, from last of first and beginning of
-        second, to vice versa. Total length: 2*N - 1
-    'same' : Slice out the central 'N' of 'full'. There will be one more
-        negative than positive timepoint.
-    'valid' : only overlaps where all of both arrays are included
+    See scipy.signal.correlate for details on `mode`. I like to use 'same'
+    because it avoids the very large lags, but note that the length of the
+    returned data will be equal to the length of `v1`. 
+    'valid' avoid zero-padding but can only be used when one signal is 
+    longer than the other.
     
-    normalize: accounts for the amount of data in each bin
     auto: sets the center peak to zero
     
     Positive peaks (latter half of the array) mean that the second array
     leads the first array.
    
+    Return: counts, corrn
+        counts: the counts
+        corrn: the offset
     """
-    counts = np.correlate(v0, v1, mode=mode)
-    
-    if len(v0) != len(v1):
-        raise ValueError('not tested')
-    
-    if mode == 'full':
-        corrn = np.arange(-len(v0) + 1, len(v0), dtype=np.int)
-    elif mode == 'same':
-        corrn = np.arange(old_div(-len(v0), 2), len(v0) - (old_div(len(v0), 2)), 
-            dtype=np.int)
-    else:
-        raise ValueError('mode not tested')
-    
-    if normalize:
-        counts = old_div(counts, (len(v0) - np.abs(corrn)).astype(float))
+    # Calculate the correlation and the lags
+    corr_vals = scipy.signal.correlate(v0, v1, mode=mode, method='auto')
+    corr_lags = scipy.signal.correlation_lags(len(v0), len(v1), mode=mode)
     
     if auto:
-        counts[corrn == 0] = 0
+        corr_vals[corr_lags == 0] = 0
     
-    return counts, corrn
+    return corr_vals, corr_lags
 
 def binned_pair2cxy(binned0, binned1, Fs=1000., NFFT=256, noverlap=None,
     windw=mlab.window_hanning, detrend=mlab.detrend_mean, freq_high=100,
@@ -944,11 +911,11 @@ def define_integer_bin_edges(start, stop, n_bins=None, binwidth=None,
             
             # Do float and then round off
             fres = np.linspace(start, stop, n_bins)
-            res = np.round(fres).astype(np.int)
+            res = np.round(fres).astype(int)
         else:
             # Divides evenly so use arange
             binwidth = (stop - start) // n_bins
-            res = np.arange(start, stop + 1, binwidth, dtype=np.int)
+            res = np.arange(start, stop + 1, binwidth, dtype=int)
         
     elif binwidth is not None and n_bins is None:
         # bin width was provided
@@ -957,7 +924,7 @@ def define_integer_bin_edges(start, stop, n_bins=None, binwidth=None,
         if int(binwidth) != binwidth:
             raise ValueError("binwidth must be integer")
         
-        res = np.arange(start, stop + 1, binwidth, dtype=np.int)
+        res = np.arange(start, stop + 1, binwidth, dtype=int)
         if res[-1] != stop:
             raise ValueError("specified bin width does not divide evenly")
     
@@ -1142,7 +1109,7 @@ def cut_dataframe(df, column, edges, new_column='bin', dropna=True, **kwargs):
     # Drop outside range
     if dropna:
         df = df[~df[new_column].isnull()]
-        df[new_column] = df[new_column].astype(np.int)
+        df[new_column] = df[new_column].astype(int)
     
     return df
 
@@ -1623,5 +1590,45 @@ def stack_df_to_series(df):
     res = df.copy()
     for n_stack in range(data.columns.nlevels):
         res = res.stack()
+    
+    return res
+    
+def join_level_onto_index(df, to_join, join_on=None, put_joined_first=True, 
+    sort=True):
+    """Join the columns of `to_join` onto the index of `df`.
+    
+    df : DataFrame
+        The result is a copy of this, plus some new levels on the index.
+    to_join : Series or DataFrame
+        All columns in to_join will be added to the index of the result.
+    join_on : IndexLabel or None
+        Passed to the `on` keyword of `join`
+    put_joined_first : bool
+        If True, all the columns of `to_join` will be first on the
+        resulting index. If False, they will be last.
+    sort : bool
+        If True, call sort_index() on the result
+    
+    Returns: DataFrame
+        The shape and the values are the same as `df`.
+        The index will have new levels on it.
+    """
+    res = df.copy()
+    midx = df.index.to_frame()
+    midx = midx.join(to_join, on=join_on)
+    
+    if put_joined_first:
+        if to_join.ndim == 1:
+            join_cols = [to_join.name]
+        else:
+            join_cols = list(to_join.columns)
+        
+        other_cols = [col for col in midx.columns if col not in join_cols]
+        midx = midx.loc[:, join_cols + other_cols]
+    
+    res.index = pandas.MultiIndex.from_frame(midx)
+    
+    if sort:
+        res = res.sort_index()
     
     return res

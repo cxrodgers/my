@@ -34,7 +34,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     max_data_size=1e6, highpass=False, probename=None,
     spike_times=None, clusters=None, cluster_list=None, features_masks=None,
     cluster2color=None, legend_t_width=.010, apply_offset=None,
-    plot_kwargs=None, legend_y_height=500):
+    plot_kwargs=None, trace_plot_kwargs=None, legend_y_height=500):
     """Plot a vertical stack of channels in the same ax.
     
     The given time range and channel range is extracted. Optionally it
@@ -68,7 +68,17 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
         more than this amount of data
     
     plot_kwargs : a dict to pass to `plot`, containing e.g. linewidth
+        This only affects spikes
+    
+    trace_plot_kwargs : same, but for traces
+        default_trace_plot_kwargs = {'color': 'k', 'linewidth': .5}
     """
+    # Set trace_plot_kwargs
+    default_trace_plot_kwargs = {'color': 'k', 'linewidth': .5}
+    if trace_plot_kwargs is not None:
+        default_trace_plot_kwargs.update(trace_plot_kwargs)
+    trace_plot_kwargs = default_trace_plot_kwargs
+    
     # Set up the channels to include
     if ch_list is None:
         if probename is None:
@@ -102,8 +112,16 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     if apply_offset:
         got_data = got_data + apply_offset
     
-    if highpass:
-        buttb, butta = scipy.signal.butter(3, old_div(300.,30e3), 'high')
+    # Optionally highpass
+    if highpass not in [None, False]:
+        # Default value is 300 Hz
+        if highpass is True:
+            highpass = 300.
+        
+        # Generate filter
+        buttb, butta = scipy.signal.butter(3, highpass / 30e3, 'high')
+        
+        # Apply filter
         got_data = scipy.signal.filtfilt(buttb, butta, got_data, axis=0)
     
     got_data = got_data[::downsample]
@@ -116,7 +134,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
     # Plot each channel
     for ncol, col in enumerate(got_data.T):
         y_offset = -inter_ch_spacing * ncol
-        ax.plot(t_ds, col + y_offset, 'k', lw=.75)
+        ax.plot(t_ds, col + y_offset, **trace_plot_kwargs)
 
     # Overplot spikes
     if spike_times is not None:
