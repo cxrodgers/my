@@ -451,37 +451,68 @@ def get_video_params(video_filename):
     return width, height, frame_rate
 
 def get_video_duration(video_filename):
+    """Returns duration of a video file
+    
+    Uses ffmpeg.probe to probe the file, and extracts the duration of the
+    container. Checks that the video file contains only a single stream,
+    whose duration matches the container's.
+    
+    Returns : float
+        The duration in seconds
+        This seems to be exact, so there will be int(np.rint(duration * rate))
+        frames in the video. You can request one less than this number using
+        my.video.get_frame to get the last frame (Pythonic). If you request 
+        this number or more, you will get an error.
+    """
+    ## Check
+    # Check it exists
     if not os.path.exists(video_filename):
         raise ValueError("%s does not exist" % video_filename)
     
+    # Probe it
     probe = ffmpeg.probe(video_filename)
+    
+    # Check that it contains only one stream
     assert len(probe['streams']) == 1
     
-    # Container duration
+    
+    ## Container duration
+    # This is the easiest one to extract, but in theory the stream duration
+    # could differ
     container_duration = float(probe['format']['duration'])
     
-    # Stream duration
-    stream_duration_s = probe['streams'][0]['tags']['DURATION']
     
-    # For some reason this is in nanoseconds, convert to microseconds
-    stream_duration_s = stream_duration_s[:-3]
+    ## Stream duration
+    if 'DURATION' in probe['streams'][0]['tags']:
+        # This tends to be the right way for most ffmpeg-encoded videos
+        stream_duration_s = probe['streams'][0]['tags']['DURATION']
+        
+        # For some reason this is in nanoseconds, convert to microseconds
+        stream_duration_s = stream_duration_s[:-3]
+        
+        # Match
+        video_duration_temp = datetime.datetime.strptime(
+            stream_duration_s, '%H:%M:%S.%f')
+        stream_duration_dt = datetime.timedelta(
+            hours=video_duration_temp.hour, 
+            minutes=video_duration_temp.minute, 
+            seconds=video_duration_temp.second,
+            microseconds=video_duration_temp.microsecond)    
+        
+        # Convert to seconds
+        stream_duration = stream_duration_dt.total_seconds()
+    else:
+        # This works for mjpeg videos from white matter
+        stream_duration_s = probe['streams'][0]['duration']
+        
+        # Convert to seconds
+        stream_duration = float(stream_duration_s)
     
-    # Match
-    video_duration_temp = datetime.datetime.strptime(
-        stream_duration_s, '%H:%M:%S.%f')
-    stream_duration_dt = datetime.timedelta(
-        hours=video_duration_temp.hour, 
-        minutes=video_duration_temp.minute, 
-        seconds=video_duration_temp.second,
-        microseconds=video_duration_temp.microsecond)    
     
-    # Convert to seconds
-    stream_duration = stream_duration_dt.total_seconds()
-    
-    # Check they are the same
-    # Maybe to almost equal here
+    ## Check that container and stream duration are the same
     assert stream_duration == container_duration
     
+    # Return the single duration
     return stream_duration
 
 def choose_rectangular_ROI(vfile, n_frames=4, interactive=False, check=True,
