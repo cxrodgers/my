@@ -1643,13 +1643,17 @@ def grouped_bar_plot(df,
     
     return ax, bar_container
 
-def color_gradient(x, y, cmap):
-    # https://stackoverflow.com/a/73914475/1676378
+def color_gradient(x, y, cmap, capstyle='projecting'):
+    """Creates a line collection from x to y with color gradient cmap
+    
+    https://stackoverflow.com/a/73914475/1676378
+    
+    capstyle : string
+        'butt': there will be tiny white lines between each line segment
+        'round': no tiny white lines, but may be harder to render in Inkscape
+        'projecting': it will look a little blocky
     """
-    Creates a line collection with a gradient from colors c1 to c2,
-    from data x and y.
-    """
-
+    # Helper function
     def sliding_window(iterable, n):
         # https://stackoverflow.com/a/73914475/1676378
         """
@@ -1665,10 +1669,14 @@ def color_gradient(x, y, cmap):
             window.append(x)
             yield tuple(window)
     
+    # Get length
     n = len(x)
     if len(y) != n:
         raise ValueError('x and y data lengths differ')
+    
+    # Construct LineCollection based on a sliding window over the data
     return matplotlib.collections.LineCollection(
         sliding_window(zip(x, y), 2),
         colors=cmap.resampled(n).colors,
+        path_effects=[matplotlib.patheffects.Stroke(capstyle=capstyle)],
         )
