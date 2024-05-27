@@ -543,11 +543,14 @@ def load_spike_clusters(sort_dir):
 def load_spikes(sort_dir):
     """Load spike times from kilosort
     
+    This is just the data in spike_times.npy, flattened
+    Data is converted to int (in case it is stored as uint64)
+    
     Returns: 
         spike_time_samples
     """
     spike_time_samples = np.load(
-        os.path.join(sort_dir, 'spike_times.npy')).flatten()
+        os.path.join(sort_dir, 'spike_times.npy')).flatten().astype(int)
     
     return spike_time_samples
 
