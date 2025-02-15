@@ -1089,21 +1089,47 @@ def imshow(C, x=None, y=None, ax=None,
     return im
 
 def colorbar(ax=None, fig=None, new_wspace=.4, **kwargs):
-    """Insert colorbar into axis or every axis in a figure."""
-    # Separate behavior based on fig
+    """Insert colorbar into axis or every axis in a figure.
+    
+    fig : figure, or None
+        If fig is specified, it will be added to every axis in the figure
+
+    ax : axis, or None
+        If fig is not specified, add colorbar only to this axis
+    
+    new_wspace : float
+        Will set new wspace to this
+    
+    
+    kwargs : passed to fig.colorbar
+    
+    Returns: colorbar object, or None if neither `ax` nor `fig` was specified
+    """
+    # Return value
+    c = None
+    
+    # Depends on whether user specifies ax or fig
     if fig:
-        if new_wspace:
+        ## They specified fig
+        # Set the new wspace, if desired
+        if new_wspace is not None:
             fig.subplots_adjust(wspace=new_wspace)
         
-        # Colorbar for all contained axes
+        # Iterate over all axes
         for ax in fig.axes:
-            if ax.images and len(ax.images) > 0:
+            # Only proceed if it contains an image
+            if ax.images is not None and len(ax.images) > 0:
+                # Add a colorbar for this axis
                 c = fig.colorbar(ax.images[0], ax=ax, **kwargs)
     
     else:
-        # Colorbar just for ax
+        ## They specified a particular ax
+        # Get the corresponding fig
         fig = ax.figure
+        
+        # Only proceed if it contains an image
         if ax.images and len(ax.images) > 0:    
+            # Add a colorbar for this axis
             c = fig.colorbar(ax.images[0], ax=ax, **kwargs)
     
     return c
@@ -1171,8 +1197,16 @@ def harmonize_clim_in_subplots(fig=None, axa=None, clim=(None, None),
 
 def generate_colorbar(n_colors, mapname='jet', rounding=100, start=0., stop=1.):
     """Generate N evenly spaced colors from start to stop in map"""
-    color_idxs = my.rint(rounding * np.linspace(start, stop, n_colors))[::-1]
-    colors = plt.cm.get_cmap('jet', rounding)(color_idxs)
+    # This must go from 0 to 1 or a subset of that
+    color_idxs = np.linspace(start, stop, n_colors)
+    
+    # Get the cmap
+    cmap = matplotlib.colormaps[mapname]
+    
+    # Apply
+    colors = cmap(color_idxs)
+    
+    # Return
     return colors
 
 def pie(n_list, labels, ax=None, autopct=None, colors=None):
