@@ -1614,7 +1614,7 @@ def join_level_onto_index(df, to_join, join_on=None, put_joined_first=True,
         The index will have new levels on it.
     """
     res = df.copy()
-    midx = df.index.to_frame()
+    midx = df.index.to_frame().reset_index(drop=True)
     midx = midx.join(to_join, on=join_on)
     
     if put_joined_first:
