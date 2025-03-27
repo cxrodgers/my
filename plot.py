@@ -1559,7 +1559,7 @@ def grouped_bar_plot(df,
         offset = 0
         for group_idx in df.index.levels[0]:
             group_len = len(df.loc[group_idx])
-            to_append = offset + np.arange(group_len, dtype=np.int)
+            to_append = offset + np.arange(group_len, dtype=int)
             xt_group_centers.append(to_append.mean())
             xts_l.append(to_append)
             offset += group_len + 1
