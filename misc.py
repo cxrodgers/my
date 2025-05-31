@@ -1,15 +1,11 @@
 """Catchall module within the catchall module for really one-off stuff."""
 from __future__ import print_function
 from __future__ import division
-from future import standard_library
-standard_library.install_aliases()
 from builtins import zip
 from builtins import str
 from builtins import map
 from builtins import range
-from past.builtins import basestring
 from builtins import object
-from past.utils import old_div
 
 import numpy as np
 import warnings
@@ -185,7 +181,7 @@ class Spectrogrammer(object):
             # Set noverlap to default
             if noverlap is None:
                 # Try to do it with 50% overlap
-                noverlap = old_div(NFFT, 2)
+                noverlap = NFFT // 2
             
             # Calculate downsample_ratio to achieve this
             self.downsample_ratio = \
@@ -204,7 +200,7 @@ class Spectrogrammer(object):
     
         # Default value for noverlap if still None
         if noverlap is None:
-            noverlap = old_div(NFFT, 2)
+            noverlap = NFFT // 2
         self.noverlap = noverlap
         
         # store other defaults
@@ -340,7 +336,7 @@ def pickle_dump(obj, filename):
 
 def invert_linear_poly(p):
     """Helper function for inverting fit.coeffs"""
-    return old_div(np.array([1, -p[1]]).astype(float), p[0])
+    return np.array([1, -p[1]]).astype(float) / p[0]
 
 def apply_and_filter_by_regex(pattern, list_of_strings, sort=True):
     """Apply regex pattern to each string and return result.
@@ -512,7 +508,7 @@ def parse_by_block(lb_counts, pb_counts, lb_trial_numbers, pb_trial_numbers,
             # Convert to beginning of first LBPB with any trials
             # The first block might be quite short
             # Change the final +1 to +161 to start at the first full block
-            start_trial = (old_div((first_trial - 1), 160)) * 160 + 1
+            start_trial = ((first_trial - 1) // 160) * 160 + 1
     
     # Arrayify
     lb_counts = np.asarray(lb_counts)
@@ -639,9 +635,9 @@ def yoked_zscore(list_of_arrays, axis=1):
     res = []
     for arr in list_of_arrays:
         if axis == 1:
-            res.append(old_div((arr - means[:, None]), stdevs[:, None]))
+            res.append((arr - means[:, None]) / stdevs[:, None])
         elif axis == 0:
-            res.append(old_div((arr - means[None, :]), stdevs[None, :]))
+            res.append((arr - means[None, :]) / stdevs[None, :])
         else:
             raise ValueError("axis must be 0 or 1")
     return res
@@ -678,7 +674,7 @@ def gaussian_smooth(signal, gstd=100, glen=None, axis=1, **filtfilt_kwargs):
     
     # Incantation such that b[0] == 1.0
     b = scipy.signal.gaussian(glen * 2, gstd, sym=False)[glen:]
-    b = old_div(b, b.sum())
+    b = b / b.sum()
     
     # Smooth
     if signal.ndim == 1:
@@ -781,7 +777,7 @@ def binned_pair2cxy(binned0, binned1, Fs=1000., NFFT=256, noverlap=None,
     """
     # Set up psd_kwargs
     if noverlap is None:
-        noverlap = old_div(NFFT, 2)
+        noverlap = NFFT // 2
     psd_kwargs = {'Fs': Fs, 'NFFT': NFFT, 'noverlap': noverlap, 
         'detrend': detrend, 'window': windw}
 
@@ -801,7 +797,7 @@ def binned_pair2cxy(binned0, binned1, Fs=1000., NFFT=256, noverlap=None,
         S12 = S12.mean(0)
         S1 = S1.mean(0)
         S2 = S2.mean(0)
-    Cxy = old_div(S12, np.sqrt(S1 * S2))
+    Cxy = S12 / np.sqrt(S1 * S2)
     
     # Truncate unnecessary frequencies
     if freq_high:
@@ -823,7 +819,7 @@ def binned2pxx(binned, Fs=1000., NFFT=256, noverlap=None,
     """
     # Set up psd_kwargs
     if noverlap is None:
-        noverlap = old_div(NFFT, 2)
+        noverlap = NFFT // 2
     psd_kwargs = {'Fs': Fs, 'NFFT': NFFT, 'noverlap': noverlap, 
         'detrend': detrend, 'window': windw}    
     
@@ -848,7 +844,7 @@ def sem(data, axis=None):
     else:
         N = np.asarray(data).shape[axis]
     
-    return old_div(np.std(np.asarray(data), axis), np.sqrt(N))
+    return np.std(np.asarray(data), axis) / np.sqrt(N)
 
 def take_equally_spaced(arr, n):
     """Take n equally spaced elements from arr
@@ -858,7 +854,7 @@ def take_equally_spaced(arr, n):
     """
     # e.g., we want 2 equally spaced, so they are at 1/3 and 2/3
     arr = np.asarray(arr)
-    first_element_relative = old_div(1.0, (n + 1))
+    first_element_relative = 1.0 / (n + 1)
     relative_pos = np.linspace(
         first_element_relative, 1 - first_element_relative, n)
     absolute_pos = my.rint((len(arr) - 1) * relative_pos)

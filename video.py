@@ -6,7 +6,6 @@ from builtins import str
 from builtins import map
 from builtins import input
 from builtins import object
-from past.utils import old_div
 import numpy as np
 import subprocess
 import re
@@ -65,12 +64,12 @@ def ffmpeg_frame_string(filename, frame_time=None, frame_number=None):
     if frame_number is not None:
         # If specified by number, convert to time
         frame_rate = get_video_params(filename)[2]
-        use_frame_time = (old_div(frame_number, float(frame_rate))) - .001
-        use_frame_time = old_div(np.floor(use_frame_time * 1000), 1000.)
+        use_frame_time = (frame_number / float(frame_rate)) - .001
+        use_frame_time = np.floor(use_frame_time * 1000) / 1000.
     
     elif frame_time is not None:
         frame_rate = get_video_params(filename)[2]
-        use_frame_time = frame_time - (old_div(1., (2 * frame_rate)))
+        use_frame_time = frame_time - (1. / (2 * frame_rate))
     
     else:
         raise ValueError("must specify frame by time or number")
@@ -348,7 +347,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
             if len(raw_image) < read_size_per_frame * this_chunk:
                 #print("warning: ran out of frames")
                 out_of_frames = True
-                this_chunk = old_div(len(raw_image), read_size_per_frame)
+                this_chunk = len(raw_image) // read_size_per_frame
                 assert this_chunk * read_size_per_frame == len(raw_image)
             
             # Process

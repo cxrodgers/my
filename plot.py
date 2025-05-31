@@ -6,7 +6,6 @@ from __future__ import division
 from builtins import zip
 from builtins import map
 from builtins import range
-from past.utils import old_div
 
 import matplotlib
 import matplotlib.patheffects as pe
@@ -971,7 +970,7 @@ def horiz_bar(bar_lengths, bar_labels=None, bar_positions=None, ax=None,
 def auto_subplot(n, return_fig=True, squeeze=False, **kwargs):
     """Return nx and ny for n subplots total"""
     nx = int(np.floor(np.sqrt(n)))
-    ny = int(np.ceil(old_div(n, float(nx))))
+    ny = int(np.ceil(n / float(nx)))
     
     if return_fig:
         return plt.subplots(nx, ny, squeeze=squeeze, **kwargs)
@@ -1058,16 +1057,16 @@ def imshow(C, x=None, y=None, ax=None,
         
         # Calculate extent from data range by adding (subtracting) half a pixel
         try:
-            xwidth = old_div((xd_range[1] - xd_range[0]), (C.shape[1] - 1))
+            xwidth = (xd_range[1] - xd_range[0]) / (C.shape[1] - 1)
         except ZeroDivisionError:
             xwidth = 1.
         try:
-            ywidth = old_div((yd_range[1] - yd_range[0]), (C.shape[0] - 1))
+            ywidth = (yd_range[1] - yd_range[0]) / (C.shape[0] - 1)
         except ZeroDivisionError:
             ywidth=1.
         extent = (
-            xd_range[0] - old_div(xwidth,2.), xd_range[1] + old_div(xwidth,2.),
-            yd_range[0] - old_div(ywidth,2.), yd_range[1] + old_div(ywidth,2.))
+            xd_range[0] - xwidth / 2., xd_range[1] + xwidth / 2.,
+            yd_range[0] - ywidth / 2., yd_range[1] + ywidth / 2.)
 
         # Optionally invert the yd_range
         # Because we specify the `extent` manually, we also need to correct
