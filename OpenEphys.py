@@ -16,7 +16,6 @@ from __future__ import division
 from builtins import map
 from builtins import str
 from builtins import range
-from past.utils import old_div
 
 import warnings
 import os
@@ -67,7 +66,7 @@ def loadFolder(folderpath,**kwargs):
             data[f.replace('.continuous','')] = loadContinuous(os.path.join(folderpath, f))
             numFiles += 1
 
-    print(''.join(('Avg. Load Time: ', str(old_div((time.time() - t0),numFiles)),' sec')))
+    print(''.join(('Avg. Load Time: ', str((time.time() - t0) / numFiles),' sec')))
     print(''.join(('Total Load Time: ', str((time.time() - t0)),' sec')))        
             
     return data
@@ -126,7 +125,7 @@ def loadFolderToArray(folderpath, channels='all', dtype=float,
     
     if verbose:
         time_taken = time.time() - t0
-        print('Avg. Load Time: %0.3f sec' % (old_div(time_taken, len(filelist))))
+        print('Avg. Load Time: %0.3f sec' % (time_taken / len(filelist)))
         print('Total Load Time: %0.3f sec' % time_taken)
 
     return data_array
@@ -328,7 +327,9 @@ def loadSpikes(filepath):
         recNum[currentSpike] = np.fromfile(f, np.dtype('<u2'), 1)       
         
         for ch in range(numChannels):
-            spikes[currentSpike,:,ch] = old_div((np.float64(wv[ch])-32768),(old_div(gain[currentSpike,ch],1000)))
+            spikes[currentSpike,:,ch] = (
+                (np.float64(wv[ch]) - 32768) / (gain[currentSpike, ch] / 1000)
+                )
         
         currentSpike += 1
         
@@ -437,7 +438,7 @@ def readHeader(f):
     return header
     
 def downsample(trace,down):
-    downsampled = scipy.signal.resample(trace,old_div(np.shape(trace)[0],down))
+    downsampled = scipy.signal.resample(trace,np.shape(trace)[0] // down)
     return downsampled
     
 def writeChannelMapFile(mapping, filename='mapping.prb'):
@@ -643,7 +644,7 @@ def get_number_of_records(filepath):
         
         # Determine the number of records
         record_length_bytes = 2 * header['blockLength'] + 22
-        n_records = int(old_div((fileLength - 1024), record_length_bytes))
+        n_records = int((fileLength - 1024) // record_length_bytes)
         if (n_records * record_length_bytes + 1024) != fileLength:
             msg = (
                 'file %s does not divide evenly into full records' %
