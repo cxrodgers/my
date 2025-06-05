@@ -181,7 +181,7 @@ def plot_each_channel(data, ax=None, n_range=None, ch_list=None,
                         
                         # The indices to plot, downsampled
                         idx0 = int((nspike_time - 15) // downsample)
-                        idx1 = int((nspike_time + 15) // downsample))
+                        idx1 = int((nspike_time + 15) // downsample)
                         
                         ax.plot(
                             t_ds[idx0:idx1],
