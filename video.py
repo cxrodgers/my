@@ -164,7 +164,7 @@ def get_frame(filename, frametime=None, frame_number=None, frame_string=None,
             raise OutOfFrames        
         
         # Convert to numpy
-        flattened_im = np.fromstring(raw_image, dtype='uint8')
+        flattened_im = np.frombuffer(raw_image, dtype='uint8')
         
         # Reshape
         frame_data = flattened_im.reshape(reshape_size)    
@@ -351,7 +351,7 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
                 assert this_chunk * read_size_per_frame == len(raw_image)
             
             # Process
-            flattened_im = np.fromstring(raw_image, dtype='uint8')
+            flattened_im = np.frombuffer(raw_image, dtype='uint8')
             if bytes_per_pixel == 1:
                 video = flattened_im.reshape(
                     (this_chunk, image_h, image_w))
@@ -972,7 +972,7 @@ class FFmpegReader(object):
                 return
         
             # Convert to array
-            flattened_im = np.fromstring(raw_image, dtype='uint8')
+            flattened_im = np.frombuffer(raw_image, dtype='uint8')
             if self.bytes_per_pixel == 1:
                 frame = flattened_im.reshape(
                     (self.frame_height, self.frame_width))
