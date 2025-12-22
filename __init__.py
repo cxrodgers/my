@@ -7,7 +7,3 @@ from . import misc
 from . import stats
 from . import video
 from . import dataload
-from . import syncing # deprecated
-
-# shortcuts
-from .misc import rint, pick, pick_rows, printnow, globjoin

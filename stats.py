@@ -5,7 +5,6 @@ from builtins import range
 import numpy as np
 import scipy.stats
 import pandas
-import statsmodels.stats.multitest
 
 try:
     import rpy2.robjects as robjects
@@ -15,6 +14,7 @@ except ImportError:
     pass
 
 def adjust_pval(ser, method='fdr_bh'):
+    import statsmodels.stats.multitest
     arr = statsmodels.stats.multitest.multipletests(
         ser.values, method=method)[1]
     res = pandas.Series(arr, index=ser.index)
