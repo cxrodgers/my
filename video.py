@@ -413,8 +413,14 @@ def get_video_aspect(video_filename):
     if not os.path.exists(video_filename):
         raise ValueError("%s does not exist" % video_filename)
     
+    # Probe
     probe = ffmpeg.probe(video_filename)
-    assert len(probe['streams']) == 1
+    
+    # Check number of streams - in some cases the second is audio
+    if len(probe['streams']) > 1:
+        print(f'warning: more than one stream in {video_filename}')
+
+    # Assume first one
     width = probe['streams'][0]['width']
     height = probe['streams'][0]['height']
     
@@ -429,8 +435,12 @@ def get_video_frame_rate(video_filename):
         raise ValueError("%s does not exist" % video_filename)
     
     probe = ffmpeg.probe(video_filename)
-    assert len(probe['streams']) == 1
-    
+
+    # Check number of streams - in some cases the second is audio
+    if len(probe['streams']) > 1:
+        print(f'warning: more than one stream in {video_filename}')
+
+    # Assume first one
     # Seems to be two ways of coding, not sure which is better
     avg_frame_rate = probe['streams'][0]['avg_frame_rate']
     r_frame_rate = probe['streams'][0]['r_frame_rate']
@@ -471,9 +481,6 @@ def get_video_duration(video_filename):
     # Probe it
     probe = ffmpeg.probe(video_filename)
     
-    # Check that it contains only one stream
-    assert len(probe['streams']) == 1
-    
     
     ## Container duration
     # This is the easiest one to extract, but in theory the stream duration
@@ -482,6 +489,11 @@ def get_video_duration(video_filename):
     
     
     ## Stream duration
+    # Check number of streams - in some cases the second is audio
+    if len(probe['streams']) > 1:
+        print(f'warning: more than one stream in {video_filename}')
+
+    # Assume first one    
     if 'DURATION' in probe['streams'][0]['tags']:
         # This tends to be the right way for most ffmpeg-encoded videos
         stream_duration_s = probe['streams'][0]['tags']['DURATION']
