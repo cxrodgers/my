@@ -1331,7 +1331,7 @@ def slice_df_by_some_levels(df, slicing_midx, drop=False):
         if level not in slicing_levels]
     
     # Error check
-    if not np.in1d(slicing_midx.names, df.index.names).all():
+    if not np.isin(slicing_midx.names, df.index.names).all():
         raise ValueError("cannot slice on missing levels")
     
     # Convert slicing_midx to DataFrame
