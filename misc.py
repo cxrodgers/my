@@ -857,7 +857,7 @@ def take_equally_spaced(arr, n):
     first_element_relative = 1.0 / (n + 1)
     relative_pos = np.linspace(
         first_element_relative, 1 - first_element_relative, n)
-    absolute_pos = my.rint((len(arr) - 1) * relative_pos)
+    absolute_pos = np.rint((len(arr) - 1) * relative_pos).astype(int)
     return arr[absolute_pos]
 
 def define_integer_bin_edges(start, stop, n_bins=None, binwidth=None,
