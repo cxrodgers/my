@@ -10,8 +10,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal
 import my.OpenEphys
-import MCwatch.behavior
-import ArduFSM
+try:
+    import MCwatch.behavior
+except ImportError:
+    pass
+try:
+    import ArduFSM
+except ImportError:
+    pass
 import tables
 import kkpandas
 import Adapters
