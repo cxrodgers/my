@@ -441,13 +441,31 @@ def get_video_frame_rate(video_filename):
         print(f'warning: more than one stream in {video_filename}')
 
     # Assume first one
-    # Seems to be two ways of coding, not sure which is better
+    # r_frame_rate is, I think, the desired or nominal frame rate
+    # avg_frame_rate is the achieved, which can be slightly lower 
+    # with dropped frames
+    # Both are coded as a string "NUM/DEN"
+    # Let's go with r_frame_rate, the "guess at the nominal" (which is rounded
+    # to a multiple of underlying tick), and print a warning
+    # Because in the case they differ, it's probably that frames arrived late,
+    # not that it was truly constant rate at `avg_frame_rate`
+    # https://ffmpeg-devel.ffmpeg.narkive.com/eoSgLYyP/patch-clarify-definition-of-r-frame-rate#
+    """To inspect PTS
+    out = ffmpeg.probe(video_filename, show_packets=None, select_streams='v:0')
+    pts = [int(p['pts']) for p in out['packets']]
+    """
     avg_frame_rate = probe['streams'][0]['avg_frame_rate']
     r_frame_rate = probe['streams'][0]['r_frame_rate']
-    assert avg_frame_rate == r_frame_rate
+    if avg_frame_rate != r_frame_rate:
+        n0, d0 = list(map(int, avg_frame_rate.split('/')))
+        n1, d1 = list(map(int, r_frame_rate.split('/')))
+        print(
+            f'warning: avg_frame_rate is {n0}/{d0}={n0/d0:.3f} whereas '
+            f'r_frame_rate is {n1}/{d1}={n1/d1:.3f}; using the latter'
+            )
     
     # Convert fraction to number
-    num, den = avg_frame_rate.split('/')
+    num, den = r_frame_rate.split('/')
     frame_rate = float(num) / float(den)
     
     return frame_rate
