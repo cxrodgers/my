@@ -307,7 +307,9 @@ def process_chunks_of_video(filename, n_frames, func='mean', verbose=False,
     read_size_per_frame = bytes_per_pixel * image_w * image_h
     
     # Create the command
-    command = [path_to_ffmpeg,
+    command = [
+        path_to_ffmpeg,
+        '-nostdin', # may prevent Popens from taking over the tty
         '-i', filename,
         '-vsync', vsync,
         '-f', 'image2pipe',
